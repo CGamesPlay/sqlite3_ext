@@ -1,0 +1,18 @@
+bindgen:
+  summary: regenerate the sqlite3ext bindings
+  command: |
+    which -s bindgen || cargo install bindgen
+    bindgen src/sqlite3ext.h --ignore-functions \
+      --raw-line "#![allow(non_snake_case)]" \
+      --raw-line "#![allow(dead_code)]" \
+      --raw-line "#![allow(non_camel_case_types)]" \
+      -o src/sqlite3ext.rs
+    echo Generated src/sqlite3ext.rs
+
+test:
+  command: |
+    set -ue
+    cargo build
+    sqlite3 :memory: <<EOF
+    .load ./target/debug/libcrdb
+    EOF

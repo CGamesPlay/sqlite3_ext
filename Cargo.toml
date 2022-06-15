@@ -3,11 +3,20 @@ name = "crdb"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = [ "rusqlite",  "libsqlite3-sys" ]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-crate-type = ["cdylib","staticlib"]
+crate-type = [ "lib", "cdylib", "staticlib" ]
 
 [dependencies]
-libsqlite3-sys = "0.24.2"
-rusqlite = "0.27.0"
+rusqlite = { version = "0.27.0", optional = true }
+libsqlite3-sys = { version = "0.24.0", optional = true }
+
+[build-dependencies]
+proc-macro2 = "1.0.39"
+which = "4.2.5"
+syn = { version = "1.0.96", features = [ "parsing", "full" ] }
+quote = "1.0.18"

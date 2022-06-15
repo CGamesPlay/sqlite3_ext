@@ -8,6 +8,8 @@ use std::io::Write;
 use std::path::Path;
 use syn;
 
+const RUSTGEN_OUTPUT: &str = "src/bindings/ffi/sqlite3ext.rs";
+
 fn extract_method(ty: &syn::Type) -> Option<&syn::TypeBareFn> {
     match &ty {
         syn::Type::Path(tp) => tp.path.segments.last(),
@@ -16,18 +18,15 @@ fn extract_method(ty: &syn::Type) -> Option<&syn::TypeBareFn> {
     .map(|seg| match &seg.arguments {
         syn::PathArguments::AngleBracketed(args) => args.args.first(),
         _ => None,
-    })
-    .unwrap_or(None)
+    })?
     .map(|arg| match &arg {
         syn::GenericArgument::Type(t) => Some(t),
         _ => None,
-    })
-    .unwrap_or(None)
+    })?
     .map(|ty| match &ty {
         syn::Type::BareFn(r) => Some(r),
         _ => None,
-    })
-    .unwrap_or(None)
+    })?
 }
 
 fn rustfmt(input: String) -> Result<String, String> {
@@ -52,14 +51,14 @@ fn rustfmt(input: String) -> Result<String, String> {
 }
 
 fn generate_api_routines() {
-    println!("cargo:rerun-if-changed=src/ffi/sqlite3ext.rs");
-    let mut file = File::open("src/ffi/sqlite3ext.rs").unwrap();
+    println!("cargo:rerun-if-changed={}", RUSTGEN_OUTPUT);
+    let mut file = File::open(format!("{}", RUSTGEN_OUTPUT)).expect(RUSTGEN_OUTPUT);
     let mut content = String::new();
     file.read_to_string(&mut content).unwrap();
 
     let ast = syn::parse_file(&content).unwrap();
     let ident = Ident::new("sqlite3_api_routines", Span::call_site());
-    let api_routines: Vec<&syn::Field> = ast
+    let api_routines: Vec<(&syn::Ident, &syn::TypeBareFn)> = ast
         .items
         .iter()
         .filter_map(|i| match i {
@@ -68,21 +67,24 @@ fn generate_api_routines() {
         })
         .find(|s| s.ident == ident)
         .map(|s| match &s.fields {
-            syn::Fields::Named(n) => Some(n.named.iter().collect()),
+            syn::Fields::Named(n) => Some(n.named.iter()),
             _ => None,
         })
         .unwrap_or(None)
-        .expect("sqlite3_api_routines missing");
+        .expect("sqlite3_api_routines missing")
+        .map(|field| {
+            let name = field.ident.as_ref().expect("unnamed method");
+            let method = extract_method(&field.ty).expect("invalid field");
+            (name, method)
+        })
+        .collect();
 
     let init_lines: Vec<TokenStream> = api_routines
         .iter()
-        .map(|field| {
-            let field_name = &field.ident;
-            let var_name =
-                format_ident!("sqlite3_{}", field.ident.as_ref().expect("unnamed method"));
+        .map(|(name, _)| {
             quote! {
-                if let Some(x) = (*api).#field_name {
-                    #var_name = x;
+                if let Some(x) = (*api).#name {
+                    #name = x;
                 }
             }
         })
@@ -90,9 +92,7 @@ fn generate_api_routines() {
 
     let methods: Vec<TokenStream> = api_routines
         .iter()
-        .map(|field| {
-            let name = format_ident!("sqlite3_{}", field.ident.as_ref().expect("unnamed method"));
-            let method = extract_method(&field.ty).expect("invalid field");
+        .map(|(name, method)| {
             let unsafety = &method.unsafety;
             let abi = &method.abi;
             let args = &method.inputs;

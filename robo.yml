@@ -16,4 +16,5 @@ test:
     cargo build
     sqlite3 :memory: <<EOF
     .load ./target/debug/libcrdb
+    SELECT * FROM crdb;
     EOF

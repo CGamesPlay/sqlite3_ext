@@ -1,21 +1,17 @@
-use super::bindings::*;
-use super::types::*;
+use sqlite3_ext::vtab::*;
 
-pub fn create_module(db: &Connection) -> Result<()> {
-    VTabModule::new("crdb", CrdbVTab {}).register(db)?;
-    Ok(())
-}
-
-struct CrdbVTab {}
+pub struct CrdbVTab {}
 
 impl VTab for CrdbVTab {
-    fn connect() {
+    type Aux = ();
+
+    fn connect(&self) {
         todo!()
     }
-    fn best_index() {
+    fn best_index(&self) {
         todo!()
     }
-    fn open() {
+    fn open(&self) {
         todo!()
     }
 }

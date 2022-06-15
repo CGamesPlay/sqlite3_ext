@@ -1,6 +1,17 @@
+use super::ffi;
+
 #[derive(Debug)]
 pub enum Error {
     Sqlite(i32),
+}
+
+impl Error {
+    pub fn from_sqlite(rc: i32) -> Result<()> {
+        match rc {
+            ffi::SQLITE_OK => Ok(()),
+            _ => Err(Error::Sqlite(rc)),
+        }
+    }
 }
 
 impl std::fmt::Display for Error {

@@ -8,7 +8,7 @@ use std::io::Write;
 use std::path::Path;
 use syn;
 
-const RUSTGEN_OUTPUT: &str = "src/bindings/ffi/sqlite3ext.rs";
+const RUSTGEN_OUTPUT: &str = "src/ffi/sqlite3ext.rs";
 
 fn extract_method(ty: &syn::Type) -> Option<&syn::TypeBareFn> {
     match &ty {
@@ -112,7 +112,7 @@ fn generate_api_routines() {
         }
 
         fn unavailable() {
-            panic!("call to unavailabke sqlite method");
+            panic!("call to unavailable sqlite method");
         }
 
         #(#methods)*

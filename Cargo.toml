@@ -3,6 +3,9 @@ name = "crdb"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+members = [ "sqlite3_ext" ]
+
 [features]
 default = [ "rusqlite",  "libsqlite3-sys" ]
 
@@ -12,6 +15,7 @@ default = [ "rusqlite",  "libsqlite3-sys" ]
 crate-type = [ "lib", "cdylib", "staticlib" ]
 
 [dependencies]
+sqlite3_ext = { path = "sqlite3_ext" }
 rusqlite = { version = "0.27.0", optional = true }
 libsqlite3-sys = { version = "0.24.0", optional = true }
 

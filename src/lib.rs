@@ -11,15 +11,7 @@ pub unsafe extern "C" fn sqlite3_crdb_init(
 ) -> std::os::raw::c_int {
     ffi::init_api_routines(api);
     let conn = Connection::from(db);
-    match crdb_init(&conn) {
-        Ok(_) => ffi::SQLITE_OK,
-        Err(err) => {
-            if let Some(ptr) = ffi::sqlite3_str(&err.to_string()) {
-                *err_msg = ptr;
-            }
-            ffi::SQLITE_ERROR
-        }
-    }
+    ffi::handle_result(crdb_init(&conn), err_msg)
 }
 
 fn crdb_init(db: &Connection) -> Result<()> {

@@ -1,6 +1,5 @@
 use std::ffi::{c_void, CStr, CString};
 pub use types::*;
-pub use vtab::{eponymous_only_module, Module, VTab};
 
 pub mod ffi;
 pub mod types;
@@ -30,10 +29,10 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn create_module<T: VTab>(
+    pub fn create_module<T: vtab::VTab>(
         &self,
         name: &str,
-        vtab: Module<T>,
+        vtab: vtab::Module<T>,
         aux: Option<T::Aux>,
     ) -> Result<()> {
         let name = CString::new(name).unwrap();
@@ -44,7 +43,7 @@ impl Connection {
                 name.as_ptr() as _,
                 &handle.vtab.base,
                 Box::into_raw(handle) as _,
-                Some(drop_box::<vtab::ModuleHandle<T>>),
+                Some(drop_boxed::<vtab::ModuleHandle<T>>),
             )
         };
         match rc {
@@ -60,7 +59,7 @@ impl From<*mut ffi::sqlite3> for Connection {
     }
 }
 
-unsafe extern "C" fn drop_box<T>(data: *mut c_void) {
+unsafe extern "C" fn drop_boxed<T>(data: *mut c_void) {
     let aux: Box<T> = Box::from_raw(data as _);
     std::mem::drop(aux);
 }

@@ -11,29 +11,35 @@ mod sqlite3ext;
 pub static mut API: *mut sqlite3_api_routines = std::ptr::null_mut();
 
 pub fn sqlite3_str(val: &str) -> Result<*mut c_char, Error> {
-    let len: u64 = (val.len() + 1)
-        .try_into()
-        .map_err(|_| Error::OutOfMemory(val.len() + 1))?;
-    let ptr: *mut c_char = unsafe { malloc64(len) } as _;
-    if !ptr.is_null() {
-        unsafe { std::ptr::copy_nonoverlapping(val.as_ptr(), ptr as _, len as _) };
-        Ok(ptr)
-    } else {
-        Err(Error::OutOfMemory(len as _))
+    let len: usize = val
+        .len()
+        .checked_add(1)
+        .ok_or(Error::OutOfMemory(val.len()))?;
+    unsafe {
+        let ptr: *mut c_char = malloc64(len as _) as _;
+        if !ptr.is_null() {
+            std::ptr::copy_nonoverlapping(val.as_ptr(), ptr as _, len as _);
+            *ptr.add(len - 1) = 0;
+            Ok(ptr)
+        } else {
+            Err(Error::OutOfMemory(len))
+        }
     }
 }
 
-pub unsafe fn handle_error<E: std::error::Error>(err: E, msg: *mut *mut c_char) -> c_int {
+pub unsafe fn handle_error(err: Error, msg: *mut *mut c_char) -> c_int {
+    if let Error::Sqlite(code) = err {
+        if code != SQLITE_OK && code != SQLITE_ROW && code != SQLITE_DONE {
+            return code;
+        }
+    }
     if let Ok(s) = sqlite3_str(&format!("{}", err)) {
         *msg = s;
     }
     SQLITE_ERROR
 }
 
-pub unsafe fn handle_result<E: std::error::Error>(
-    result: Result<(), E>,
-    msg: *mut *mut c_char,
-) -> c_int {
+pub unsafe fn handle_result(result: Result<(), Error>, msg: *mut *mut c_char) -> c_int {
     match result {
         Ok(_) => SQLITE_OK,
         Err(e) => handle_error(e, msg),

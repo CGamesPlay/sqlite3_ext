@@ -1,8 +1,11 @@
 use std::ffi::{c_void, CStr, CString};
 pub use types::*;
+pub use value::*;
 
 pub mod ffi;
+pub mod function;
 pub mod types;
+pub mod value;
 pub mod vtab;
 
 pub fn sqlite3_libversion() -> &'static str {
@@ -29,10 +32,10 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn create_module<T: vtab::VTab>(
+    pub fn create_module<'vtab, T: vtab::VTab<'vtab>>(
         &self,
         name: &str,
-        vtab: vtab::Module<T>,
+        vtab: vtab::Module<'vtab, T>,
         aux: Option<T::Aux>,
     ) -> Result<()> {
         let name = CString::new(name).unwrap();

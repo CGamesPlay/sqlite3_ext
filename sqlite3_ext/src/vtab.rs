@@ -1,19 +1,21 @@
-use super::{ffi, types::*, Connection};
+use super::{ffi, function::Context, types::*, value::Value, Connection};
 use std::{
     ffi::{CStr, CString},
+    marker::PhantomData,
     os::raw::{c_int, c_void},
     ptr, slice,
 };
 
 /// Eponymous-only virtual table
-pub trait VTab: Sized {
+pub trait VTab<'vtab>: Sized {
     type Aux;
+    type Cursor: VTabCursor;
 
     /// Corresponds to xConnect. The virtual table implementation will return an error if
     /// any of the arguments contain invalid UTF-8.
     fn connect(
         db: &mut Connection,
-        aux: Option<&Self::Aux>,
+        aux: Option<&'vtab Self::Aux>,
         args: &[&str],
     ) -> Result<(String, Self)>;
 
@@ -22,25 +24,29 @@ pub trait VTab: Sized {
     /// xBestIndex to fail.
     fn best_index(&self, index_info: &mut IndexInfo) -> Result<()>;
 
-    fn open(&self);
+    fn open(&mut self) -> Result<Self::Cursor>;
 }
 
 /// Implementation of the cursor type for a virtual table.
-pub trait Cursor {
-    fn filter(&self);
-    fn next(&self);
-    fn eof(&self);
-    fn column(&self);
-    fn rowid(&self);
+pub trait VTabCursor {
+    fn filter(&mut self, index_num: usize, index_str: Option<&str>, args: &[Value]) -> Result<()>;
+
+    fn next(&mut self) -> Result<()>;
+
+    fn eof(&self) -> bool;
+
+    fn column(&self, context: &mut Context, idx: usize) -> Result<()>;
+
+    fn rowid(&self) -> Result<i64>;
 }
 
 #[repr(transparent)]
-pub struct Module<T: VTab> {
+pub struct Module<'vtab, T: VTab<'vtab>> {
     pub(crate) base: ffi::sqlite3_module,
-    phantom: std::marker::PhantomData<T>,
+    phantom: PhantomData<&'vtab T>,
 }
 
-pub fn eponymous_only_module<'vtab, T: VTab>() -> Module<T> {
+pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> Module<'vtab, T> {
     Module {
         base: ffi::sqlite3_module {
             iVersion: 2,
@@ -50,12 +56,12 @@ pub fn eponymous_only_module<'vtab, T: VTab>() -> Module<T> {
             xDisconnect: Some(vtab_disconnect::<T>),
             xDestroy: None,
             xOpen: Some(vtab_open::<T>),
-            xClose: Some(vtab_close),
-            xFilter: Some(vtab_filter),
-            xNext: Some(vtab_next),
-            xEof: Some(vtab_eof),
-            xColumn: Some(vtab_column),
-            xRowid: Some(vtab_rowid),
+            xClose: Some(vtab_close::<T>),
+            xFilter: Some(vtab_filter::<T>),
+            xNext: Some(vtab_next::<T>),
+            xEof: Some(vtab_eof::<T>),
+            xColumn: Some(vtab_column::<T>),
+            xRowid: Some(vtab_rowid::<T>),
             xUpdate: None,
             xBegin: None,
             xSync: None,
@@ -67,11 +73,11 @@ pub fn eponymous_only_module<'vtab, T: VTab>() -> Module<T> {
             xRelease: None,
             xRollbackTo: None,
         },
-        phantom: std::marker::PhantomData,
+        phantom: PhantomData,
     }
 }
 
-unsafe extern "C" fn vtab_connect<T: VTab>(
+unsafe extern "C" fn vtab_connect<'vtab, T: VTab<'vtab> + 'vtab>(
     db: *mut ffi::sqlite3,
     module: *mut c_void,
     argc: i32,
@@ -80,12 +86,15 @@ unsafe extern "C" fn vtab_connect<T: VTab>(
     err_msg: *mut *mut i8,
 ) -> c_int {
     let mut conn: Connection = db.into();
-    let module = ModuleHandle::<T>::from_ptr::<'_>(module);
-    let args: std::result::Result<Vec<&str>, std::str::Utf8Error> =
-        slice::from_raw_parts(argv, argc as _)
-            .into_iter()
-            .map(|arg| CStr::from_ptr(*arg).to_str())
-            .collect();
+    let module = ModuleHandle::<'vtab, T>::from_ptr(module);
+    let args: Result<Vec<&str>> = slice::from_raw_parts(argv, argc as _)
+        .into_iter()
+        .map(|arg| {
+            CStr::from_ptr(*arg)
+                .to_str()
+                .map_err(|e| Error::Utf8Error(e))
+        })
+        .collect();
     let args = match args {
         Ok(x) => x,
         Err(e) => return ffi::handle_error(e, err_msg),
@@ -113,12 +122,13 @@ unsafe extern "C" fn vtab_connect<T: VTab>(
             zErrMsg: ptr::null_mut(),
         },
         vtab,
+        phantom: PhantomData,
     });
     *p_vtab = Box::into_raw(vtab) as _;
     ffi::SQLITE_OK
 }
 
-unsafe extern "C" fn vtab_best_index<T: VTab>(
+unsafe extern "C" fn vtab_best_index<'vtab, T: VTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
     info: *mut ffi::sqlite3_index_info,
 ) -> c_int {
@@ -132,77 +142,134 @@ unsafe extern "C" fn vtab_best_index<T: VTab>(
     }
 }
 
-unsafe extern "C" fn vtab_open<T: VTab>(
+unsafe extern "C" fn vtab_open<'vtab, T: VTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
-    _cursor: *mut *mut ffi::sqlite3_vtab_cursor,
+    p_cursor: *mut *mut ffi::sqlite3_vtab_cursor,
 ) -> c_int {
     let vtab = &mut *(vtab as *mut VTabHandle<T>);
-    todo!()
+    let cursor = match vtab.vtab.open() {
+        Ok(x) => x,
+        Err(e) => return ffi::handle_error(e, &mut vtab.base.zErrMsg),
+    };
+    let cursor = Box::new(VTabCursorHandle::<'vtab, T> {
+        base: ffi::sqlite3_vtab_cursor {
+            pVtab: ptr::null_mut(),
+        },
+        cursor,
+        phantom: PhantomData,
+    });
+    *p_cursor = Box::into_raw(cursor) as _;
+    ffi::SQLITE_OK
 }
 
-unsafe extern "C" fn vtab_close(_cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int {
-    todo!()
+unsafe extern "C" fn vtab_close<'vtab, T: VTab<'vtab> + 'vtab>(
+    cursor: *mut ffi::sqlite3_vtab_cursor,
+) -> c_int {
+    let cursor: Box<VTabCursorHandle<T>> = Box::from_raw(cursor as _);
+    std::mem::drop(cursor);
+    ffi::SQLITE_OK
 }
 
-unsafe extern "C" fn vtab_disconnect<T: VTab>(vtab: *mut ffi::sqlite3_vtab) -> c_int {
+unsafe extern "C" fn vtab_disconnect<'vtab, T: VTab<'vtab> + 'vtab>(
+    vtab: *mut ffi::sqlite3_vtab,
+) -> c_int {
     let vtab: Box<VTabHandle<T>> = Box::from_raw(vtab as _);
     std::mem::drop(vtab);
     ffi::SQLITE_OK
 }
 
-unsafe extern "C" fn vtab_filter(
-    _cursor: *mut ffi::sqlite3_vtab_cursor,
-    _index_num: i32,
-    _index_name: *const i8,
-    _argc: i32,
-    _argv: *mut *mut ffi::sqlite3_value,
+unsafe extern "C" fn vtab_filter<'vtab, T: VTab<'vtab> + 'vtab>(
+    cursor: *mut ffi::sqlite3_vtab_cursor,
+    index_num: i32,
+    index_str: *const i8,
+    argc: i32,
+    argv: *mut *mut ffi::sqlite3_value,
 ) -> c_int {
-    todo!()
+    let cursor = &mut *(cursor as *mut VTabCursorHandle<T>);
+    let index_str = if index_str.is_null() {
+        None
+    } else {
+        CStr::from_ptr(index_str).to_str().ok()
+    };
+    let args = slice::from_raw_parts(*argv as *mut Value, argc as _);
+    ffi::handle_result(
+        cursor.cursor.filter(index_num as _, index_str, args),
+        &mut (*cursor.base.pVtab).zErrMsg,
+    )
 }
 
-unsafe extern "C" fn vtab_next(_cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int {
-    todo!()
-}
-
-unsafe extern "C" fn vtab_eof(_cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int {
-    todo!()
-}
-
-unsafe extern "C" fn vtab_column(
-    _cursor: *mut ffi::sqlite3_vtab_cursor,
-    _context: *mut ffi::sqlite3_context,
-    _i: i32,
+unsafe extern "C" fn vtab_next<'vtab, T: VTab<'vtab> + 'vtab>(
+    cursor: *mut ffi::sqlite3_vtab_cursor,
 ) -> c_int {
-    todo!()
+    let cursor = &mut *(cursor as *mut VTabCursorHandle<T>);
+    ffi::handle_result(cursor.cursor.next(), &mut (*cursor.base.pVtab).zErrMsg)
 }
 
-unsafe extern "C" fn vtab_rowid(_cursor: *mut ffi::sqlite3_vtab_cursor, _ptr: *mut i64) -> c_int {
-    todo!()
+unsafe extern "C" fn vtab_eof<'vtab, T: VTab<'vtab> + 'vtab>(
+    cursor: *mut ffi::sqlite3_vtab_cursor,
+) -> c_int {
+    let cursor = &mut *(cursor as *mut VTabCursorHandle<T>);
+    cursor.cursor.eof() as _
+}
+
+unsafe extern "C" fn vtab_column<'vtab, T: VTab<'vtab> + 'vtab>(
+    cursor: *mut ffi::sqlite3_vtab_cursor,
+    context: *mut ffi::sqlite3_context,
+    i: i32,
+) -> c_int {
+    let cursor = &mut *(cursor as *mut VTabCursorHandle<T>);
+    let context = &mut *(context as *mut Context);
+    ffi::handle_result(
+        cursor.cursor.column(context, i as _),
+        &mut (*cursor.base.pVtab).zErrMsg,
+    )
+}
+
+unsafe extern "C" fn vtab_rowid<'vtab, T: VTab<'vtab> + 'vtab>(
+    cursor: *mut ffi::sqlite3_vtab_cursor,
+    ptr: *mut i64,
+) -> c_int {
+    let cursor = &mut *(cursor as *mut VTabCursorHandle<T>);
+    match cursor.cursor.rowid() {
+        Ok(x) => {
+            *ptr = x;
+            ffi::SQLITE_OK
+        }
+        Err(e) => ffi::handle_error(e, &mut (*cursor.base.pVtab).zErrMsg),
+    }
 }
 
 /// Handle to the module and aux data, so that it can be properly dropped when the module is
 /// unloaded.
-pub(crate) struct ModuleHandle<T: VTab> {
-    pub vtab: Module<T>,
+pub(crate) struct ModuleHandle<'vtab, T: VTab<'vtab>> {
+    pub vtab: Module<'vtab, T>,
     pub aux: Option<T::Aux>,
 }
 
-impl<T: VTab> ModuleHandle<T> {
-    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> Option<&'a ModuleHandle<T>> {
+impl<'vtab, T: VTab<'vtab>> ModuleHandle<'vtab, T> {
+    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> Option<&'a ModuleHandle<'vtab, T>> {
         ptr.cast::<ModuleHandle<T>>().as_ref()
     }
 }
 
-impl<T: VTab> Drop for ModuleHandle<T> {
+impl<'vtab, T: VTab<'vtab>> Drop for ModuleHandle<'vtab, T> {
     fn drop(&mut self) {
         println!("Dropped the module");
     }
 }
 
 #[repr(C)]
-struct VTabHandle<T: VTab> {
+struct VTabHandle<'vtab, T: VTab<'vtab>> {
     base: ffi::sqlite3_vtab,
     vtab: T,
+    phantom: PhantomData<&'vtab T>,
+}
+
+#[repr(C)]
+struct VTabCursorHandle<'vtab, T: VTab<'vtab>> {
+    base: ffi::sqlite3_vtab_cursor,
+    cursor: T::Cursor,
+    phantom: PhantomData<&'vtab T>,
 }
 
 #[repr(transparent)]
@@ -286,7 +353,10 @@ impl IndexInfo {
             unsafe { ffi::free(self.base.idxStr as _) };
         }
         match val {
-            None => self.base.idxStr = ptr::null_mut(),
+            None => {
+                self.base.idxStr = ptr::null_mut();
+                self.base.needToFreeIdxStr = 0;
+            }
             Some(x) => {
                 self.base.idxStr = ffi::sqlite3_str(x)?;
                 self.base.needToFreeIdxStr = 1;

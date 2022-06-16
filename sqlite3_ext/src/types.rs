@@ -3,9 +3,11 @@ use super::ffi;
 #[derive(Debug)]
 pub enum Error {
     Sqlite(i32),
+    Utf8Error(std::str::Utf8Error),
     OutOfMemory(usize),
     VersionNotSatisfied(std::os::raw::c_int),
     ConstraintViolation,
+    Module(String),
 }
 
 impl Error {
@@ -20,7 +22,8 @@ impl Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Sqlite(_) => todo!(),
+            Error::Sqlite(i) => write!(f, "SQLite error {}", i),
+            Error::Utf8Error(e) => e.fmt(f),
             Error::OutOfMemory(l) => write!(f, "unable to allocate {} bytes", l),
             Error::VersionNotSatisfied(v) => write!(
                 f,
@@ -30,6 +33,7 @@ impl std::fmt::Display for Error {
                 v % 1000
             ),
             Error::ConstraintViolation => write!(f, "constraint violation"),
+            Error::Module(s) => write!(f, "{}", s),
         }
     }
 }

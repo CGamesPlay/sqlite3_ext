@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use sqlite3_ext::{function::*, vtab::*, *};
 use std::sync::Once;
 
@@ -70,6 +72,21 @@ impl<'vtab> VTabLifecycle {
         println!("=== xDestroy");
         self.assert_state(&[VTabLifecycleState::Connected]);
         self.state = VTabLifecycleState::Destroyed;
+    }
+
+    pub fn xUpdateInsert(&self, args: &[&Value]) {
+        println!("=== xUpdate INSERT {:?}", args);
+        self.assert_state(&[VTabLifecycleState::Connected]);
+    }
+
+    pub fn xUpdateUpdate(&self, rowid: &Value, args: &[&Value]) {
+        println!("=== xUpdate UPDATE {:?} {:?}", rowid, args);
+        self.assert_state(&[VTabLifecycleState::Connected]);
+    }
+
+    pub fn xUpdateDelete(&self, rowid: &Value) {
+        println!("=== xUpdate DELETE {:?}", rowid);
+        self.assert_state(&[VTabLifecycleState::Connected]);
     }
 
     pub fn xRename(&self, name: &str) {

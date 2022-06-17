@@ -13,6 +13,7 @@ pub fn sqlite3_libversion() -> &'static str {
     ret.to_str().expect("sqlite3_libversion")
 }
 
+/// Register the provided function to be called by each new database connection.
 pub fn sqlite3_auto_extension(
     init: unsafe extern "C" fn(
         *mut ffi::sqlite3,
@@ -32,7 +33,7 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn create_module<'vtab, T: vtab::VTab<'vtab>>(
+    pub fn create_module<'vtab, T: vtab::VTab<'vtab> + 'vtab>(
         &self,
         name: &str,
         vtab: vtab::Module<'vtab, T>,
@@ -52,6 +53,25 @@ impl Connection {
         match rc {
             ffi::SQLITE_OK => Ok(()),
             _ => Err(Error::Sqlite(rc)),
+        }
+    }
+}
+
+impl From<&rusqlite::Connection> for Connection {
+    /// Convert a rusqlite::Connection to an sqlite3_ext::Connection.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if the sqlite3_ext API has not been initialized, see
+    /// [sqlite3_auto_extension].
+    fn from(conn: &rusqlite::Connection) -> Self {
+        if !ffi::is_ready() {
+            panic!("loadable extension not initialized");
+        }
+        unsafe {
+            Connection {
+                db: conn.handle() as _,
+            }
         }
     }
 }

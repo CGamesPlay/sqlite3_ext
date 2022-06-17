@@ -4,11 +4,20 @@
 
 use super::Error;
 pub use sqlite3ext::*;
-use std::os::raw::{c_char, c_int};
+use std::{
+    os::raw::{c_char, c_int},
+    ptr,
+    sync::Once,
+};
 
 mod sqlite3ext;
 
-pub static mut API: *mut sqlite3_api_routines = std::ptr::null_mut();
+static API_READY: Once = Once::new();
+static mut API: *mut sqlite3_api_routines = ptr::null_mut();
+
+pub fn is_ready() -> bool {
+    API_READY.is_completed()
+}
 
 pub fn sqlite3_str(val: &str) -> Result<*mut c_char, Error> {
     let len: usize = val
@@ -18,7 +27,7 @@ pub fn sqlite3_str(val: &str) -> Result<*mut c_char, Error> {
     unsafe {
         let ptr: *mut c_char = malloc64(len as _) as _;
         if !ptr.is_null() {
-            std::ptr::copy_nonoverlapping(val.as_ptr(), ptr as _, len as _);
+            ptr::copy_nonoverlapping(val.as_ptr(), ptr as _, len as _);
             *ptr.add(len - 1) = 0;
             Ok(ptr)
         } else {

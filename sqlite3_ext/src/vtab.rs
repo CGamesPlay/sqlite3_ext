@@ -32,25 +32,9 @@ const EMPTY_MODULE: ffi::sqlite3_module = ffi::sqlite3_module {
     xRollbackTo: None,
 };
 
-// xCreate = NULL
-//     eponymous-only virtual table. create is forbidden, requires SQLite 3.9.0
-// xCreate = xConnect
-//     eponymous virtual table. create is allowed to instance the table with different
-//     parameters, but the default is also available always
-// xCreate different from xConnect
-//     normal virtual table, cannot be used without a create
-// all of these can be read-only or not.
-
-// eponymous-only read-only | VTab                    |
-// eponymous-only updatable | UpdateVTab              |
-// eponymous read-only      | VTab                    |
-// eponymous updatable      | UpdateVTab              |
-// normal read-only         | CreateVTab              |
-// normal updatable         | UpdateVTab + CreateVTab |
-
 /// Functionality required by all virtual tables. A read-only, eponymous-only virtual table
 /// (e.g. a table-valued function) can implement only this trait.
-pub trait VTab<'vtab>: Sized {
+pub trait VTab<'vtab> {
     type Aux;
     type Cursor: VTabCursor;
 
@@ -60,9 +44,11 @@ pub trait VTab<'vtab>: Sized {
         db: &mut Connection,
         aux: Option<&'vtab Self::Aux>,
         args: &[&str],
-    ) -> Result<(String, Self)>;
+    ) -> Result<(String, Self)>
+    where
+        Self: Sized;
 
-    /// Corrrsponds to xBestIndex. If best_index returns `Err(Error::ConstraintViolation)`,
+    /// Corrresponds to xBestIndex. If best_index returns [`Err(Error::ConstraintViolation)`](Error::ConstraintViolation),
     /// then xBestIndex will return `SQLITE_CONSTRAINT`. Any other error will cause
     /// xBestIndex to fail.
     fn best_index(&self, index_info: &mut IndexInfo) -> Result<()>;
@@ -70,7 +56,7 @@ pub trait VTab<'vtab>: Sized {
     fn open(&'vtab mut self) -> Result<Self::Cursor>;
 }
 
-/// A virtual table that has xCreate and xDestroy methods.
+/// A non-eponymous virtual table that supports CREATE VIRTUAL TABLE.
 pub trait CreateVTab<'vtab>: VTab<'vtab> {
     /// Corresponds to xCreate. The virtual table implementation will return an error if
     /// any of the arguments contain invalid UTF-8.
@@ -78,9 +64,18 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
         db: &mut Connection,
         aux: Option<&'vtab Self::Aux>,
         args: &[&str],
-    ) -> Result<(String, Self)>;
+    ) -> Result<(String, Self)>
+    where
+        Self: Sized;
 
+    /// Corresponds to xDestroy, when DROP TABLE is run on the virtual table.
     fn destroy(&mut self) -> Result<()>;
+}
+
+/// A virtual table that supports ALTER TABLE RENAME.
+pub trait RenameVTab<'vtab>: VTab<'vtab> {
+    /// Corresponds to xRename, when ALTER TABLE RENAME is run on the virtual table.
+    fn rename(&mut self, name: &str) -> Result<()>;
 }
 
 /// A virtual table that supports INSERT/UPDATE/DELETE.
@@ -110,7 +105,7 @@ pub struct Module<'vtab, T: VTab<'vtab>> {
 impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
     /// Declare an eponymous-only virtual table. For this module, CREATE VIRTUAL TABLE is
     /// forbidden. This requires SQLITE >= 3.9.0.
-    pub fn eponymous_only() -> Result<Module<'vtab, T>> {
+    pub fn eponymous_only() -> Result<Self> {
         ffi::require_version(3_009_000)?;
         Ok(Module {
             base: ffi::sqlite3_module {
@@ -134,7 +129,7 @@ impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
     /// Declare an eponymous virtual table. For this module, the virtual table is available
     /// ambiently in the database, but CREATE VIRTUAL TABLE can also be used to instantiate
     /// the table with alternative parameters.
-    pub fn eponymous() -> Module<'vtab, T> {
+    pub fn eponymous() -> Self {
         Module {
             base: ffi::sqlite3_module {
                 iVersion: 2,
@@ -158,7 +153,7 @@ impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
 }
 
 impl<'vtab, T: CreateVTab<'vtab>> Module<'vtab, T> {
-    pub fn standard() -> Module<'vtab, T> {
+    pub fn standard() -> Self {
         Module {
             base: ffi::sqlite3_module {
                 iVersion: 2,
@@ -178,6 +173,20 @@ impl<'vtab, T: CreateVTab<'vtab>> Module<'vtab, T> {
             },
             phantom: PhantomData,
         }
+    }
+}
+
+impl<'vtab, T: UpdateVTab<'vtab>> Module<'vtab, T> {
+    pub fn with_update(mut self) -> Self {
+        self.base.xUpdate = Some(vtab_update::<T>);
+        self
+    }
+}
+
+impl<'vtab, T: RenameVTab<'vtab>> Module<'vtab, T> {
+    pub fn with_rename(mut self) -> Self {
+        self.base.xRename = Some(vtab_rename::<T>);
+        self
     }
 }
 
@@ -205,11 +214,7 @@ macro_rules! vtab_connect {
                 Ok(x) => x,
                 Err(e) => return ffi::handle_error(e, err_msg),
             };
-            let ret = T::$func(
-                &mut conn,
-                module.map_or(None, |m| m.aux.as_ref()),
-                args.as_slice(),
-            );
+            let ret = T::$func(&mut conn, module.aux.as_ref(), args.as_slice());
             let (sql, vtab) = match ret {
                 Ok(x) => x,
                 Err(e) => return ffi::handle_error(e, err_msg),
@@ -364,6 +369,30 @@ unsafe extern "C" fn vtab_rowid<'vtab, T: VTab<'vtab> + 'vtab>(
     }
 }
 
+unsafe extern "C" fn vtab_update<'vtab, T: UpdateVTab<'vtab> + 'vtab>(
+    _vtab: *mut ffi::sqlite3_vtab,
+    _argc: i32,
+    _argv: *mut *mut ffi::sqlite3_value,
+    _rowid: *mut i64,
+) -> c_int {
+    todo!();
+}
+
+unsafe extern "C" fn vtab_rename<'vtab, T: RenameVTab<'vtab> + 'vtab>(
+    vtab: *mut ffi::sqlite3_vtab,
+    name: *const i8,
+) -> c_int {
+    let vtab = &mut *(vtab as *mut VTabHandle<T>);
+    let name = CStr::from_ptr(name)
+        .to_str()
+        .map_err(|e| Error::Utf8Error(e));
+    let name = match name {
+        Ok(name) => name,
+        Err(e) => return ffi::handle_error(e, &mut vtab.base.zErrMsg),
+    };
+    ffi::handle_result(vtab.vtab.rename(name), &mut vtab.base.zErrMsg)
+}
+
 /// Handle to the module and aux data, so that it can be properly dropped when the module is
 /// unloaded.
 pub(crate) struct ModuleHandle<'vtab, T: VTab<'vtab>> {
@@ -372,8 +401,8 @@ pub(crate) struct ModuleHandle<'vtab, T: VTab<'vtab>> {
 }
 
 impl<'vtab, T: VTab<'vtab>> ModuleHandle<'vtab, T> {
-    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> Option<&'a ModuleHandle<'vtab, T>> {
-        ptr.cast::<ModuleHandle<T>>().as_ref()
+    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a mut ModuleHandle<'vtab, T> {
+        &mut *(ptr as *mut ModuleHandle<'vtab, T>)
     }
 }
 
@@ -509,28 +538,33 @@ impl IndexInfo {
         self.base.estimatedCost = val;
     }
 
+    /// Requires SQLite 3.8.2.
     pub fn estimated_rows(&self) -> Result<i64> {
         ffi::require_version(3_008_002)?;
         Ok(self.base.estimatedRows)
     }
 
+    /// Requires SQLite 3.8.2.
     pub fn set_estimated_rows(&mut self, val: i64) -> Result<()> {
         ffi::require_version(3_008_002)?;
         self.base.estimatedRows = val;
         Ok(())
     }
 
+    /// Requires SQLite 3.9.0.
     pub fn scan_flags(&self) -> Result<usize> {
         ffi::require_version(3_009_000)?;
         Ok(self.base.idxFlags as _)
     }
 
+    /// Requires SQLite 3.9.0.
     pub fn set_scan_flags(&mut self, val: usize) -> Result<()> {
         ffi::require_version(3_009_000)?;
         self.base.idxFlags = val as _;
         Ok(())
     }
 
+    /// Requires SQLite 3.10.0.
     pub fn columns_used(&self) -> Result<u64> {
         ffi::require_version(3_010_000)?;
         Ok(self.base.colUsed)

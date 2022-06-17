@@ -10,11 +10,10 @@ pub unsafe extern "C" fn sqlite3_crdb_init(
     api: *mut ffi::sqlite3_api_routines,
 ) -> std::os::raw::c_int {
     ffi::init_api_routines(api);
-    let conn = Connection::from(db);
-    ffi::handle_result(crdb_init(&conn), err_msg)
+    ffi::handle_result(crdb_init(&Connection::from(db)), err_msg)
 }
 
 fn crdb_init(db: &Connection) -> Result<()> {
-    db.create_module("crdb", eponymous_only_module::<vtab::CrdbVTab>(), None)?;
+    db.create_module("crdb", Module::<vtab::CrdbVTab>::standard_module(), None)?;
     Ok(())
 }

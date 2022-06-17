@@ -106,9 +106,11 @@ fn generate_api_routines() {
 
     let result = quote! {
         pub fn init_api_routines(api: *mut sqlite3_api_routines) {
-            unsafe {
-                #(#init_lines)*
-            }
+            API_READY.call_once(|| {
+                unsafe {
+                    #(#init_lines)*
+                }
+            });
         }
 
         fn unavailable() {

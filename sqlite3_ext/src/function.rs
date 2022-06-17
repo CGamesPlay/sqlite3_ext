@@ -27,6 +27,14 @@ impl ToContextResult for i32 {
     }
 }
 
+impl ToContextResult for i64 {
+    fn assign_to(&self, context: &mut Context) {
+        unsafe {
+            ffi::result_int64(context.as_ptr() as _, *self);
+        }
+    }
+}
+
 impl std::fmt::Debug for Context {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("Context").finish()

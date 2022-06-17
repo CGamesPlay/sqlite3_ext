@@ -13,9 +13,21 @@ pub enum Error {
 impl Error {
     pub fn from_sqlite(rc: i32) -> Result<()> {
         match rc {
-            ffi::SQLITE_OK => Ok(()),
+            ffi::SQLITE_OK | ffi::SQLITE_ROW | ffi::SQLITE_DONE => Ok(()),
             _ => Err(Error::Sqlite(rc)),
         }
+    }
+}
+
+impl From<Error> for rusqlite::Error {
+    fn from(e: Error) -> Self {
+        rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: rusqlite::ffi::ErrorCode::Unknown,
+                extended_code: ffi::SQLITE_ERROR,
+            },
+            Some(format!("{}", e)),
+        )
     }
 }
 

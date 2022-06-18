@@ -1,0 +1,15 @@
+bindgen:
+  summary: regenerate the sqlite3ext bindings
+  command: |
+    set -e
+    which -s bindgen || cargo install bindgen
+    bindgen src/ffi/sqlite3ext.h \
+      --allowlist-file src/ffi/sqlite3.h \
+      --allowlist-file src/ffi/sqlite3ext.h \
+      --ignore-functions \
+      --default-macro-constant-type signed \
+      --raw-line "#![allow(non_snake_case)]" \
+      --raw-line "#![allow(dead_code)]" \
+      --raw-line "#![allow(non_camel_case_types)]" \
+      -o src/ffi/sqlite3ext.rs
+    echo Generated src/ffi/sqlite3ext.rs

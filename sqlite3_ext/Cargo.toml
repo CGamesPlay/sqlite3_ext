@@ -5,12 +5,30 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+static = [ "dep:rusqlite", "dep:libsqlite3-sys" ]
+static_modern = [ "static", "rusqlite?/modern_sqlite" ]
+
 [dependencies]
-rusqlite = { version = "0.27.0" }
-libsqlite3-sys = { version = "0.24.0" }
+rusqlite = { version = "0.27.0", optional = true }
+libsqlite3-sys = { version = "0.24.0", optional = true }
 
 [build-dependencies]
 proc-macro2 = "1.0.39"
 which = "4.2.5"
 syn = { version = "1.0.96", features = [ "parsing", "full" ] }
 quote = "1.0.18"
+
+[[test]]
+name = "read_only"
+required-features = [ "static" ]
+
+[[test]]
+name = "update"
+required-features = [ "static" ]
+
+[[example]]
+name = "generate_series"
+required-features = [ "static" ]
+crate-type = [ "staticlib", "cdylib" ]
+test = true

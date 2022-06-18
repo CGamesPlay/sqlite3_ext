@@ -1,32 +1,25 @@
+//! Wrappers for creating virtual tables.
+
 use super::{ffi, function::Context, types::*, value::Value, Connection};
 use std::{ffi::CStr, marker::PhantomData, os::raw::c_void, ptr, slice};
 
 pub mod stubs;
 
-const EMPTY_MODULE: ffi::sqlite3_module = ffi::sqlite3_module {
-    iVersion: 2,
-    xCreate: None,
-    xConnect: None,
-    xBestIndex: None,
-    xDisconnect: None,
-    xDestroy: None,
-    xOpen: None,
-    xClose: None,
-    xFilter: None,
-    xNext: None,
-    xEof: None,
-    xColumn: None,
-    xRowid: None,
-    xUpdate: None,
-    xBegin: None,
-    xSync: None,
-    xCommit: None,
-    xRollback: None,
-    xFindFunction: None,
-    xRename: None,
-    xSavepoint: None,
-    xRelease: None,
-    xRollbackTo: None,
+union ModuleBytes {
+    bytes: [u8; std::mem::size_of::<ffi::sqlite3_module>()],
+    module: ffi::sqlite3_module,
+}
+
+// We use this empty module hack to avoid specifying all of the fields for the module here. In
+// general, we present the most modern API that we can, but use Result types to indicate when a
+// feature is not available due to the runtime SQLite version. When statically linking, we
+// emulate the same behavior, but we have to be a bit more cautious, since we are using the
+// libsqlite3_sys presented API, which might otherwise cause compilation errors.
+const EMPTY_MODULE: ffi::sqlite3_module = unsafe {
+    ModuleBytes {
+        bytes: [0_u8; std::mem::size_of::<ffi::sqlite3_module>()],
+    }
+    .module
 };
 
 /// Functionality required by all virtual tables. A read-only, eponymous-only virtual table
@@ -307,7 +300,7 @@ impl IndexInfo {
     /// able to allocate memory for the string.
     pub fn set_index_str(&mut self, val: Option<&str>) -> Result<()> {
         if self.base.needToFreeIdxStr != 0 {
-            unsafe { ffi::free(self.base.idxStr as _) };
+            unsafe { ffi::sqlite3_free(self.base.idxStr as _) };
         }
         match val {
             None => {
@@ -315,7 +308,7 @@ impl IndexInfo {
                 self.base.needToFreeIdxStr = 0;
             }
             Some(x) => {
-                self.base.idxStr = ffi::sqlite3_str(x)?;
+                self.base.idxStr = ffi::str_to_sqlite3(x)?;
                 self.base.needToFreeIdxStr = 1;
             }
         }
@@ -325,7 +318,7 @@ impl IndexInfo {
     /// Set the index string without copying.
     pub fn set_index_str_static(&mut self, val: &'static CStr) {
         if self.base.needToFreeIdxStr != 0 {
-            unsafe { ffi::free(self.base.idxStr as _) };
+            unsafe { ffi::sqlite3_free(self.base.idxStr as _) };
         }
         self.base.idxStr = val.as_ptr() as _;
         self.base.needToFreeIdxStr = 0;
@@ -349,34 +342,65 @@ impl IndexInfo {
 
     /// Requires SQLite 3.8.2.
     pub fn estimated_rows(&self) -> Result<i64> {
-        ffi::require_version(3_008_002)?;
-        Ok(self.base.estimatedRows)
+        ffi::match_sqlite! {
+            modern => {
+                ffi::require_version(3_008_002)?;
+                Ok(self.base.estimatedRows)
+            },
+            _ => Err(Error::VersionNotSatisfied(3_008_002))
+        }
     }
 
     /// Requires SQLite 3.8.2.
     pub fn set_estimated_rows(&mut self, val: i64) -> Result<()> {
-        ffi::require_version(3_008_002)?;
-        self.base.estimatedRows = val;
-        Ok(())
+        ffi::match_sqlite! {
+            modern => {
+                ffi::require_version(3_008_002)?;
+                self.base.estimatedRows = val;
+                Ok(())
+            },
+            _ => {
+                let _ = val;
+                Err(Error::VersionNotSatisfied(3_008_002))
+            }
+        }
     }
 
     /// Requires SQLite 3.9.0.
     pub fn scan_flags(&self) -> Result<usize> {
-        ffi::require_version(3_009_000)?;
-        Ok(self.base.idxFlags as _)
+        ffi::match_sqlite! {
+            modern => {
+                ffi::require_version(3_009_000)?;
+                Ok(self.base.idxFlags as _)
+            },
+            _ => Err(Error::VersionNotSatisfied(3_009_000))
+        }
     }
 
     /// Requires SQLite 3.9.0.
     pub fn set_scan_flags(&mut self, val: usize) -> Result<()> {
-        ffi::require_version(3_009_000)?;
-        self.base.idxFlags = val as _;
-        Ok(())
+        ffi::match_sqlite! {
+            modern => {
+                ffi::require_version(3_009_000)?;
+                self.base.idxFlags = val as _;
+                Ok(())
+            },
+            _ => {
+                let _ = val;
+                Err(Error::VersionNotSatisfied(3_009_000))
+            }
+        }
     }
 
     /// Requires SQLite 3.10.0.
     pub fn columns_used(&self) -> Result<u64> {
-        ffi::require_version(3_010_000)?;
-        Ok(self.base.colUsed)
+        ffi::match_sqlite! {
+            modern => {
+                ffi::require_version(3_010_000)?;
+                Ok(self.base.colUsed)
+            },
+            _ => Err(Error::VersionNotSatisfied(3_010_000))
+        }
     }
 }
 

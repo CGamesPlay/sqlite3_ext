@@ -19,18 +19,6 @@ impl Error {
     }
 }
 
-impl From<Error> for rusqlite::Error {
-    fn from(e: Error) -> Self {
-        rusqlite::Error::SqliteFailure(
-            rusqlite::ffi::Error {
-                code: rusqlite::ffi::ErrorCode::Unknown,
-                extended_code: ffi::SQLITE_ERROR,
-            },
-            Some(format!("{}", e)),
-        )
-    }
-}
-
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

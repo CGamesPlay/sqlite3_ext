@@ -22,7 +22,7 @@ pub trait ToContextResult {
 impl ToContextResult for i32 {
     fn assign_to(&self, context: &mut Context) {
         unsafe {
-            ffi::result_int(context.as_ptr() as _, *self);
+            ffi::sqlite3_result_int(context.as_ptr() as _, *self);
         }
     }
 }
@@ -30,7 +30,7 @@ impl ToContextResult for i32 {
 impl ToContextResult for i64 {
     fn assign_to(&self, context: &mut Context) {
         unsafe {
-            ffi::result_int64(context.as_ptr() as _, *self);
+            ffi::sqlite3_result_int64(context.as_ptr() as _, *self);
         }
     }
 }

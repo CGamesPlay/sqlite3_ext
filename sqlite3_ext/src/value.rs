@@ -23,7 +23,7 @@ impl Value {
 
     pub fn value_type(&self) -> ValueType {
         unsafe {
-            match ffi::value_type(self.as_ptr() as _) {
+            match ffi::sqlite3_value_type(self.as_ptr() as _) {
                 ffi::SQLITE_INTEGER => ValueType::Integer,
                 ffi::SQLITE_FLOAT => ValueType::Float,
                 ffi::SQLITE_TEXT => ValueType::Text,
@@ -35,7 +35,7 @@ impl Value {
     }
 
     pub fn get_i64(&self) -> i64 {
-        unsafe { ffi::value_int64(self.as_ptr()) }
+        unsafe { ffi::sqlite3_value_int64(self.as_ptr()) }
     }
 }
 

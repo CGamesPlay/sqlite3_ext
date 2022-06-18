@@ -1,5 +1,5 @@
 use sqlite3_ext::ffi;
-use sqlite3_ext::*;
+use sqlite3_ext::{vtab::*, *};
 
 mod vtab;
 
@@ -14,6 +14,6 @@ pub unsafe extern "C" fn sqlite3_crdb_init(
 }
 
 fn crdb_init(db: &Connection) -> Result<()> {
-    db.create_module("crdb", Module::<vtab::CrdbVTab>::standard_module(), None)?;
+    db.create_module("crdb", Module::<vtab::CrdbVTab>::eponymous(), None)?;
     Ok(())
 }

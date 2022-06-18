@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use sqlite3_ext::{function::*, vtab::*, *};
-use std::sync::Once;
 
 #[derive(Debug, PartialEq)]
 pub enum VTabLifecycleState {
@@ -170,20 +169,6 @@ impl Drop for CursorLifecycle<'_> {
     }
 }
 
-static START: Once = Once::new();
-
 pub fn setup() -> rusqlite::Result<rusqlite::Connection> {
-    START.call_once(|| {
-        sqlite3_auto_extension(init_test).unwrap();
-    });
     rusqlite::Connection::open_in_memory()
-}
-
-pub unsafe extern "C" fn init_test(
-    _db: *mut ffi::sqlite3,
-    err_msg: *mut *mut std::os::raw::c_char,
-    api: *mut ffi::sqlite3_api_routines,
-) -> std::os::raw::c_int {
-    ffi::init_api_routines(api);
-    ffi::handle_result(Ok(()), err_msg)
 }

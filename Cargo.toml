@@ -6,18 +6,13 @@ edition = "2021"
 [workspace]
 members = [ "sqlite3_ext" ]
 
-[features]
-default = [ "rusqlite",  "libsqlite3-sys" ]
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-crate-type = [ "lib", "cdylib", "staticlib" ]
+crate-type = [ "cdylib", "staticlib" ]
 
 [dependencies]
 sqlite3_ext = { path = "sqlite3_ext" }
-rusqlite = { version = "0.27.0", optional = true }
-libsqlite3-sys = { version = "0.24.0", optional = true }
 
 [build-dependencies]
 proc-macro2 = "1.0.39"

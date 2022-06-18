@@ -3,29 +3,45 @@
 #![allow(dead_code)]
 
 use super::Error;
-pub use sqlite3ext::*;
+#[cfg(not(feature = "static"))]
+pub use dynamic_link::*;
+pub use sqlite3ext::sqlite3_api_routines;
+#[cfg(feature = "static")]
+pub use static_link::*;
 use std::{
     os::raw::{c_char, c_int},
     ptr,
-    sync::Once,
 };
 
+#[cfg(not(feature = "static"))]
+mod dynamic_link;
 mod sqlite3ext;
+#[cfg(feature = "static")]
+mod static_link;
 
-static API_READY: Once = Once::new();
-static mut API: *mut sqlite3_api_routines = ptr::null_mut();
-
-pub fn is_ready() -> bool {
-    API_READY.is_completed()
+#[cfg(any(not(feature = "static"), feature = "static_modern"))]
+macro_rules! match_sqlite {
+    (modern => $modern:expr , _ => $old:expr) => {
+        $modern
+    };
+}
+#[cfg(not(any(not(feature = "static"), feature = "static_modern")))]
+macro_rules! match_sqlite {
+    (modern => $modern:expr , _ => $old:expr) => {
+        $old
+    };
 }
 
-pub fn sqlite3_str(val: &str) -> Result<*mut c_char, Error> {
+pub(crate) use match_sqlite;
+
+pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
     let len: usize = val
         .len()
         .checked_add(1)
         .ok_or(Error::OutOfMemory(val.len()))?;
     unsafe {
-        let ptr: *mut c_char = malloc64(len as _) as _;
+        let ptr: *mut c_char =
+            match_sqlite!( modern => sqlite3_malloc64, _ => sqlite3_malloc )(len as _) as _;
         if !ptr.is_null() {
             ptr::copy_nonoverlapping(val.as_ptr(), ptr as _, len as _);
             *ptr.add(len - 1) = 0;
@@ -42,7 +58,7 @@ pub unsafe fn handle_error(err: Error, msg: *mut *mut c_char) -> c_int {
             return code;
         }
     }
-    if let Ok(s) = sqlite3_str(&format!("{}", err)) {
+    if let Ok(s) = str_to_sqlite3(&format!("{}", err)) {
         *msg = s;
     }
     SQLITE_ERROR
@@ -56,7 +72,7 @@ pub unsafe fn handle_result(result: Result<(), Error>, msg: *mut *mut c_char) ->
 }
 
 pub fn is_version(min: c_int) -> bool {
-    let found = unsafe { libversion_number() };
+    let found = unsafe { sqlite3_libversion_number() };
     found >= min
 }
 
@@ -67,5 +83,3 @@ pub fn require_version(min: c_int) -> Result<(), Error> {
         Ok(())
     }
 }
-
-include!(concat!(env!("OUT_DIR"), "/sqlite3_api_routines.rs"));

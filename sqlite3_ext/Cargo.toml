@@ -10,14 +10,16 @@ static = [ "dep:rusqlite", "dep:libsqlite3-sys" ]
 static_modern = [ "static", "rusqlite?/modern_sqlite" ]
 
 [dependencies]
+once_cell = "1.0"
+sqlite3_ext_macro = { path = "sqlite3_ext_macro" }
 rusqlite = { version = "0.27.0", optional = true }
 libsqlite3-sys = { version = "0.24.0", optional = true }
 
 [build-dependencies]
-proc-macro2 = "1.0.39"
+proc-macro2 = "1.0"
 which = "4.2.5"
-syn = { version = "1.0.96", features = [ "parsing", "full" ] }
-quote = "1.0.18"
+syn = { version = "1.0", features = [ "parsing", "full" ] }
+quote = "1.0"
 
 [[test]]
 name = "read_only"
@@ -29,6 +31,5 @@ required-features = [ "static" ]
 
 [[example]]
 name = "generate_series"
-required-features = [ "static" ]
 crate-type = [ "staticlib", "cdylib" ]
 test = true

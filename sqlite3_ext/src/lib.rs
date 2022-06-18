@@ -1,7 +1,10 @@
+pub use extension::Extension;
+pub use sqlite3_ext_macro::*;
 use std::ffi::{c_void, CStr, CString};
 pub use types::*;
 pub use value::*;
 
+mod extension;
 pub mod ffi;
 pub mod function;
 pub mod static_ext;

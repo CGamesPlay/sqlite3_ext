@@ -1,6 +1,6 @@
 use super::ffi;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Error {
     Sqlite(i32),
     Utf8Error(std::str::Utf8Error),
@@ -24,6 +24,7 @@ impl std::fmt::Display for Error {
         match self {
             Error::Sqlite(i) => write!(f, "SQLite error {}", i),
             Error::Utf8Error(e) => e.fmt(f),
+            Error::Module(s) => write!(f, "{}", s),
             Error::OutOfMemory(l) => write!(f, "unable to allocate {} bytes", l),
             Error::VersionNotSatisfied(v) => write!(
                 f,
@@ -33,7 +34,6 @@ impl std::fmt::Display for Error {
                 v % 1000
             ),
             Error::ConstraintViolation => write!(f, "constraint violation"),
-            Error::Module(s) => write!(f, "{}", s),
         }
     }
 }

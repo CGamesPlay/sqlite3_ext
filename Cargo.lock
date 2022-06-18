@@ -167,11 +167,21 @@ name = "sqlite3_ext"
 version = "0.1.0"
 dependencies = [
  "libsqlite3-sys",
+ "once_cell",
  "proc-macro2",
  "quote",
  "rusqlite",
+ "sqlite3_ext_macro",
  "syn",
  "which",
+]
+
+[[package]]
+name = "sqlite3_ext_macro"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]

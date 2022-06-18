@@ -52,13 +52,23 @@ impl VTabCursor for Cursor {
     }
 }
 
+#[sqlite3_ext_main]
+fn crdb_init(db: &Connection) -> Result<bool> {
+    println!("crdb_init!");
+    db.create_module("crdb", Module::<GenerateSeries>::eponymous(), None)?;
+    Ok(false)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use rusqlite;
 
     #[test]
-    fn usage() {
-        println!("generate_srries");
+    fn usage() -> rusqlite::Result<()> {
+        Extension::auto(&crdb_init).unwrap();
+        let conn = rusqlite::Connection::open_in_memory()?;
+        println!("generate_series");
+        Ok(())
     }
 }

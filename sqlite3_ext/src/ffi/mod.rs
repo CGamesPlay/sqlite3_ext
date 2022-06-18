@@ -5,7 +5,6 @@
 use super::Error;
 #[cfg(not(feature = "static"))]
 pub use dynamic_link::*;
-pub use sqlite3ext::sqlite3_api_routines;
 #[cfg(feature = "static")]
 pub use static_link::*;
 use std::{

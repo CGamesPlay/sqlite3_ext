@@ -97,7 +97,7 @@ pub trait UpdateVTab<'vtab>: VTab<'vtab> {
 
 /// Implementation of the cursor type for a virtual table.
 pub trait VTabCursor {
-    fn filter(&mut self, index_num: usize, index_str: Option<&str>, args: &[Value]) -> Result<()>;
+    fn filter(&mut self, index_num: usize, index_str: Option<&str>, args: &[&Value]) -> Result<()>;
 
     fn next(&mut self) -> Result<()>;
 

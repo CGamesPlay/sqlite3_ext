@@ -137,7 +137,7 @@ pub unsafe extern "C" fn vtab_filter<'vtab, T: VTab<'vtab> + 'vtab>(
     } else {
         CStr::from_ptr(index_str).to_str().ok()
     };
-    let args = slice::from_raw_parts(*argv as *mut Value, argc as _);
+    let args = slice::from_raw_parts(argv as *mut &Value, argc as _);
     ffi::handle_result(
         cursor.cursor.filter(index_num as _, index_str, args),
         &mut (*cursor.base.pVtab).zErrMsg,

@@ -112,7 +112,7 @@ impl<'vtab> CursorLifecycle<'vtab> {
         }
     }
 
-    pub fn xFilter(&mut self, index_num: usize, index_str: Option<&str>, args: &[Value]) {
+    pub fn xFilter(&mut self, index_num: usize, index_str: Option<&str>, args: &[&Value]) {
         println!(
             "=== xFilter with {}, {:?}, {:?}",
             index_num, index_str, args

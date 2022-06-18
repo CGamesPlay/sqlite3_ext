@@ -9,8 +9,9 @@ pub enum ValueType {
     Null,
 }
 
+/// Stores a SQL value. SQLite always owns all value objects, so there is no way to directly
+/// create one.
 #[repr(transparent)]
-#[derive(Copy, Clone)]
 pub struct Value {
     base: ffi::sqlite3_value,
 }

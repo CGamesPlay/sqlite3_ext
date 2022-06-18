@@ -110,7 +110,7 @@ impl<'vtab> ListCursor<'vtab> {
 }
 
 impl<'vtab> VTabCursor for ListCursor<'vtab> {
-    fn filter(&mut self, index_num: usize, index_str: Option<&str>, args: &[Value]) -> Result<()> {
+    fn filter(&mut self, index_num: usize, index_str: Option<&str>, args: &[&Value]) -> Result<()> {
         self.lifecycle.xFilter(index_num, index_str, args);
         self.current = self.iter.next().map(|v| (0, v));
         Ok(())

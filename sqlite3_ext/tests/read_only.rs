@@ -104,7 +104,7 @@ struct StandardCursor<'vtab> {
 }
 
 impl VTabCursor for StandardCursor<'_> {
-    fn filter(&mut self, index_num: usize, index_str: Option<&str>, args: &[Value]) -> Result<()> {
+    fn filter(&mut self, index_num: usize, index_str: Option<&str>, args: &[&Value]) -> Result<()> {
         self.lifecycle.xFilter(index_num, index_str, args);
         self.current = self.iter.next();
         Ok(())

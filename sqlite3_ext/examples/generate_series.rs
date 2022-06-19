@@ -204,13 +204,13 @@ impl VTabCursor for Cursor {
 }
 
 #[sqlite3_ext_main]
-fn init(db: &Connection) -> Result<bool> {
+fn init(db: &Connection) -> Result<()> {
     db.create_module(
         "generate_series",
         Module::<GenerateSeries>::eponymous_only()?,
         None,
     )?;
-    Ok(false)
+    Ok(())
 }
 
 #[cfg(test)]

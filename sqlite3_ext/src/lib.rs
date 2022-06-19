@@ -1,6 +1,6 @@
 pub use extension::Extension;
 pub use sqlite3_ext_macro::*;
-use std::ffi::{c_void, CStr, CString};
+use std::ffi::{CStr, CString};
 pub use types::*;
 pub use value::*;
 

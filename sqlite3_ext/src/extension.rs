@@ -22,32 +22,32 @@ type CEntry = unsafe extern "C" fn(
 /// ```no_run
 /// use sqlite3_ext::*;
 ///
-/// #[sqlite3_ext_main]
-/// fn vfs_init(db: &Connection) -> Result<bool> {
+/// #[sqlite3_ext_main(persistent)]
+/// fn init(db: &Connection) -> Result<()> {
 ///     // Automatically load this extension on future connections.
 ///     Extension::auto(&per_db_init)?;
 ///     // Load this extension on this connection.
 ///     per_db_init(db)?;
-///     // Keep extension loaded after this connection ends.
-///     Ok(true)
+///     Ok(())
 /// }
 ///
 /// #[sqlite3_ext_init]
-/// fn per_db_init(db: &Connection) -> Result<bool> {
-///     Ok(false)
+/// fn per_db_init(db: &Connection) -> Result<()> {
+///     // Add extensions to this connection.
+///     Ok(())
 /// }
 /// ```
 #[repr(C)]
 pub struct Extension {
     c_entry: unsafe extern "C" fn(),
-    init: fn(&Connection) -> Result<bool>,
+    init: fn(&Connection) -> Result<()>,
 }
 
 impl Extension {
     /// Construct an Extension from parts.
     ///
     /// You generally want to use [sqlite3_ext_init] instead of this function.
-    pub const fn new(c_entry: CEntry, init: fn(&Connection) -> Result<bool>) -> Self {
+    pub const fn new(c_entry: CEntry, init: fn(&Connection) -> Result<()>) -> Self {
         unsafe {
             Extension {
                 c_entry: transmute(c_entry as *mut c_void),
@@ -88,9 +88,9 @@ impl Extension {
 }
 
 impl Deref for Extension {
-    type Target = fn(&Connection) -> Result<bool>;
+    type Target = fn(&Connection) -> Result<()>;
 
-    fn deref(&self) -> &fn(&Connection) -> Result<bool> {
+    fn deref(&self) -> &Self::Target {
         &self.init
     }
 }

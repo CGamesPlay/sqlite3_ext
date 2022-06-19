@@ -3,6 +3,7 @@
 #![cfg(feature = "static")]
 
 use super::*;
+use std::ffi::c_void;
 
 /// Register the provided function to be called by each new database connection.
 pub fn sqlite3_auto_extension(

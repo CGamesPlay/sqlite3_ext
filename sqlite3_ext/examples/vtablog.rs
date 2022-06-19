@@ -201,9 +201,9 @@ impl Drop for VTabLogCursor<'_> {
 }
 
 #[sqlite3_ext_main]
-fn init(db: &Connection) -> Result<bool> {
+fn init(db: &Connection) -> Result<()> {
     db.create_module("vtablog", Module::<VTabLog>::standard(), None)?;
-    Ok(false)
+    Ok(())
 }
 
 #[cfg(test)]

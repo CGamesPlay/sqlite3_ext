@@ -9,38 +9,37 @@ use syn::{
 
 mod kw {
     syn::custom_keyword!(export);
+    syn::custom_keyword!(persistent);
 }
 
 /// Declare the primary extension entry point for the crate.
 ///
 /// This is equivalent to [macro@sqlite3_ext_init], but it will automatically name the export
 /// according to the name of the crate (e.g. `sqlite3_myextension_init`).
+///
+/// # Examples
+///
+/// Specify a persistent extension:
+///
+/// ```no_run
+/// #[sqlite3_ext_init(persistent)]
+/// fn init(db: &Connection) -> Result<()> {
+///     Ok(())
+/// }
+/// ```
 #[proc_macro_attribute]
-pub fn sqlite3_ext_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn sqlite3_ext_main(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attr = proc_macro2::TokenStream::from(attr);
     let item = parse_macro_input!(item as syn::ItemFn);
     let crate_name = std::env::var("CARGO_CRATE_NAME").unwrap();
     let export_base = crate_name.to_lowercase();
     let export_base = Regex::new("[^a-z]").unwrap().replace_all(&export_base, "");
     let init_ident = format_ident!("sqlite3_{}_init", export_base);
     let expanded = quote! {
-        #[sqlite3_ext_init(export = #init_ident)]
+        #[sqlite3_ext_init(export = #init_ident, #attr)]
         #item
     };
     TokenStream::from(expanded)
-}
-
-struct ExtAttrName {
-    value: Ident,
-}
-
-impl Parse for ExtAttrName {
-    fn parse(input: ParseStream) -> Result<Self> {
-        input.parse::<kw::export>()?;
-        input.parse::<token::Eq>()?;
-        Ok(ExtAttrName {
-            value: input.parse()?,
-        })
-    }
 }
 
 /// Declare the entry point to an extension.
@@ -51,10 +50,8 @@ impl Parse for ExtAttrName {
 /// about naming the exported method, but generally you can use [macro@sqlite3_ext_main] to
 /// automatically name the export correctly.
 ///
-/// The extension entry point must return a `Result<bool>`. Returning `Ok(true)` is equivalent
-/// to returning `SQLITE_OK_LOAD_PERMANENTLY`, meaning that the extension will not be unloaded
-/// when the connection is closed. Returning `Ok(false)` is equivalent to returning
-/// `SQLITE_OK`. See [the SQLite
+/// If the persistent keyword is included in the attribute, the extension will be loaded
+/// permanently. See [the SQLite
 /// documentation](https://www.sqlite.org/loadext.html#persistent_loadable_extensions) for more
 /// information.
 ///
@@ -62,10 +59,10 @@ impl Parse for ExtAttrName {
 ///
 /// Specifying a nonstandard entry point name:
 ///
-/// ```
-/// #[sqlite3_ext_init(export = "nonstandard_entry_point")]
-/// fn init(db: &Connection) -> Result<bool> {
-///     Ok(false)
+/// ```no_run
+/// #[sqlite3_ext_init(export = "nonstandard_entry_point", persistent)]
+/// fn init(db: &Connection) -> Result<()> {
+///     Ok(())
 /// }
 /// ```
 ///
@@ -84,18 +81,43 @@ impl Parse for ExtAttrName {
 #[proc_macro_attribute]
 pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
     let directives =
-        parse_macro_input!(attr with Punctuated::<ExtAttrName, Token![,]>::parse_terminated);
-    if directives.len() > 1 {
-        return Error::new(directives[1].value.span(), "multiple names")
-            .into_compile_error()
-            .into();
+        parse_macro_input!(attr with Punctuated::<ExtAttr, Token![,]>::parse_terminated);
+    let mut export: Option<Ident> = None;
+    let mut persistent: Option<kw::persistent> = None;
+    for d in directives {
+        match d {
+            ExtAttr::Export(ExtAttrExport { value }) => {
+                if let Some(_) = export {
+                    return Error::new(value.span(), "export specified multiple times")
+                        .into_compile_error()
+                        .into();
+                } else {
+                    export = Some(value)
+                }
+            }
+            ExtAttr::Persistent(tok) => {
+                persistent = Some(tok);
+            }
+        }
     }
-    let export_vis = directives.first().map(|_| quote!(#[no_mangle] pub));
+    let export_vis = export.as_ref().map(|_| quote!(#[no_mangle] pub));
     let item = parse_macro_input!(item as syn::ItemFn);
     let name = item.sig.ident.clone();
-    let c_name = match directives.first() {
+    let persistent = match persistent {
+        None => quote!(SQLITE_OK),
+        Some(tok) => {
+            if let Some(_) = export {
+                quote!(SQLITE_OK_LOAD_PERMANENTLY)
+            } else {
+                return Error::new(tok.span, "unexported extension cannot be persistent")
+                    .into_compile_error()
+                    .into();
+            }
+        }
+    };
+    let c_name = match export {
         None => format_ident!("{}_entry", item.sig.ident),
-        Some(x) => x.value.clone(),
+        Some(x) => x,
     };
     let expanded = quote! {
         #[allow(non_upper_case_globals)]
@@ -108,8 +130,7 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
             ) -> ::std::os::raw::c_int {
                 ::sqlite3_ext::ffi::init_api_routines(api);
                 match #name(::sqlite3_ext::Connection::from_ptr(db)) {
-                    Ok(true) => ::sqlite3_ext::ffi::SQLITE_OK_LOAD_PERMANENTLY,
-                    Ok(false) => ::sqlite3_ext::ffi::SQLITE_OK,
+                    Ok(_) => ::sqlite3_ext::ffi::#persistent,
                     Err(e) => ::sqlite3_ext::ffi::handle_error(e, err_msg),
                 }
             }
@@ -120,4 +141,36 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
         };
     };
     TokenStream::from(expanded)
+}
+
+enum ExtAttr {
+    Export(ExtAttrExport),
+    Persistent(kw::persistent),
+}
+
+struct ExtAttrExport {
+    value: Ident,
+}
+
+impl Parse for ExtAttr {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(kw::export) {
+            input.parse().map(ExtAttr::Export)
+        } else if lookahead.peek(kw::persistent) {
+            input.parse().map(ExtAttr::Persistent)
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
+
+impl Parse for ExtAttrExport {
+    fn parse(input: ParseStream) -> Result<Self> {
+        input.parse::<kw::export>()?;
+        input.parse::<token::Eq>()?;
+        Ok(ExtAttrExport {
+            value: input.parse()?,
+        })
+    }
 }

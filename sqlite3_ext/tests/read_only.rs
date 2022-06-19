@@ -163,7 +163,7 @@ fn check_table(
 #[test]
 fn eponymous_only_vtab() -> rusqlite::Result<()> {
     let conn = setup()?;
-    Connection::from(&conn).create_module(
+    Connection::from_rusqlite(&conn).create_module(
         "eponymous_only_vtab",
         Module::<StandardVTab>::eponymous_only()?.with_rename(),
         Some(vec![10, 12, 14, 16, 18]),
@@ -192,7 +192,7 @@ fn eponymous_only_vtab() -> rusqlite::Result<()> {
 #[test]
 fn eponymous_vtab() -> rusqlite::Result<()> {
     let conn = setup()?;
-    Connection::from(&conn).create_module(
+    Connection::from_rusqlite(&conn).create_module(
         "eponymous_vtab",
         Module::<StandardVTab>::eponymous().with_rename(),
         Some(vec![20, 22, 24, 26, 28]),
@@ -226,7 +226,7 @@ fn eponymous_vtab() -> rusqlite::Result<()> {
 #[test]
 fn standard_vtab() -> rusqlite::Result<()> {
     let conn = setup()?;
-    Connection::from(&conn).create_module(
+    Connection::from_rusqlite(&conn).create_module(
         "standard_vtab",
         Module::<StandardVTab>::standard().with_rename(),
         Some(vec![30, 32, 34, 36, 38]),

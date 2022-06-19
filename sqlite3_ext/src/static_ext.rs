@@ -19,19 +19,10 @@ pub fn sqlite3_auto_extension(
     Error::from_sqlite(rc)
 }
 
-impl From<&rusqlite::Connection> for Connection {
+impl Connection {
     /// Convert a rusqlite::Connection to an sqlite3_ext::Connection.
-    ///
-    /// # Panics
-    ///
-    /// This method will panic if the sqlite3_ext API has not been initialized, see
-    /// [sqlite3_auto_extension].
-    fn from(conn: &rusqlite::Connection) -> Self {
-        unsafe {
-            Connection {
-                db: conn.handle() as _,
-            }
-        }
+    pub fn from_rusqlite(conn: &rusqlite::Connection) -> &mut Self {
+        unsafe { Connection::from_ptr(conn.handle()) }
     }
 }
 

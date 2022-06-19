@@ -35,7 +35,7 @@ pub trait VTab<'vtab> {
     /// The virtual table implementation will return an error if any of the arguments
     /// contain invalid UTF-8.
     fn connect(
-        db: &mut VTabConnection,
+        db: &'vtab mut VTabConnection,
         aux: Option<&'vtab Self::Aux>,
         args: &[&str],
     ) -> Result<(String, Self)>
@@ -60,7 +60,7 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
     /// The virtual table implementation will return an error if any of the arguments
     /// contain invalid UTF-8.
     fn create(
-        db: &mut VTabConnection,
+        db: &'vtab mut VTabConnection,
         aux: Option<&'vtab Self::Aux>,
         args: &[&str],
     ) -> Result<(String, Self)>
@@ -229,8 +229,8 @@ pub(crate) struct ModuleHandle<'vtab, T: VTab<'vtab>> {
 }
 
 impl<'vtab, T: VTab<'vtab>> ModuleHandle<'vtab, T> {
-    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a mut ModuleHandle<'vtab, T> {
-        &mut *(ptr as *mut ModuleHandle<'vtab, T>)
+    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a ModuleHandle<'vtab, T> {
+        &*(ptr as *mut ModuleHandle<'vtab, T>)
     }
 }
 
@@ -259,14 +259,15 @@ pub enum RiskLevel {
 }
 
 /// A wrapper around [Connection] that supports configuring virtual table implementations.
+#[repr(transparent)]
 pub struct VTabConnection {
-    conn: Connection,
+    db: ffi::sqlite3,
 }
 
 impl VTabConnection {
     /// Return the underlying [Connection].
     pub fn get(&mut self) -> &mut Connection {
-        &mut self.conn
+        unsafe { &mut *(self as *mut VTabConnection as *mut Connection) }
     }
 
     /// Enable ON CONFLICT support for UPDATEs for this virtual table.
@@ -276,7 +277,7 @@ impl VTabConnection {
     pub fn enable_constraints(&mut self) -> Result<()> {
         unsafe {
             Error::from_sqlite(ffi::sqlite3_vtab_config(
-                self.conn.as_ptr(),
+                &mut self.db,
                 ffi::SQLITE_VTAB_CONSTRAINT_SUPPORT,
                 1,
             ))
@@ -295,7 +296,7 @@ impl VTabConnection {
     pub fn set_risk(&mut self, level: RiskLevel) -> Result<()> {
         unsafe {
             Error::from_sqlite(ffi::sqlite3_vtab_config(
-                self.conn.as_ptr(),
+                &mut self.db,
                 match level {
                     RiskLevel::Innocuous => ffi::SQLITE_VTAB_INNOCUOUS,
                     RiskLevel::DirectOnly => ffi::SQLITE_VTAB_DIRECTONLY,

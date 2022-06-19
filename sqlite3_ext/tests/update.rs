@@ -170,7 +170,7 @@ fn check_table(
 #[test]
 fn update() -> rusqlite::Result<()> {
     let conn = setup()?;
-    Connection::from(&conn).create_module(
+    Connection::from_rusqlite(&conn).create_module(
         "vtab",
         Module::<ListVTab>::standard().with_update(),
         None,

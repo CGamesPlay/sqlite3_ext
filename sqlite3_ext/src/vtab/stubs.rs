@@ -16,7 +16,7 @@ macro_rules! vtab_connect {
             p_vtab: *mut *mut ffi::sqlite3_vtab,
             err_msg: *mut *mut i8,
         ) -> c_int {
-            let mut conn: Connection = db.into();
+            let conn = &*(db as *mut Connection);
             let module = ModuleHandle::<'vtab, T>::from_ptr(module);
             let args: Result<Vec<&str>> = slice::from_raw_parts(argv, argc as _)
                 .into_iter()
@@ -30,19 +30,14 @@ macro_rules! vtab_connect {
                 Ok(x) => x,
                 Err(e) => return ffi::handle_error(e, err_msg),
             };
-            let ret = {
-                // XXX - remove this and replace with a zero-cost
-                let mut vtab_conn = VTabConnection { conn };
-                let ret = T::$func(&mut vtab_conn, module.aux.as_ref(), args.as_slice());
-                conn = vtab_conn.conn;
-                ret
-            };
+            let vtab_conn = &mut *(db as *mut VTabConnection);
+            let ret = T::$func(vtab_conn, module.aux.as_ref(), args.as_slice());
             let (sql, vtab) = match ret {
                 Ok(x) => x,
                 Err(e) => return ffi::handle_error(e, err_msg),
             };
             let rc = ffi::sqlite3_declare_vtab(
-                conn.db,
+                conn.as_ptr(),
                 CString::from_vec_unchecked(sql.into_bytes()).as_ptr() as _,
             );
             if rc != ffi::SQLITE_OK {

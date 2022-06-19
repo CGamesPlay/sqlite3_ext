@@ -220,7 +220,7 @@ mod test {
 
     fn setup() -> rusqlite::Result<rusqlite::Connection> {
         let conn = rusqlite::Connection::open_in_memory()?;
-        init(&Connection::from(&conn))?;
+        init(Connection::from_rusqlite(&conn))?;
         Ok(conn)
     }
 

@@ -107,7 +107,7 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
                 api: *mut ::sqlite3_ext::ffi::sqlite3_api_routines,
             ) -> ::std::os::raw::c_int {
                 ::sqlite3_ext::ffi::init_api_routines(api);
-                match #name(&::sqlite3_ext::Connection::from(db)) {
+                match #name(::sqlite3_ext::Connection::from_ptr(db)) {
                     Ok(true) => ::sqlite3_ext::ffi::SQLITE_OK_LOAD_PERMANENTLY,
                     Ok(false) => ::sqlite3_ext::ffi::SQLITE_OK,
                     Err(e) => ::sqlite3_ext::ffi::handle_error(e, err_msg),

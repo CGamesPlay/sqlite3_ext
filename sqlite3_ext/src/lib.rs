@@ -17,11 +17,16 @@ pub fn sqlite3_libversion() -> &'static str {
     ret.to_str().expect("sqlite3_libversion")
 }
 
+#[repr(transparent)]
 pub struct Connection {
-    db: *mut ffi::sqlite3,
+    db: ffi::sqlite3,
 }
 
 impl Connection {
+    pub unsafe fn from_ptr<'a>(db: *mut ffi::sqlite3) -> &'a mut Connection {
+        &mut *(db as *mut Connection)
+    }
+
     pub fn create_module<'vtab, T: vtab::VTab<'vtab> + 'vtab>(
         &self,
         name: &str,
@@ -32,7 +37,7 @@ impl Connection {
         let handle = Box::new(vtab::ModuleHandle { vtab, aux });
         let rc = unsafe {
             ffi::sqlite3_create_module_v2(
-                self.db,
+                &self.db as *const ffi::sqlite3 as _,
                 name.as_ptr() as _,
                 &handle.vtab.base,
                 Box::into_raw(handle) as _,
@@ -45,14 +50,8 @@ impl Connection {
         }
     }
 
-    pub fn as_ptr(&mut self) -> *mut ffi::sqlite3 {
-        self.db
-    }
-}
-
-impl From<*mut ffi::sqlite3> for Connection {
-    fn from(db: *mut ffi::sqlite3) -> Connection {
-        Connection { db }
+    fn as_ptr(&self) -> *mut ffi::sqlite3 {
+        self as *const Connection as _
     }
 }
 

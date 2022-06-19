@@ -44,6 +44,10 @@ impl Connection {
             _ => Err(Error::Sqlite(rc)),
         }
     }
+
+    pub fn as_ptr(&mut self) -> *mut ffi::sqlite3 {
+        self.db
+    }
 }
 
 impl From<*mut ffi::sqlite3> for Connection {

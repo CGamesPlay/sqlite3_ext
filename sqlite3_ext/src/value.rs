@@ -39,6 +39,12 @@ impl Value {
     }
 }
 
+impl From<&Value> for i64 {
+    fn from(val: &Value) -> i64 {
+        val.get_i64()
+    }
+}
+
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self.value_type() {

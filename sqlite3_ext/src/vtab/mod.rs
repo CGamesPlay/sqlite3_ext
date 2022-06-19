@@ -30,8 +30,10 @@ pub trait VTab<'vtab> {
     type Aux;
     type Cursor: VTabCursor;
 
-    /// Corresponds to xConnect. The virtual table implementation will return an error if
-    /// any of the arguments contain invalid UTF-8.
+    /// Corresponds to xConnect.
+    ///
+    /// The virtual table implementation will return an error if any of the arguments
+    /// contain invalid UTF-8.
     fn connect(
         db: &mut VTabConnection,
         aux: Option<&'vtab Self::Aux>,
@@ -40,9 +42,12 @@ pub trait VTab<'vtab> {
     where
         Self: Sized;
 
-    /// Corrresponds to xBestIndex. If best_index returns [`Err(Error::ConstraintViolation)`](Error::ConstraintViolation),
-    /// then xBestIndex will return `SQLITE_CONSTRAINT`. Any other error will cause
-    /// xBestIndex to fail.
+    /// Corrresponds to xBestIndex.
+    ///
+    /// If best_index returns
+    /// [`Err(Error::constraint_violation())`](Error::constraint_violation), then
+    /// xBestIndex will return `SQLITE_CONSTRAINT`. Any other error will cause xBestIndex
+    /// to fail.
     fn best_index(&self, index_info: &mut IndexInfo) -> Result<()>;
 
     fn open(&'vtab mut self) -> Result<Self::Cursor>;
@@ -50,8 +55,10 @@ pub trait VTab<'vtab> {
 
 /// A non-eponymous virtual table that supports CREATE VIRTUAL TABLE.
 pub trait CreateVTab<'vtab>: VTab<'vtab> {
-    /// Corresponds to xCreate. The virtual table implementation will return an error if
-    /// any of the arguments contain invalid UTF-8.
+    /// Corresponds to xCreate.
+    ///
+    /// The virtual table implementation will return an error if any of the arguments
+    /// contain invalid UTF-8.
     fn create(
         db: &mut VTabConnection,
         aux: Option<&'vtab Self::Aux>,
@@ -72,21 +79,25 @@ pub trait RenameVTab<'vtab>: VTab<'vtab> {
 
 /// A virtual table that supports INSERT/UPDATE/DELETE.
 pub trait UpdateVTab<'vtab>: VTab<'vtab> {
-    /// Insert a new row into the virtual table. For rowid tables, the first value is
-    /// either the provided rowid or NULL. For WITHOUT ROWID tables, the first value is
-    /// always NULL. If the first value is NULL and the table is a rowid table, then the
-    /// returned i64 must be the rowid of the new row. In all other cases the returned
-    /// value is ignored.
+    /// Insert a new row into the virtual table.
+    ///
+    /// For rowid tables, the first value is either the provided rowid or NULL. For WITHOUT
+    /// ROWID tables, the first value is always NULL. If the first value is NULL and the
+    /// table is a rowid table, then the returned i64 must be the rowid of the new row. In
+    /// all other cases the returned value is ignored.
     fn insert(&mut self, args: &[&Value]) -> Result<i64>;
 
-    /// Update an existing row in the virtual table. The rowid argument corresponds to the
-    /// rowid or PRIMARY KEY of the existing row to update. For rowid tables, the first
-    /// value of args will be the new rowid for the row. For WITHOUT ROWID tables, the
-    /// first value of args will be NULL.
+    /// Update an existing row in the virtual table.
+    ///
+    /// The rowid argument corresponds to the rowid or PRIMARY KEY of the existing row to
+    /// update. For rowid tables, the first value of args will be the new rowid for the
+    /// row. For WITHOUT ROWID tables, the first value of args will be NULL.
     fn update(&mut self, rowid: &Value, args: &[&Value]) -> Result<()>;
 
-    /// Delete a row from the virtual table. The rowid argument corresopnds to the rowid
-    /// (or PRIMARY KEY for WITHOUT ROWID tables) of the row to delete.
+    /// Delete a row from the virtual table.
+    ///
+    /// The rowid argument corresopnds to the rowid (or PRIMARY KEY for WITHOUT ROWID
+    /// tables) of the row to delete.
     fn delete(&mut self, rowid: &Value) -> Result<()>;
 }
 

@@ -4,9 +4,7 @@ use super::ffi;
 pub enum Error {
     Sqlite(i32),
     Utf8Error(std::str::Utf8Error),
-    OutOfMemory(usize),
     VersionNotSatisfied(std::os::raw::c_int),
-    ConstraintViolation,
     Module(String),
 }
 
@@ -17,6 +15,10 @@ impl Error {
             _ => Err(Error::Sqlite(rc)),
         }
     }
+
+    pub fn constraint_violation() -> Error {
+        Error::Sqlite(ffi::SQLITE_CONSTRAINT)
+    }
 }
 
 impl std::fmt::Display for Error {
@@ -25,7 +27,6 @@ impl std::fmt::Display for Error {
             Error::Sqlite(i) => write!(f, "SQLite error {}", i),
             Error::Utf8Error(e) => e.fmt(f),
             Error::Module(s) => write!(f, "{}", s),
-            Error::OutOfMemory(l) => write!(f, "unable to allocate {} bytes", l),
             Error::VersionNotSatisfied(v) => write!(
                 f,
                 "requires SQLite version {}.{}.{} or above",
@@ -33,7 +34,6 @@ impl std::fmt::Display for Error {
                 (v / 1000) % 1000,
                 v % 1000
             ),
-            Error::ConstraintViolation => write!(f, "constraint violation"),
         }
     }
 }

@@ -1,5 +1,27 @@
 use super::super::{ffi, types::*};
-use std::{ffi::CStr, ptr, slice};
+use std::{ffi::CStr, mem::transmute, ptr, slice};
+
+#[repr(u8)]
+#[derive(Debug, PartialEq)]
+pub enum ConstraintOp {
+    Eq = 2,
+    GT = 4,
+    LE = 8,
+    LT = 16,
+    GE = 32,
+    Match = 64,
+    Like = 65,      /* 3.10.0 and later */
+    Glob = 66,      /* 3.10.0 and later */
+    Regexp = 67,    /* 3.10.0 and later */
+    NE = 68,        /* 3.21.0 and later */
+    IsNot = 69,     /* 3.21.0 and later */
+    IsNotNull = 70, /* 3.21.0 and later */
+    IsNull = 71,    /* 3.21.0 and later */
+    Is = 72,        /* 3.21.0 and later */
+    Limit = 73,     /* 3.38.0 and later */
+    Offset = 74,    /* 3.38.0 and later */
+    Function = 150, /* 3.25.0 and later */
+}
 
 #[repr(transparent)]
 pub struct IndexInfo {
@@ -184,21 +206,23 @@ impl IndexInfo {
 }
 
 impl IndexInfoConstraint {
-    pub fn column(&self) -> isize {
+    pub fn column(&self) -> usize {
         self.base.iColumn as _
     }
 
-    pub fn op(&self) -> u8 {
-        self.base.op
+    pub fn op(&self) -> ConstraintOp {
+        unsafe { transmute(self.base.op) }
     }
 
+    // XXX - what happens if you use it anyways?
+    /// Indicates if this constraint is usable in this query plan.
     pub fn usable(&self) -> bool {
         self.base.usable != 0
     }
 }
 
 impl IndexInfoOrderBy {
-    pub fn column(&self) -> isize {
+    pub fn column(&self) -> usize {
         self.base.iColumn as _
     }
 
@@ -212,8 +236,26 @@ impl IndexInfoConstraintUsage {
         self.base.argvIndex as _
     }
 
+    /// Set the desired index for [filter](super::VTabCursor::filter)'s argv.
+    ///
+    /// Exactly one entry in the IndexInfo should be set to 1, another to 2, another to 3,
+    /// and so forth up to as many or as few as the best_index method wants. The EXPR of
+    /// the corresponding constraints will then be passed in as the argv[] parameters to
+    /// filter.
+    ///
+    /// Notice that the idx values specified here are 1-based, but array passed to filter
+    /// will use 0-based indexing. The value 0 is used to indicate that the constraint is
+    /// not needed by the filter function.
+    pub fn set_argv_index(&mut self, idx: usize) {
+        self.base.argvIndex = idx as _;
+    }
+
     pub fn omit(&self) -> bool {
         self.base.omit != 0
+    }
+
+    pub fn set_omit(&mut self, val: bool) {
+        self.base.omit = val as _;
     }
 }
 

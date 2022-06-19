@@ -37,7 +37,7 @@ pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
     let len: usize = val
         .len()
         .checked_add(1)
-        .ok_or(Error::OutOfMemory(val.len()))?;
+        .ok_or(Error::Sqlite(SQLITE_NOMEM))?;
     unsafe {
         let ptr: *mut c_char =
             match_sqlite!( modern => sqlite3_malloc64, _ => sqlite3_malloc )(len as _) as _;
@@ -46,7 +46,7 @@ pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
             *ptr.add(len - 1) = 0;
             Ok(ptr)
         } else {
-            Err(Error::OutOfMemory(len))
+            Err(Error::Sqlite(SQLITE_NOMEM))
         }
     }
 }

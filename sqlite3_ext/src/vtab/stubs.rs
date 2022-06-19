@@ -73,11 +73,7 @@ pub unsafe extern "C" fn vtab_best_index<'vtab, T: VTab<'vtab> + 'vtab>(
     let vtab = &mut *(vtab as *mut VTabHandle<T>);
     let info = &mut *(info as *mut IndexInfo);
     let ret = vtab.vtab.best_index(info);
-    if let Err(Error::ConstraintViolation) = ret {
-        ffi::SQLITE_CONSTRAINT
-    } else {
-        ffi::handle_result(ret, &mut vtab.base.zErrMsg)
-    }
+    ffi::handle_result(ret, &mut vtab.base.zErrMsg)
 }
 
 pub unsafe extern "C" fn vtab_open<'vtab, T: VTab<'vtab> + 'vtab>(

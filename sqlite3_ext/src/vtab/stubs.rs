@@ -30,7 +30,13 @@ macro_rules! vtab_connect {
                 Ok(x) => x,
                 Err(e) => return ffi::handle_error(e, err_msg),
             };
-            let ret = T::$func(&mut conn, module.aux.as_ref(), args.as_slice());
+            let ret = {
+                // XXX - remove this and replace with a zero-cost
+                let mut vtab_conn = VTabConnection { conn };
+                let ret = T::$func(&mut vtab_conn, module.aux.as_ref(), args.as_slice());
+                conn = vtab_conn.conn;
+                ret
+            };
             let (sql, vtab) = match ret {
                 Ok(x) => x,
                 Err(e) => return ffi::handle_error(e, err_msg),

@@ -1,5 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
+use regex::Regex;
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -18,7 +19,9 @@ mod kw {
 pub fn sqlite3_ext_main(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as syn::ItemFn);
     let crate_name = std::env::var("CARGO_CRATE_NAME").unwrap();
-    let init_ident = format_ident!("sqlite3_{}_init", crate_name);
+    let export_base = crate_name.to_lowercase();
+    let export_base = Regex::new("[^a-z]").unwrap().replace_all(&export_base, "");
+    let init_ident = format_ident!("sqlite3_{}_init", export_base);
     let expanded = quote! {
         #[sqlite3_ext_init(export = #init_ident)]
         #item
@@ -76,7 +79,7 @@ impl Parse for ExtAttrName {
 ///
 /// This macro renames the original Rust function and instead creates an
 /// `sqlite3_ext::Extension` object in its place. Because `Extension` dereferences to the
-/// renamed function, you generally won't notice this change. This behavior allows you to use
+/// original function, you generally won't notice this change. This behavior allows you to use
 /// the original identifier to pass the auto extension methods.
 #[proc_macro_attribute]
 pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -88,33 +91,33 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
             .into();
     }
     let export_vis = directives.first().map(|_| quote!(#[no_mangle] pub));
-    let mut item = parse_macro_input!(item as syn::ItemFn);
+    let item = parse_macro_input!(item as syn::ItemFn);
     let name = item.sig.ident.clone();
     let c_name = match directives.first() {
-        None => format_ident!("{}_cfunc", item.sig.ident),
+        None => format_ident!("{}_entry", item.sig.ident),
         Some(x) => x.value.clone(),
     };
-    let rust_name = format_ident!("{}_rust", item.sig.ident);
-    item.sig.ident = rust_name.clone();
     let expanded = quote! {
         #[allow(non_upper_case_globals)]
-        static #name: ::sqlite3_ext::Extension = ::sqlite3_ext::Extension::new(#c_name, #rust_name);
-
-        #export_vis
-        unsafe extern "C" fn #c_name(
-            db: *mut ::sqlite3_ext::ffi::sqlite3,
-            err_msg: *mut *mut ::std::os::raw::c_char,
-            api: *mut ::sqlite3_ext::ffi::sqlite3_api_routines,
-        ) -> ::std::os::raw::c_int {
-            ::sqlite3_ext::ffi::init_api_routines(api);
-            match #name(&::sqlite3_ext::Connection::from(db)) {
-                Ok(true) => ::sqlite3_ext::ffi::SQLITE_OK_LOAD_PERMANENTLY,
-                Ok(false) => ::sqlite3_ext::ffi::SQLITE_OK,
-                Err(e) => ::sqlite3_ext::ffi::handle_error(e, err_msg),
+        static #name: ::sqlite3_ext::Extension = {
+            #export_vis
+            unsafe extern "C" fn #c_name(
+                db: *mut ::sqlite3_ext::ffi::sqlite3,
+                err_msg: *mut *mut ::std::os::raw::c_char,
+                api: *mut ::sqlite3_ext::ffi::sqlite3_api_routines,
+            ) -> ::std::os::raw::c_int {
+                ::sqlite3_ext::ffi::init_api_routines(api);
+                match #name(&::sqlite3_ext::Connection::from(db)) {
+                    Ok(true) => ::sqlite3_ext::ffi::SQLITE_OK_LOAD_PERMANENTLY,
+                    Ok(false) => ::sqlite3_ext::ffi::SQLITE_OK,
+                    Err(e) => ::sqlite3_ext::ffi::handle_error(e, err_msg),
+                }
             }
-        }
 
-        #item
+            #item
+
+            ::sqlite3_ext::Extension::new(#c_name, #name)
+        };
     };
     TokenStream::from(expanded)
 }

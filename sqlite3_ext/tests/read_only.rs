@@ -17,7 +17,7 @@ struct StandardVTab {
 
 impl<'vtab> StandardVTab {
     fn connect_create(
-        _db: &mut Connection,
+        _db: &mut VTabConnection,
         aux: Option<&'vtab Vec<i32>>,
         args: &[&str],
     ) -> Result<(String, Self)> {
@@ -47,7 +47,7 @@ impl<'vtab> VTab<'vtab> for StandardVTab {
     type Cursor = StandardCursor<'vtab>;
 
     fn connect(
-        db: &mut Connection,
+        db: &mut VTabConnection,
         aux: Option<&'vtab Self::Aux>,
         args: &[&str],
     ) -> Result<(String, Self)> {
@@ -74,7 +74,7 @@ impl<'vtab> VTab<'vtab> for StandardVTab {
 
 impl<'vtab> CreateVTab<'vtab> for StandardVTab {
     fn create(
-        db: &mut Connection,
+        db: &mut VTabConnection,
         aux: Option<&'vtab Self::Aux>,
         args: &[&str],
     ) -> Result<(String, Self)> {

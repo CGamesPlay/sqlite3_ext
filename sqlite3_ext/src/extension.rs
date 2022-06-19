@@ -19,11 +19,16 @@ type CEntry = unsafe extern "C" fn(
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// use sqlite3_ext::*;
+///
 /// #[sqlite3_ext_main]
 /// fn vfs_init(db: &Connection) -> Result<bool> {
+///     // Automatically load this extension on future connections.
 ///     Extension::auto(&per_db_init)?;
-///     conn_init()?;
+///     // Load this extension on this connection.
+///     per_db_init(db)?;
+///     // Keep extension loaded after this connection ends.
 ///     Ok(true)
 /// }
 ///

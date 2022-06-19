@@ -31,7 +31,7 @@ impl<'vtab> VTab<'vtab> for ListVTab {
     type Cursor = ListCursor<'vtab>;
 
     fn connect(
-        _db: &mut Connection,
+        _db: &mut VTabConnection,
         aux: Option<&'vtab Self::Aux>,
         args: &[&str],
     ) -> Result<(String, Self)> {
@@ -56,7 +56,7 @@ impl<'vtab> VTab<'vtab> for ListVTab {
 
 impl<'vtab> CreateVTab<'vtab> for ListVTab {
     fn create(
-        _db: &mut Connection,
+        _db: &mut VTabConnection,
         aux: Option<&'vtab Self::Aux>,
         args: &[&str],
     ) -> Result<(String, Self)> {

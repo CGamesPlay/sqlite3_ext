@@ -6,7 +6,7 @@ pub struct CrdbVTab {
 
 impl<'vtab> CrdbVTab {
     fn connect_create(
-        _db: &mut Connection,
+        _db: &mut VTabConnection,
         _aux: Option<&'vtab Vec<i32>>,
         _args: &[&str],
     ) -> Result<(String, Self)> {
@@ -24,7 +24,7 @@ impl<'vtab> VTab<'vtab> for CrdbVTab {
     type Cursor = StandardCursor<'vtab>;
 
     fn connect(
-        db: &mut Connection,
+        db: &mut VTabConnection,
         aux: Option<&'vtab Self::Aux>,
         args: &[&str],
     ) -> Result<(String, Self)> {
@@ -45,7 +45,7 @@ impl<'vtab> VTab<'vtab> for CrdbVTab {
 
 impl<'vtab> CreateVTab<'vtab> for CrdbVTab {
     fn create(
-        db: &mut Connection,
+        db: &mut VTabConnection,
         aux: Option<&'vtab Self::Aux>,
         args: &[&str],
     ) -> Result<(String, Self)> {

@@ -79,17 +79,11 @@ fn generate_ffi() {
         .collect();
 
     let result = quote! {
-        pub fn init_api_routines(api: *mut sqlite3_api_routines) {
-            API_READY.call_once(|| {
-                unsafe {
-                    #(#init_lines)*
-                }
-            });
+        pub unsafe fn init_api_routines(api: *mut sqlite3_api_routines) {
+            #(#init_lines)*
         }
 
-        fn unavailable() {
-            panic!("call to unavailable sqlite method");
-        }
+        fn unavailable() { unreachable!() }
 
         #(#methods)*
     };

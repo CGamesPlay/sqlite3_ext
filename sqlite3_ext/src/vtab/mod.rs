@@ -108,11 +108,24 @@ pub struct Module<'vtab, T: VTab<'vtab>> {
 }
 
 impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
-    /// Declare an eponymous-only virtual table. For this module, CREATE VIRTUAL TABLE is
-    /// forbidden. This requires SQLITE >= 3.9.0.
+    /// Declare an eponymous-only virtual table.
+    ///
+    /// For this virtual table, CREATE VIRTUAL TABLE is forbidden, but the table is
+    /// ambiently available under the module name. This method requires SQLite >= 3.9.0.
+    /// For more information, see [Module::eponymous_only_unchecked].
     pub fn eponymous_only() -> Result<Self> {
         ffi::require_version(3_009_000)?;
-        Ok(Module {
+        unsafe { Ok(Self::eponymous_only_unchecked()) }
+    }
+
+    /// Declare an eponymous-only virtual table.
+    ///
+    /// # Safety
+    ///
+    /// On versions of SQLite older than 3.9.0, issuing a CREATE VIRTUAL TBALE
+    /// on an eponymous-only table results in a crash.
+    pub unsafe fn eponymous_only_unchecked() -> Self {
+        Module {
             base: ffi::sqlite3_module {
                 iVersion: 2,
                 xConnect: Some(stubs::vtab_connect::<T>),
@@ -128,7 +141,7 @@ impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
                 ..EMPTY_MODULE
             },
             phantom: PhantomData,
-        })
+        }
     }
 
     /// Declare an eponymous virtual table. For this module, the virtual table is available

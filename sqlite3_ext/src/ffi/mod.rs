@@ -8,6 +8,7 @@ pub use dynamic_link::*;
 #[cfg(feature = "static")]
 pub use static_link::*;
 use std::{
+    ffi::{c_void, CString},
     os::raw::{c_char, c_int},
     ptr,
 };
@@ -81,4 +82,14 @@ pub fn require_version(min: c_int) -> Result<(), Error> {
     } else {
         Ok(())
     }
+}
+
+pub unsafe extern "C" fn drop_boxed<T>(data: *mut c_void) {
+    let data: Box<T> = Box::from_raw(data as _);
+    std::mem::drop(data);
+}
+
+pub unsafe extern "C" fn drop_cstring(data: *mut c_void) {
+    let data = CString::from_raw(data as _);
+    std::mem::drop(data);
 }

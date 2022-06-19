@@ -41,7 +41,7 @@ impl Connection {
                 name.as_ptr() as _,
                 &handle.vtab.base,
                 Box::into_raw(handle) as _,
-                Some(drop_boxed::<vtab::ModuleHandle<T>>),
+                Some(ffi::drop_boxed::<vtab::ModuleHandle<T>>),
             )
         };
         match rc {
@@ -53,9 +53,4 @@ impl Connection {
     fn as_ptr(&self) -> *mut ffi::sqlite3 {
         self as *const Connection as _
     }
-}
-
-unsafe extern "C" fn drop_boxed<T>(data: *mut c_void) {
-    let aux: Box<T> = Box::from_raw(data as _);
-    std::mem::drop(aux);
 }

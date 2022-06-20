@@ -19,7 +19,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
         _aux: Option<&'vtab Self::Aux>,
         _args: &[&str],
     ) -> Result<(String, Self)> {
-        db.set_risk(RiskLevel::Innocuous)?;
+        let _ = db.set_risk(RiskLevel::Innocuous);
         Ok((
             "CREATE TABLE x ( value, start HIDDEN, stop HIDDEN, step HIDDEN )".to_owned(),
             GenerateSeries {},
@@ -207,7 +207,7 @@ impl VTabCursor for Cursor {
 fn init(db: &Connection) -> Result<()> {
     db.create_module(
         "generate_series",
-        Module::<GenerateSeries>::eponymous_only()?,
+        Module::<GenerateSeries>::eponymous(),
         None,
     )?;
     Ok(())

@@ -82,8 +82,13 @@ impl Extension {
     ///
     /// For more information, consult the SQLite documentation for
     /// `sqlite3_cancel_auto_extension`.
-    pub fn cancel_auto(ext: &'static Self) -> bool {
-        unsafe { ffi::sqlite3_cancel_auto_extension(Some(ext.c_entry)) != 0 }
+    ///
+    /// Requires SQLite 3.8.7.
+    pub fn cancel_auto(ext: &'static Self) -> Result<bool> {
+        let _ = ext;
+        sqlite3_require_version!(3_008_007, unsafe {
+            Ok(ffi::sqlite3_cancel_auto_extension(Some(ext.c_entry)) != 0)
+        })
     }
 }
 

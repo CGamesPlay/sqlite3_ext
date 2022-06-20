@@ -1,6 +1,6 @@
 //! Wrappers for creating virtual tables.
 
-use super::{ffi, function::Context, types::*, value::Value, Connection};
+use super::{ffi, function::Context, sqlite3_require_version, types::*, value::Value, Connection};
 pub use index_info::*;
 use std::{marker::PhantomData, os::raw::c_void};
 
@@ -32,6 +32,14 @@ pub trait VTab<'vtab> {
 
     /// Corresponds to xConnect.
     ///
+    /// This method is called called when connecting to an existing virtual table, either
+    /// because it was previously created with CREATE VIRTUAL TABLE (see
+    /// [CreateVTab::create]), or because it is an eponymous virtual table.
+    ///
+    /// This method must return a valid CREATE TABLE statement as a [String], along with a
+    /// configured table instance. Additionally, all virtual tables are recommended to set
+    /// a risk level using [VTabConnection::set_risk].
+    ///
     /// The virtual table implementation will return an error if any of the arguments
     /// contain invalid UTF-8.
     fn connect(
@@ -57,8 +65,11 @@ pub trait VTab<'vtab> {
 pub trait CreateVTab<'vtab>: VTab<'vtab> {
     /// Corresponds to xCreate.
     ///
-    /// The virtual table implementation will return an error if any of the arguments
-    /// contain invalid UTF-8.
+    /// This method is invoked when a CREATE VIRTUAL TABLE statement is invoked on the
+    /// module. Future connections to the created table will use [VTab::connect] instead.
+    ///
+    /// This method has the same requirements as [VTab::connect]; see that method
+    /// for more details.
     fn create(
         db: &'vtab mut VTabConnection,
         aux: Option<&'vtab Self::Aux>,
@@ -127,8 +138,7 @@ impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
     /// ambiently available under the module name. This method requires SQLite >= 3.9.0.
     /// For more information, see [Module::eponymous_only_unchecked].
     pub fn eponymous_only() -> Result<Self> {
-        ffi::require_version(3_009_000)?;
-        unsafe { Ok(Self::eponymous_only_unchecked()) }
+        sqlite3_require_version!(3_009_000, unsafe { Ok(Self::eponymous_only_unchecked()) })
     }
 
     /// Declare an eponymous-only virtual table.
@@ -261,6 +271,7 @@ pub enum RiskLevel {
 /// A wrapper around [Connection] that supports configuring virtual table implementations.
 #[repr(transparent)]
 pub struct VTabConnection {
+    #[allow(dead_code)]
     db: ffi::sqlite3,
 }
 
@@ -274,14 +285,16 @@ impl VTabConnection {
     ///
     /// Enabling this support has additional requirements on the [UpdateVTab::update]
     /// method of the virtual table implementation. See [the SQLite documentation](https://www.sqlite.org/c3ref/c_vtab_constraint_support.html#sqlitevtabconstraintsupport) for more details.
+    ///
+    /// Requires SQLite 3.7.7.
     pub fn enable_constraints(&mut self) -> Result<()> {
-        unsafe {
+        sqlite3_require_version!(3_007_007, unsafe {
             Error::from_sqlite(ffi::sqlite3_vtab_config(
                 &mut self.db,
                 ffi::SQLITE_VTAB_CONSTRAINT_SUPPORT,
                 1,
             ))
-        }
+        })
     }
 
     /// Set the risk level of this virtual table.
@@ -293,8 +306,11 @@ impl VTabConnection {
     ///
     /// See [this discussion](https://www.sqlite.org/src/doc/latest/doc/trusted-schema.md)
     /// for more details about the motivation and implications.
+    ///
+    /// Requires SQLite 3.31.0.
     pub fn set_risk(&mut self, level: RiskLevel) -> Result<()> {
-        unsafe {
+        let _ = level;
+        sqlite3_require_version!(3_031_000, unsafe {
             Error::from_sqlite(ffi::sqlite3_vtab_config(
                 &mut self.db,
                 match level {
@@ -302,6 +318,6 @@ impl VTabConnection {
                     RiskLevel::DirectOnly => ffi::SQLITE_VTAB_DIRECTONLY,
                 },
             ))
-        }
+        })
     }
 }

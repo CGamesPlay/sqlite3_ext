@@ -161,6 +161,7 @@ fn check_table(
 }
 
 #[test]
+#[cfg(any(not(feature = "static"), feature = "static_modern"))]
 fn eponymous_only_vtab() -> rusqlite::Result<()> {
     let conn = setup()?;
     Connection::from_rusqlite(&conn).create_module(

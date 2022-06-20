@@ -12,6 +12,10 @@ pub mod types;
 pub mod value;
 pub mod vtab;
 
+pub fn sqlite3_libversion_number() -> i32 {
+    unsafe { ffi::sqlite3_libversion_number() }
+}
+
 pub fn sqlite3_libversion() -> &'static str {
     let ret = unsafe { CStr::from_ptr(ffi::sqlite3_libversion()) };
     ret.to_str().expect("sqlite3_libversion")

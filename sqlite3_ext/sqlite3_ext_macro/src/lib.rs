@@ -103,11 +103,22 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
     let export_vis = export.as_ref().map(|_| quote!(#[no_mangle] pub));
     let item = parse_macro_input!(item as syn::ItemFn);
     let name = item.sig.ident.clone();
-    let persistent = match persistent {
-        None => quote!(SQLITE_OK),
+    let load_result = match persistent {
+        None => quote!(::sqlite3_ext::ffi::SQLITE_OK),
         Some(tok) => {
             if let Some(_) = export {
-                quote!(SQLITE_OK_LOAD_PERMANENTLY)
+                // Persistent loadable extensions were added in SQLite 3.14.0. If
+                // the entry point for the extension returns
+                // SQLITE_OK_LOAD_PERSISTENT, then the load fails. We want to
+                // detect this situation and allow the load to complete anyways:
+                // any API which requires persistent extensions would return an
+                // error, but ignored errors imply that the persistent loading
+                // requirement is optional.
+                quote!(::sqlite3_ext::sqlite3_require_version!(
+                    3_014_000,
+                    ::sqlite3_ext::ffi::SQLITE_OK_LOAD_PERMANENTLY,
+                    ::sqlite3_ext::ffi::SQLITE_OK
+                ))
             } else {
                 return Error::new(tok.span, "unexported extension cannot be persistent")
                     .into_compile_error()
@@ -130,7 +141,7 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
             ) -> ::std::os::raw::c_int {
                 ::sqlite3_ext::ffi::init_api_routines(api);
                 match #name(::sqlite3_ext::Connection::from_ptr(db)) {
-                    Ok(_) => ::sqlite3_ext::ffi::#persistent,
+                    Ok(_) => #load_result,
                     Err(e) => ::sqlite3_ext::ffi::handle_error(e, err_msg),
                 }
             }

@@ -1,4 +1,4 @@
-use super::super::{ffi, types::*};
+use super::super::{ffi, sqlite3_require_version, types::*};
 use std::{ffi::CStr, mem::transmute, ptr, slice};
 
 #[repr(u8)]
@@ -143,65 +143,35 @@ impl IndexInfo {
 
     /// Requires SQLite 3.8.2.
     pub fn estimated_rows(&self) -> Result<i64> {
-        ffi::match_sqlite! {
-            modern => {
-                ffi::require_version(3_008_002)?;
-                Ok(self.base.estimatedRows)
-            },
-            _ => Err(Error::VersionNotSatisfied(3_008_002))
-        }
+        sqlite3_require_version!(3_008_002, Ok(self.base.estimatedRows))
     }
 
     /// Requires SQLite 3.8.2.
     pub fn set_estimated_rows(&mut self, val: i64) -> Result<()> {
-        ffi::match_sqlite! {
-            modern => {
-                ffi::require_version(3_008_002)?;
-                self.base.estimatedRows = val;
-                Ok(())
-            },
-            _ => {
-                let _ = val;
-                Err(Error::VersionNotSatisfied(3_008_002))
-            }
-        }
+        let _ = val;
+        sqlite3_require_version!(3_008_002, {
+            self.base.estimatedRows = val;
+            Ok(())
+        })
     }
 
     /// Requires SQLite 3.9.0.
     pub fn scan_flags(&self) -> Result<usize> {
-        ffi::match_sqlite! {
-            modern => {
-                ffi::require_version(3_009_000)?;
-                Ok(self.base.idxFlags as _)
-            },
-            _ => Err(Error::VersionNotSatisfied(3_009_000))
-        }
+        sqlite3_require_version!(3_009_000, Ok(self.base.idxFlags as _))
     }
 
     /// Requires SQLite 3.9.0.
     pub fn set_scan_flags(&mut self, val: usize) -> Result<()> {
-        ffi::match_sqlite! {
-            modern => {
-                ffi::require_version(3_009_000)?;
-                self.base.idxFlags = val as _;
-                Ok(())
-            },
-            _ => {
-                let _ = val;
-                Err(Error::VersionNotSatisfied(3_009_000))
-            }
-        }
+        let _ = val;
+        sqlite3_require_version!(3_009_000, {
+            self.base.idxFlags = val as _;
+            Ok(())
+        })
     }
 
     /// Requires SQLite 3.10.0.
     pub fn columns_used(&self) -> Result<u64> {
-        ffi::match_sqlite! {
-            modern => {
-                ffi::require_version(3_010_000)?;
-                Ok(self.base.colUsed)
-            },
-            _ => Err(Error::VersionNotSatisfied(3_010_000))
-        }
+        sqlite3_require_version!(3_010_000, Ok(self.base.colUsed))
     }
 }
 

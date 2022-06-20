@@ -1,21 +1,43 @@
 [package]
-name = "crdb"
+name = "sqlite3_ext"
 version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = [ "sqlite3_ext" ]
+members = [ "sqlite3_ext_macro" ]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-crate-type = [ "cdylib", "staticlib" ]
+[features]
+static = [ "dep:rusqlite", "dep:libsqlite3-sys" ]
+static_modern = [ "static", "rusqlite?/modern_sqlite" ]
 
 [dependencies]
-sqlite3_ext = { path = "sqlite3_ext" }
+sqlite3_ext_macro = { path = "sqlite3_ext_macro" }
+rusqlite = { version = "0.27.0", optional = true }
+libsqlite3-sys = { version = "0.24.0", optional = true }
+
+[dev-dependencies]
+nom = "7.1.1"
 
 [build-dependencies]
-proc-macro2 = "1.0.39"
+proc-macro2 = "1.0"
 which = "4.2.5"
-syn = { version = "1.0.96", features = [ "parsing", "full" ] }
-quote = "1.0.18"
+syn = { version = "1.0", features = [ "parsing", "full" ] }
+quote = "1.0"
+
+[[test]]
+name = "read_only"
+required-features = [ "static" ]
+
+[[test]]
+name = "update"
+required-features = [ "static" ]
+
+[[example]]
+name = "generate_series"
+crate-type = [ "staticlib", "cdylib" ]
+test = true
+
+[[example]]
+name = "vtablog"
+crate-type = [ "staticlib", "cdylib" ]
+test = true

@@ -1,6 +1,7 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use regex::Regex;
+use std::mem::replace;
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -100,8 +101,8 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
     }
-    let export_vis = export.as_ref().map(|_| quote!(#[no_mangle] pub));
-    let item = parse_macro_input!(item as syn::ItemFn);
+    let mut item = parse_macro_input!(item as syn::ItemFn);
+    let extension_vis = replace(&mut item.vis, syn::Visibility::Inherited);
     let name = item.sig.ident.clone();
     let load_result = match persistent {
         None => quote!(::sqlite3_ext::ffi::SQLITE_OK),
@@ -126,14 +127,17 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
     };
+
+    let c_export = export.as_ref().map(|_| quote!(#[no_mangle] pub));
     let c_name = match export {
         None => format_ident!("{}_entry", item.sig.ident),
         Some(x) => x,
     };
+
     let expanded = quote! {
         #[allow(non_upper_case_globals)]
-        static #name: ::sqlite3_ext::Extension = {
-            #export_vis
+        #extension_vis static #name: ::sqlite3_ext::Extension = {
+            #c_export
             unsafe extern "C" fn #c_name(
                 db: *mut ::sqlite3_ext::ffi::sqlite3,
                 err_msg: *mut *mut ::std::os::raw::c_char,

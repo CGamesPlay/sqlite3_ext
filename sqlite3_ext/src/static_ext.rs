@@ -3,22 +3,6 @@
 #![cfg(feature = "static")]
 
 use super::*;
-use std::ffi::c_void;
-
-/// Register the provided function to be called by each new database connection.
-pub fn sqlite3_auto_extension(
-    init: unsafe extern "C" fn(
-        *mut ffi::sqlite3,
-        *mut *mut std::os::raw::c_char,
-        *mut ffi::sqlite3_api_routines,
-    ) -> std::os::raw::c_int,
-) -> Result<()> {
-    let rc = unsafe {
-        let init: unsafe extern "C" fn() = std::mem::transmute(init as *mut c_void);
-        libsqlite3_sys::sqlite3_auto_extension(Some(init))
-    };
-    Error::from_sqlite(rc)
-}
 
 impl Connection {
     /// Convert a rusqlite::Connection to an sqlite3_ext::Connection.

@@ -210,7 +210,6 @@ version = "0.1.0"
 dependencies = [
  "libsqlite3-sys",
  "nom",
- "once_cell",
  "proc-macro2",
  "quote",
  "rusqlite",

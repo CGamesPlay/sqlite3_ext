@@ -1,6 +1,9 @@
 //! Wrappers for creating virtual tables.
 
-use super::{ffi, function::Context, sqlite3_require_version, types::*, value::Value, Connection};
+use super::{
+    ffi, function::Context, sqlite3_libversion_number, sqlite3_require_version, types::*,
+    value::Value, Connection,
+};
 pub use index_info::*;
 use std::{marker::PhantomData, os::raw::c_void};
 
@@ -135,10 +138,17 @@ impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
     /// Declare an eponymous-only virtual table.
     ///
     /// For this virtual table, CREATE VIRTUAL TABLE is forbidden, but the table is
-    /// ambiently available under the module name. This method requires SQLite >= 3.9.0.
-    /// For more information, see [Module::eponymous_only_unchecked].
-    pub fn eponymous_only() -> Result<Self> {
-        sqlite3_require_version!(3_009_000, unsafe { Ok(Self::eponymous_only_unchecked()) })
+    /// ambiently available under the module name.
+    ///
+    /// On versions of SQLite older than 3.9.0, this method falls back to
+    /// [Module::eponymous]. If this is not desired, see
+    /// [Module::eponymous_only_unchecked].
+    pub fn eponymous_only() -> Self {
+        if sqlite3_libversion_number() < 3_009_000 {
+            Self::eponymous()
+        } else {
+            unsafe { Self::eponymous_only_unchecked() }
+        }
     }
 
     /// Declare an eponymous-only virtual table.

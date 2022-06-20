@@ -166,7 +166,7 @@ fn eponymous_only_vtab() -> rusqlite::Result<()> {
     let conn = setup()?;
     Connection::from_rusqlite(&conn).create_module(
         "eponymous_only_vtab",
-        Module::<StandardVTab>::eponymous_only()?.with_rename(),
+        Module::<StandardVTab>::eponymous_only().with_rename(),
         Some(vec![10, 12, 14, 16, 18]),
     )?;
     match conn.execute(

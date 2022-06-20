@@ -13,3 +13,10 @@ bindgen:
       --raw-line "#![allow(non_camel_case_types)]" \
       -o src/ffi/sqlite3ext.rs
     echo Generated src/ffi/sqlite3ext.rs
+
+test:
+  summary: test all supported configurations
+  command: |
+    set -e
+    cargo test --all-features
+    cargo test --features=static

@@ -206,7 +206,7 @@ fn init(db: &Connection) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "static"))]
 mod test {
     use super::*;
     use rusqlite;

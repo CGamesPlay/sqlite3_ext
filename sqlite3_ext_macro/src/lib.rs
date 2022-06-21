@@ -1,16 +1,22 @@
+use ext_attr::*;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use regex::Regex;
 use std::mem::replace;
-use syn::{
-    parse::{Parse, ParseStream},
-    punctuated::Punctuated,
-    *,
-};
+use syn::{punctuated::Punctuated, *};
+use vtab_attr::*;
+
+mod ext_attr;
+mod vtab_attr;
 
 mod kw {
     syn::custom_keyword!(export);
     syn::custom_keyword!(persistent);
+    syn::custom_keyword!(standard);
+    syn::custom_keyword!(eponymous);
+    syn::custom_keyword!(eponymous_only);
+    syn::custom_keyword!(UpdateVTab);
+    syn::custom_keyword!(RenameVTab);
 }
 
 /// Declare the primary extension entry point for the crate.
@@ -37,7 +43,7 @@ pub fn sqlite3_ext_main(attr: TokenStream, item: TokenStream) -> TokenStream {
     let export_base = Regex::new("[^a-z]").unwrap().replace_all(&export_base, "");
     let init_ident = format_ident!("sqlite3_{}_init", export_base);
     let expanded = quote! {
-        #[sqlite3_ext_init(export = #init_ident, #attr)]
+        #[::sqlite3_ext::sqlite3_ext_init(export = #init_ident, #attr)]
         #item
     };
     TokenStream::from(expanded)
@@ -158,34 +164,44 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-enum ExtAttr {
-    Export(ExtAttrExport),
-    Persistent(kw::persistent),
-}
-
-struct ExtAttrExport {
-    value: Ident,
-}
-
-impl Parse for ExtAttr {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(kw::export) {
-            input.parse().map(ExtAttr::Export)
-        } else if lookahead.peek(kw::persistent) {
-            input.parse().map(ExtAttr::Persistent)
-        } else {
-            Err(lookahead.error())
+#[proc_macro_attribute]
+pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let attr = match parse::<VTabAttr>(attr) {
+        Ok(syntax_tree) => syntax_tree,
+        Err(err) => {
+            let mut ret = TokenStream::from(err.to_compile_error());
+            ret.extend(item);
+            return ret;
+        }
+    };
+    let item = parse_macro_input!(item as syn::ItemStruct);
+    let struct_ident = &item.ident;
+    let struct_generics = &item.generics;
+    let ret = if let VTabBase::EponymousOnly(_) = attr.base {
+        quote!(::sqlite3_ext::Result<::sqlite3_ext::vtab::Module<'a, Self>>)
+    } else {
+        quote!(::sqlite3_ext::vtab::Module<'a, Self>)
+    };
+    let mut expr = match attr.base {
+        VTabBase::Standard(_) => quote!(Module::<Self>::standard()),
+        VTabBase::Eponymous(_) => quote!(Module::<Self>::eponymous()),
+        VTabBase::EponymousOnly(_) => quote!(Module::<Self>::eponymous_only()?),
+    };
+    for t in attr.additional {
+        match t {
+            VTabTrait::UpdateVTab(_) => expr.extend(quote!(.with_update())),
+            VTabTrait::RenameVTab(_) => expr.extend(quote!(.with_rename())),
         }
     }
-}
+    let expanded = quote! {
+        #item
 
-impl Parse for ExtAttrExport {
-    fn parse(input: ParseStream) -> Result<Self> {
-        input.parse::<kw::export>()?;
-        input.parse::<token::Eq>()?;
-        Ok(ExtAttrExport {
-            value: input.parse()?,
-        })
-    }
+        #[automatically_derived]
+        impl #struct_ident #struct_generics {
+            pub fn module<'a>() -> #ret {
+                #expr
+            }
+        }
+    };
+    TokenStream::from(expanded)
 }

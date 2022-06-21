@@ -140,40 +140,33 @@ impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
     /// For this virtual table, CREATE VIRTUAL TABLE is forbidden, but the table is
     /// ambiently available under the module name.
     ///
-    /// On versions of SQLite older than 3.9.0, this method falls back to
-    /// [Module::eponymous]. If this is not desired, see
-    /// [Module::eponymous_only_unchecked].
-    pub fn eponymous_only() -> Self {
-        if sqlite3_libversion_number() < 3_009_000 {
-            Self::eponymous()
+    /// This feature requires SQLite 3.9.0 or above. Older versions of SQLite do not
+    /// support eponymous virtual tables, meaning they require at least one CREATE VIRTUAL
+    /// TABLE statement to be used. If supporting these versions of SQLite is desired, you
+    /// can either use [Module::eponymous] or [Module::standard] and return an error if
+    /// there is an attempt to instantiate the virtual table more than once.
+    pub fn eponymous_only() -> Result<Self> {
+        const MIN_VERSION: i32 = 3_009_000;
+        if sqlite3_libversion_number() >= MIN_VERSION {
+            Ok(Module {
+                base: ffi::sqlite3_module {
+                    iVersion: 2,
+                    xConnect: Some(stubs::vtab_connect::<T>),
+                    xBestIndex: Some(stubs::vtab_best_index::<T>),
+                    xDisconnect: Some(stubs::vtab_disconnect::<T>),
+                    xOpen: Some(stubs::vtab_open::<T>),
+                    xClose: Some(stubs::vtab_close::<T>),
+                    xFilter: Some(stubs::vtab_filter::<T>),
+                    xNext: Some(stubs::vtab_next::<T>),
+                    xEof: Some(stubs::vtab_eof::<T>),
+                    xColumn: Some(stubs::vtab_column::<T>),
+                    xRowid: Some(stubs::vtab_rowid::<T>),
+                    ..EMPTY_MODULE
+                },
+                phantom: PhantomData,
+            })
         } else {
-            unsafe { Self::eponymous_only_unchecked() }
-        }
-    }
-
-    /// Declare an eponymous-only virtual table.
-    ///
-    /// # Safety
-    ///
-    /// On versions of SQLite older than 3.9.0, issuing a CREATE VIRTUAL TBALE
-    /// on an eponymous-only table results in a crash.
-    pub unsafe fn eponymous_only_unchecked() -> Self {
-        Module {
-            base: ffi::sqlite3_module {
-                iVersion: 2,
-                xConnect: Some(stubs::vtab_connect::<T>),
-                xBestIndex: Some(stubs::vtab_best_index::<T>),
-                xDisconnect: Some(stubs::vtab_disconnect::<T>),
-                xOpen: Some(stubs::vtab_open::<T>),
-                xClose: Some(stubs::vtab_close::<T>),
-                xFilter: Some(stubs::vtab_filter::<T>),
-                xNext: Some(stubs::vtab_next::<T>),
-                xEof: Some(stubs::vtab_eof::<T>),
-                xColumn: Some(stubs::vtab_column::<T>),
-                xRowid: Some(stubs::vtab_rowid::<T>),
-                ..EMPTY_MODULE
-            },
-            phantom: PhantomData,
+            Err(Error::VersionNotSatisfied(MIN_VERSION))
         }
     }
 

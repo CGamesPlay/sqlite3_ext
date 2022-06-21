@@ -25,9 +25,10 @@ type CEntry = unsafe extern "C" fn(
 /// #[sqlite3_ext_main(persistent)]
 /// fn init(db: &Connection) -> Result<()> {
 ///     // Automatically load this extension on future connections.
-///     Extension::auto(&per_db_init)?;
+///     per_db_init.register_auto()?;
 ///     // Load this extension on this connection.
 ///     per_db_init(db)?;
+///     // Add extensions to the VFS system
 ///     Ok(())
 /// }
 ///
@@ -36,6 +37,7 @@ type CEntry = unsafe extern "C" fn(
 ///     // Add extensions to this connection.
 ///     Ok(())
 /// }
+/// # fn main() {}
 /// ```
 #[repr(C)]
 pub struct Extension {
@@ -61,16 +63,16 @@ impl Extension {
     /// The provided method will be invoked on all database connections opened in the
     /// future. For more information, consult the SQLite documentation for
     /// `sqlite3_auto_extension`.
-    pub fn auto(ext: &'static Self) -> Result<()> {
+    pub fn register_auto(&'static self) -> Result<()> {
         unsafe {
-            Error::from_sqlite(ffi::sqlite3_auto_extension(Some(ext.c_entry)))?;
+            Error::from_sqlite(ffi::sqlite3_auto_extension(Some(self.c_entry)))?;
         }
         Ok(())
     }
 
     /// Remove all registered automatic extensions.
     ///
-    /// For more information, consule the SQLite documentation for
+    /// For more information, consult the SQLite documentation for
     /// `sqlite3_reset_auto_extension`.
     pub fn reset_auto() {
         unsafe {
@@ -84,10 +86,10 @@ impl Extension {
     /// `sqlite3_cancel_auto_extension`.
     ///
     /// Requires SQLite 3.8.7.
-    pub fn cancel_auto(ext: &'static Self) -> Result<bool> {
-        let _ = ext;
+    pub fn cancel_auto(&'static self) -> Result<bool> {
+        let _ = self;
         sqlite3_require_version!(3_008_007, unsafe {
-            Ok(ffi::sqlite3_cancel_auto_extension(Some(ext.c_entry)) != 0)
+            Ok(ffi::sqlite3_cancel_auto_extension(Some(self.c_entry)) != 0)
         })
     }
 }

@@ -50,6 +50,7 @@ macro_rules! vtab_connect {
                     zErrMsg: ptr::null_mut(),
                 },
                 vtab,
+                txn: None,
                 phantom: PhantomData,
             });
             *p_vtab = Box::into_raw(vtab) as _;
@@ -207,6 +208,58 @@ pub unsafe extern "C" fn vtab_update<'vtab, T: UpdateVTab<'vtab> + 'vtab>(
                 &mut vtab.base.zErrMsg,
             )
         }
+    }
+}
+
+pub unsafe extern "C" fn vtab_begin<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
+    vtab: *mut ffi::sqlite3_vtab,
+) -> c_int {
+    let vtab = &mut *(vtab as *mut VTabHandle<T>);
+    match vtab.vtab.begin() {
+        Ok(txn) => {
+            vtab.txn.replace(Box::into_raw(Box::new(txn)) as _);
+            ffi::SQLITE_OK
+        }
+        Err(e) => ffi::handle_error(e, &mut vtab.base.zErrMsg),
+    }
+}
+
+pub unsafe extern "C" fn vtab_sync<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
+    vtab: *mut ffi::sqlite3_vtab,
+) -> c_int {
+    let vtab = &mut *(vtab as *mut VTabHandle<T>);
+    match vtab.txn {
+        Some(txn) => {
+            let txn = &mut *(txn as *mut T::Transaction);
+            ffi::handle_result(txn.sync(), &mut vtab.base.zErrMsg)
+        }
+        None => ffi::SQLITE_OK,
+    }
+}
+
+pub unsafe extern "C" fn vtab_commit<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
+    vtab: *mut ffi::sqlite3_vtab,
+) -> c_int {
+    let vtab = &mut *(vtab as *mut VTabHandle<T>);
+    match vtab.txn.take() {
+        Some(txn) => {
+            let txn = Box::from_raw(txn as *mut T::Transaction);
+            ffi::handle_result(txn.commit(), &mut vtab.base.zErrMsg)
+        }
+        None => ffi::SQLITE_OK,
+    }
+}
+
+pub unsafe extern "C" fn vtab_rollback<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
+    vtab: *mut ffi::sqlite3_vtab,
+) -> c_int {
+    let vtab = &mut *(vtab as *mut VTabHandle<T>);
+    match vtab.txn.take() {
+        Some(txn) => {
+            let txn = Box::from_raw(txn as *mut T::Transaction);
+            ffi::handle_result(txn.rollback(), &mut vtab.base.zErrMsg)
+        }
+        None => ffi::SQLITE_OK,
     }
 }
 

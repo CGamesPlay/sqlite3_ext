@@ -85,12 +85,6 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
     fn destroy(&mut self) -> Result<()>;
 }
 
-/// A virtual table that supports ALTER TABLE RENAME.
-pub trait RenameVTab<'vtab>: VTab<'vtab> {
-    /// Corresponds to xRename, when ALTER TABLE RENAME is run on the virtual table.
-    fn rename(&mut self, name: &str) -> Result<()>;
-}
-
 /// A virtual table that supports INSERT/UPDATE/DELETE.
 pub trait UpdateVTab<'vtab>: VTab<'vtab> {
     /// Insert a new row into the virtual table.
@@ -115,6 +109,36 @@ pub trait UpdateVTab<'vtab>: VTab<'vtab> {
     fn delete(&mut self, rowid: &Value) -> Result<()>;
 }
 
+/// A virtual table that requires additional work to implement transactions.
+///
+/// Virtual tables which modify resources outside of the database in which they are defined may
+/// require additional code in order to safely implement transactions. If the virtual table
+/// only modifies data inside of the database in which it is defined, then SQLite's built-in
+/// transaction support is sufficient.
+pub trait TransactionVTab<'vtab>: UpdateVTab<'vtab> {
+    type Transaction: VTabTransaction;
+
+    /// Begin a transaction.
+    ///
+    /// This method will always be followed by a call to either commit or rollback. Virtual
+    /// table transactions do not nest, so the xBegin method will not be invoked more than
+    /// once on a single virtual table without an intervening call to either commit or
+    /// rollback.
+    fn begin(&'vtab mut self) -> Result<Self::Transaction>;
+}
+
+pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {}
+
+/// A virtual table that supports ALTER TABLE RENAME.
+pub trait RenameVTab<'vtab>: VTab<'vtab> {
+    /// Corresponds to xRename, when ALTER TABLE RENAME is run on the virtual table.
+    fn rename(&mut self, name: &str) -> Result<()>;
+}
+
+pub trait SavepointVTab<'vtab>: VTab<'vtab> {}
+
+pub trait ShadowNameVTab<'vtab>: VTab<'vtab> {}
+
 /// Implementation of the cursor type for a virtual table.
 pub trait VTabCursor {
     fn filter(&mut self, index_num: usize, index_str: Option<&str>, args: &[&Value]) -> Result<()>;
@@ -126,6 +150,25 @@ pub trait VTabCursor {
     fn column(&self, context: &mut Context, idx: usize) -> Result<()>;
 
     fn rowid(&self) -> Result<i64>;
+}
+
+/// Implementation of the transaction type for a virtual table.
+pub trait VTabTransaction {
+    /// Start a two-phase commit.
+    ///
+    /// This method is only invoked prior to an commit or rollback. In order to implement
+    /// two-phase commit, the sync method on all virtual tables is invoked prior to
+    /// invoking the commit method on any virtual table. If any of the sync methods fail,
+    /// the entire transaction is rolled back.
+    fn sync(&mut self) -> Result<()>;
+
+    /// Finish a commit.
+    ///
+    /// A call to this method always follows a prior call sync.
+    fn commit(self) -> Result<()>;
+
+    /// Roll back a commit.
+    fn rollback(self) -> Result<()>;
 }
 
 #[repr(transparent)]
@@ -227,9 +270,37 @@ impl<'vtab, T: UpdateVTab<'vtab>> Module<'vtab, T> {
     }
 }
 
+impl<'vtab, T: TransactionVTab<'vtab>> Module<'vtab, T> {
+    pub fn with_transactions(mut self) -> Self {
+        self.base.xBegin = Some(stubs::vtab_begin::<T>);
+        self.base.xSync = Some(stubs::vtab_sync::<T>);
+        self.base.xCommit = Some(stubs::vtab_commit::<T>);
+        self.base.xRollback = Some(stubs::vtab_rollback::<T>);
+        self
+    }
+}
+
+impl<'vtab, T: FindFunctionVTab<'vtab>> Module<'vtab, T> {
+    pub fn with_find_function(mut self) -> Self {
+        self
+    }
+}
+
 impl<'vtab, T: RenameVTab<'vtab>> Module<'vtab, T> {
     pub fn with_rename(mut self) -> Self {
         self.base.xRename = Some(stubs::vtab_rename::<T>);
+        self
+    }
+}
+
+impl<'vtab, T: SavepointVTab<'vtab>> Module<'vtab, T> {
+    pub fn with_savepoints(mut self) -> Self {
+        self
+    }
+}
+
+impl<'vtab, T: ShadowNameVTab<'vtab>> Module<'vtab, T> {
+    pub fn with_shadow_name(mut self) -> Self {
         self
     }
 }
@@ -251,6 +322,7 @@ impl<'vtab, T: VTab<'vtab>> ModuleHandle<'vtab, T> {
 struct VTabHandle<'vtab, T: VTab<'vtab>> {
     base: ffi::sqlite3_vtab,
     vtab: T,
+    txn: Option<*mut c_void>,
     phantom: PhantomData<&'vtab T>,
 }
 

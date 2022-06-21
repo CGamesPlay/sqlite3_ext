@@ -47,16 +47,31 @@ mod parsing {
     }
 }
 
+#[sqlite3_ext_vtab(
+    standard,
+    UpdateVTab,
+    TransactionVTab,
+    FindFunctionVTab,
+    RenameVTab,
+    SavepointVTab,
+    ShadowNameVTab
+)]
 struct VTabLog {
     id: usize,
     num_rows: i64,
     num_cursors: usize,
+    num_transactions: usize,
 }
 
 struct VTabLogCursor<'vtab> {
     vtab: &'vtab VTabLog,
     id: usize,
     rowid: i64,
+}
+
+struct VTabLogTransaction<'vtab> {
+    vtab: &'vtab VTabLog,
+    id: usize,
 }
 
 impl VTabLog {
@@ -88,6 +103,7 @@ impl VTabLog {
                 id,
                 num_rows,
                 num_cursors: 0,
+                num_transactions: 0,
             },
         ))
     }
@@ -136,6 +152,50 @@ impl<'vtab> CreateVTab<'vtab> for VTabLog {
         Ok(())
     }
 }
+
+impl<'vtab> UpdateVTab<'vtab> for VTabLog {
+    fn insert(&mut self, args: &[&Value]) -> Result<i64> {
+        println!("insert(tab={}, args={:?})", self.id, args);
+        Ok(1)
+    }
+
+    fn update(&mut self, rowid: &Value, args: &[&Value]) -> Result<()> {
+        println!("update(tab={}, rowid={:?}, args={:?}", self.id, rowid, args);
+        Ok(())
+    }
+
+    fn delete(&mut self, rowid: &Value) -> Result<()> {
+        println!("delete(tab={}, rowid={:?})", self.id, rowid);
+        Ok(())
+    }
+}
+
+impl<'vtab> TransactionVTab<'vtab> for VTabLog {
+    type Transaction = VTabLogTransaction<'vtab>;
+
+    fn begin(&'vtab mut self) -> Result<Self::Transaction> {
+        self.num_transactions += 1;
+        let ret = VTabLogTransaction {
+            vtab: self,
+            id: self.id + self.num_transactions,
+        };
+        println!("begin(tab={}, transaction={})", self.id, ret.id);
+        Ok(ret)
+    }
+}
+
+impl<'vtab> FindFunctionVTab<'vtab> for VTabLog {}
+
+impl<'vtab> RenameVTab<'vtab> for VTabLog {
+    fn rename(&mut self, name: &str) -> Result<()> {
+        println!("rename(tab={}, name={:?})", self.id, name);
+        Ok(())
+    }
+}
+
+impl<'vtab> SavepointVTab<'vtab> for VTabLog {}
+
+impl<'vtab> ShadowNameVTab<'vtab> for VTabLog {}
 
 impl Drop for VTabLog {
     fn drop(&mut self) {
@@ -200,9 +260,26 @@ impl Drop for VTabLogCursor<'_> {
     }
 }
 
+impl<'vtab> VTabTransaction for VTabLogTransaction<'vtab> {
+    fn sync(&mut self) -> Result<()> {
+        println!("sync(tab={}, transaction={})", self.vtab.id, self.id);
+        Ok(())
+    }
+
+    fn commit(self) -> Result<()> {
+        println!("commit(tab={}, transaction={})", self.vtab.id, self.id);
+        Ok(())
+    }
+
+    fn rollback(self) -> Result<()> {
+        println!("rollback(tab={}, transaction={})", self.vtab.id, self.id);
+        Ok(())
+    }
+}
+
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
-    db.create_module("vtablog", Module::<VTabLog>::standard(), None)?;
+    db.create_module("vtablog", VTabLog::module(), None)?;
     Ok(())
 }
 
@@ -214,16 +291,16 @@ mod test {
     fn setup() -> rusqlite::Result<rusqlite::Connection> {
         let conn = rusqlite::Connection::open_in_memory()?;
         init(Connection::from_rusqlite(&conn))?;
+        conn.execute(
+            "CREATE VIRTUAL TABLE temp.log USING vtablog(schema='CREATE TABLE x(a,b,c)', rows=3)",
+            [],
+        )?;
         Ok(conn)
     }
 
     #[test]
-    fn example() -> rusqlite::Result<()> {
-        let conn = setup()?;
-        conn.execute(
-            "CREATE VIRTUAL TABLE temp.log USING vtablog(schema='CREATE TABLE x(a,b,c)', rows=25)",
-            [],
-        )?;
+    fn read() -> rusqlite::Result<()> {
+        let mut conn = setup()?;
         let ret = conn
             .prepare("SELECT * FROM log")?
             .query_map([], |row| {
@@ -237,10 +314,24 @@ mod test {
             .collect::<rusqlite::Result<Vec<Vec<String>>>>()?;
         assert_eq!(
             ret,
-            (0..25)
+            (0..3)
                 .map(|i| vec![format!("a{}", i), format!("b{}", i), format!("c{}", i)])
                 .collect::<Vec<Vec<String>>>()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn update() -> rusqlite::Result<()> {
+        let mut conn = setup()?;
+        conn.execute("UPDATE log SET a = b WHERE rowid = 1", [])?;
+        Ok(())
+    }
+
+    #[test]
+    fn rename() -> rusqlite::Result<()> {
+        let mut conn = setup()?;
+        conn.execute("ALTER TABLE log RENAME to newname", [])?;
         Ok(())
     }
 }

@@ -52,6 +52,9 @@ impl Value {
     // XXX - need to figure out how to make this safe. Presently, value_text and value_blob
     // could both be called, but the reference returned by the first one would be
     // invalidated by the second call.
+    //
+    // Since any value method can result in a type conversion, which puts the value into an
+    // indeterminate state, perhaps the get methods should move self?
 }
 
 impl From<&Value> for i64 {

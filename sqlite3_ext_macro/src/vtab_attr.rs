@@ -18,7 +18,11 @@ pub enum VTabBase {
 
 pub enum VTabTrait {
     UpdateVTab(kw::UpdateVTab),
+    TransactionVTab(kw::TransactionVTab),
+    FindFunctionVTab(kw::FindFunctionVTab),
     RenameVTab(kw::RenameVTab),
+    SavepointVTab(kw::SavepointVTab),
+    ShadowNameVTab(kw::ShadowNameVTab),
 }
 
 impl Parse for VTabAttr {
@@ -53,8 +57,16 @@ impl Parse for VTabTrait {
         let lookahead = input.lookahead1();
         if lookahead.peek(kw::UpdateVTab) {
             input.parse().map(VTabTrait::UpdateVTab)
+        } else if lookahead.peek(kw::TransactionVTab) {
+            input.parse().map(VTabTrait::TransactionVTab)
+        } else if lookahead.peek(kw::FindFunctionVTab) {
+            input.parse().map(VTabTrait::FindFunctionVTab)
         } else if lookahead.peek(kw::RenameVTab) {
             input.parse().map(VTabTrait::RenameVTab)
+        } else if lookahead.peek(kw::SavepointVTab) {
+            input.parse().map(VTabTrait::SavepointVTab)
+        } else if lookahead.peek(kw::ShadowNameVTab) {
+            input.parse().map(VTabTrait::ShadowNameVTab)
         } else {
             Err(lookahead.error())
         }

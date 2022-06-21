@@ -1,4 +1,5 @@
-use super::ffi;
+use super::{ffi, types::*};
+use std::ffi::CStr;
 
 #[derive(Debug, PartialEq)]
 pub enum ValueType {
@@ -37,6 +38,20 @@ impl Value {
     pub fn get_i64(&self) -> i64 {
         unsafe { ffi::sqlite3_value_int64(self.as_ptr()) }
     }
+
+    pub fn get_cstr(&self) -> Result<&CStr> {
+        let ret = unsafe { CStr::from_ptr(ffi::sqlite3_value_text(self.as_ptr()) as _) };
+        // XXX - check for out of memory
+        Ok(ret)
+    }
+
+    pub fn get_str(&self) -> Result<&str> {
+        self.get_cstr()?.to_str().map_err(|e| Error::Utf8Error(e))
+    }
+
+    // XXX - need to figure out how to make this safe. Presently, value_text and value_blob
+    // could both be called, but the reference returned by the first one would be
+    // invalidated by the second call.
 }
 
 impl From<&Value> for i64 {
@@ -48,12 +63,14 @@ impl From<&Value> for i64 {
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self.value_type() {
-            ValueType::Null => f.debug_tuple("Value::Null").finish(),
             ValueType::Integer => f
                 .debug_tuple("Value::Integer")
                 .field(&self.get_i64())
                 .finish(),
-            _ => todo!(),
+            ValueType::Float => todo!(),
+            ValueType::Text => f.debug_tuple("Value::Text").field(&self.get_str()).finish(),
+            ValueType::Blob => todo!(),
+            ValueType::Null => f.debug_tuple("Value::Null").finish(),
         }
     }
 }

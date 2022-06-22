@@ -40,7 +40,11 @@ impl Value {
     }
 
     pub fn get_cstr(&self) -> Result<&CStr> {
-        let ret = unsafe { CStr::from_ptr(ffi::sqlite3_value_text(self.as_ptr()) as _) };
+        let ret = unsafe { ffi::sqlite3_value_text(self.as_ptr()) as *const i8 };
+        if ret.is_null() {
+            return Err(Error::InvalidConversion);
+        }
+        let ret = unsafe { CStr::from_ptr(ret) };
         // XXX - check for out of memory
         Ok(ret)
     }

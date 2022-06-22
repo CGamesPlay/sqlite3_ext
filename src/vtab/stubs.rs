@@ -22,12 +22,6 @@ struct VTabCursorHandle<'vtab, T: VTab<'vtab>> {
     phantom: PhantomData<&'vtab T>,
 }
 
-impl<'vtab, T: VTab<'vtab>> ModuleHandle<'vtab, T> {
-    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a ModuleHandle<'vtab, T> {
-        &*(ptr as *mut ModuleHandle<'vtab, T>)
-    }
-}
-
 macro_rules! vtab_connect {
     ($name:ident, $trait:ident, $func:ident) => {
         pub unsafe extern "C" fn $name<'vtab, T: $trait<'vtab> + 'vtab>(

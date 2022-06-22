@@ -3,6 +3,7 @@
 use super::{ffi, function::Context, sqlite3_require_version, types::*, value::Value, Connection};
 pub use index_info::*;
 pub use module::*;
+use std::ffi::c_void;
 
 mod index_info;
 mod module;
@@ -291,4 +292,10 @@ impl VTabConnection {
 pub(crate) struct ModuleHandle<'vtab, T: VTab<'vtab>> {
     pub vtab: ffi::sqlite3_module,
     pub aux: T::Aux,
+}
+
+impl<'vtab, T: VTab<'vtab>> ModuleHandle<'vtab, T> {
+    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a ModuleHandle<'vtab, T> {
+        &*(ptr as *mut ModuleHandle<'vtab, T>)
+    }
 }

@@ -347,3 +347,15 @@ pub unsafe extern "C" fn vtab_rollback_to<'vtab, T: TransactionVTab<'vtab> + 'vt
     let txn = &mut *(vtab.txn.unwrap() as *mut T::Transaction);
     ffi::handle_result(txn.rollback_to(n), &mut vtab.base.zErrMsg)
 }
+
+pub unsafe extern "C" fn vtab_shadow_name<'vtab, T: CreateVTab<'vtab> + 'vtab>(
+    name: *const i8,
+) -> c_int {
+    let name = CStr::from_ptr(name).to_bytes();
+    for candidate in T::SHADOW_NAMES {
+        if candidate.as_bytes() == name {
+            return 1;
+        }
+    }
+    0
+}

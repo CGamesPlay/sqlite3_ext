@@ -52,8 +52,7 @@ mod parsing {
     UpdateVTab,
     TransactionVTab,
     FindFunctionVTab,
-    RenameVTab,
-    ShadowNameVTab
+    RenameVTab
 )]
 struct VTabLog {
     id: usize,
@@ -138,6 +137,8 @@ impl<'vtab> VTab<'vtab> for VTabLog {
 }
 
 impl<'vtab> CreateVTab<'vtab> for VTabLog {
+    const SHADOW_NAMES: &'static [&'static str] = &["shadow"];
+
     fn create(
         _: &'vtab mut VTabConnection,
         _: Option<&'vtab Self::Aux>,
@@ -191,8 +192,6 @@ impl<'vtab> RenameVTab<'vtab> for VTabLog {
         Ok(())
     }
 }
-
-impl<'vtab> ShadowNameVTab<'vtab> for VTabLog {}
 
 impl Drop for VTabLog {
     fn drop(&mut self) {
@@ -363,5 +362,18 @@ mod test {
         let mut conn = setup()?;
         conn.execute("ALTER TABLE log RENAME to newname", [])?;
         Ok(())
+    }
+
+    #[test]
+    fn shadow_name() -> rusqlite::Result<()> {
+        sqlite3_require_version!(3_026_000, {}, {
+            return Ok(());
+        });
+        let mut conn = setup()?;
+        conn.set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
+        match conn.execute("CREATE TABLE log_shadow (a, b, c)", []) {
+            Err(_) => Ok(()),
+            _ => panic!("expected error, got ok"),
+        }
     }
 }

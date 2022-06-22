@@ -56,6 +56,18 @@ pub trait VTab<'vtab> {
 
 /// A non-eponymous virtual table that supports CREATE VIRTUAL TABLE.
 pub trait CreateVTab<'vtab>: VTab<'vtab> {
+    /// List of shadow table names.
+    ///
+    /// This can be set by a virtual table implementation to automatically implement the
+    /// xShadowName method. For example, "data" appears in this slice, then SQLite will
+    /// understand that "vtab_data" is a shadow table for a table named "vtab" created with
+    /// this module.
+    ///
+    /// Shadow tables are read-only if the database has SQLITE_DBCONFIG_DEFENSIVE set, and
+    /// SQLite is version 3.26.0 or greater. For more information, see [the SQLite
+    /// documentation](https://www.sqlite.org/vtab.html#the_xshadowname_method).
+    const SHADOW_NAMES: &'static [&'static str] = &[];
+
     /// Corresponds to xCreate.
     ///
     /// This method is invoked when a CREATE VIRTUAL TABLE statement is invoked on the
@@ -116,8 +128,6 @@ pub trait RenameVTab<'vtab>: VTab<'vtab> {
     /// Corresponds to xRename, when ALTER TABLE RENAME is run on the virtual table.
     fn rename(&mut self, name: &str) -> Result<()>;
 }
-
-pub trait ShadowNameVTab<'vtab>: VTab<'vtab> {}
 
 /// Implementation of the cursor type for a virtual table.
 pub trait VTabCursor {

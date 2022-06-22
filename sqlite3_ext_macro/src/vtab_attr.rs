@@ -21,7 +21,6 @@ pub enum VTabTrait {
     TransactionVTab(kw::TransactionVTab),
     FindFunctionVTab(kw::FindFunctionVTab),
     RenameVTab(kw::RenameVTab),
-    ShadowNameVTab(kw::ShadowNameVTab),
 }
 
 impl Parse for VTabAttr {
@@ -62,8 +61,6 @@ impl Parse for VTabTrait {
             input.parse().map(VTabTrait::FindFunctionVTab)
         } else if lookahead.peek(kw::RenameVTab) {
             input.parse().map(VTabTrait::RenameVTab)
-        } else if lookahead.peek(kw::ShadowNameVTab) {
-            input.parse().map(VTabTrait::ShadowNameVTab)
         } else {
             Err(lookahead.error())
         }

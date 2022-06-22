@@ -5,7 +5,7 @@ use super::{
     *,
 };
 use sealed::sealed;
-use std::{ffi::CString, marker::PhantomData};
+use std::{cmp::max, ffi::CString, marker::PhantomData};
 
 union ModuleBytes {
     bytes: [u8; std::mem::size_of::<ffi::sqlite3_module>()],
@@ -23,6 +23,10 @@ const EMPTY_MODULE: ffi::sqlite3_module = unsafe {
     }
     .module
 };
+
+fn set_version(m: &mut ffi::sqlite3_module, val: i32) {
+    m.iVersion = max(m.iVersion, val);
+}
 
 /// A virtual table module.
 #[sealed]
@@ -73,7 +77,7 @@ where
         m.xSync = Some(stubs::vtab_sync::<T>);
         m.xCommit = Some(stubs::vtab_commit::<T>);
         let _: Result<()> = sqlite3_require_version!(3_007_007, {
-            m.iVersion = std::cmp::min(m.iVersion, 2);
+            set_version(m, 2);
             m.xRollback = Some(stubs::vtab_rollback::<T>);
             m.xSavepoint = Some(stubs::vtab_savepoint::<T>);
             m.xRelease = Some(stubs::vtab_release::<T>);
@@ -102,14 +106,6 @@ where
         T: RenameVTab<'vtab>,
     {
         self.module().xRename = Some(stubs::vtab_rename::<T>);
-        self
-    }
-
-    #[doc(hidden)]
-    fn with_shadow_name(mut self) -> Self
-    where
-        T: ShadowNameVTab<'vtab>,
-    {
         self
     }
 }
@@ -194,7 +190,7 @@ module_base!(
 impl<'vtab, T: CreateVTab<'vtab>> StandardModule<'vtab, T> {
     #[doc(hidden)]
     pub fn new() -> Self {
-        StandardModule {
+        let mut ret = StandardModule {
             base: ffi::sqlite3_module {
                 xCreate: Some(stubs::vtab_create::<T>),
                 xConnect: Some(stubs::vtab_connect::<T>),
@@ -211,7 +207,15 @@ impl<'vtab, T: CreateVTab<'vtab>> StandardModule<'vtab, T> {
                 ..EMPTY_MODULE
             },
             phantom: PhantomData,
+        };
+        if T::SHADOW_NAMES.len() > 0 {
+            let _: Result<()> = sqlite3_require_version!(3_026_000, {
+                set_version(&mut ret.base, 3);
+                ret.base.xShadowName = Some(stubs::vtab_shadow_name::<T>);
+                Ok(())
+            });
         }
+        ret
     }
 }
 

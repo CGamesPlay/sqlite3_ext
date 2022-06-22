@@ -19,7 +19,6 @@ mod kw {
     syn::custom_keyword!(TransactionVTab);
     syn::custom_keyword!(FindFunctionVTab);
     syn::custom_keyword!(RenameVTab);
-    syn::custom_keyword!(ShadowNameVTab);
 }
 
 /// Declare the primary extension entry point for the crate.
@@ -267,7 +266,6 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
             VTabTrait::TransactionVTab(_) => expr.extend(quote!(.with_transactions())),
             VTabTrait::FindFunctionVTab(_) => expr.extend(quote!(.with_find_function())),
             VTabTrait::RenameVTab(_) => expr.extend(quote!(.with_rename())),
-            VTabTrait::ShadowNameVTab(_) => expr.extend(quote!(.with_shadow_name())),
         }
     }
     if let VTabBase::EponymousOnly(_) = attr.base {

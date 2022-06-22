@@ -53,7 +53,7 @@ macro_rules! vtab_connect {
                 Err(e) => return ffi::handle_error(e, err_msg),
             };
             let vtab_conn = &mut *(db as *mut VTabConnection);
-            let ret = T::$func(vtab_conn, module.aux.as_ref(), args.as_slice());
+            let ret = T::$func(vtab_conn, &module.aux, args.as_slice());
             let (sql, vtab) = match ret {
                 Ok(x) => x,
                 Err(e) => return ffi::handle_error(e, err_msg),

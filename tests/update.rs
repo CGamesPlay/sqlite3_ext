@@ -32,7 +32,7 @@ impl<'vtab> VTab<'vtab> for ListVTab {
 
     fn connect(
         _db: &mut VTabConnection,
-        aux: Option<&'vtab Self::Aux>,
+        aux: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)> {
         let (sql, mut vtab) = Self::connect_create()?;
@@ -57,7 +57,7 @@ impl<'vtab> VTab<'vtab> for ListVTab {
 impl<'vtab> CreateVTab<'vtab> for ListVTab {
     fn create(
         _db: &mut VTabConnection,
-        aux: Option<&'vtab Self::Aux>,
+        aux: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)> {
         let (sql, mut vtab) = Self::connect_create()?;
@@ -173,7 +173,7 @@ fn update() -> rusqlite::Result<()> {
     Connection::from_rusqlite(&conn).create_module(
         "vtab",
         StandardModule::<ListVTab>::new().with_update(),
-        None,
+        (),
     )?;
     conn.execute("CREATE VIRTUAL TABLE tbl USING vtab", [])?;
     conn.execute("INSERT INTO tbl VALUES (100), (200)", [])?;

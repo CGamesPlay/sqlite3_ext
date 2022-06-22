@@ -41,13 +41,13 @@ impl<'vtab> VTabLifecycle {
         }
     }
 
-    pub fn xCreate<T: std::fmt::Debug>(&mut self, aux: Option<T>, args: &[&str]) {
+    pub fn xCreate<T: std::fmt::Debug>(&mut self, aux: &T, args: &[&str]) {
         println!("=== xCreate with {:?}, {:?}", aux, args);
         self.assert_state(&[VTabLifecycleState::Default]);
         self.state = VTabLifecycleState::Connected;
     }
 
-    pub fn xConnect<T: std::fmt::Debug>(&mut self, aux: Option<T>, args: &[&str]) {
+    pub fn xConnect<T: std::fmt::Debug>(&mut self, aux: &T, args: &[&str]) {
         println!("=== xConnect with {:?}, {:?}", aux, args);
         self.assert_state(&[VTabLifecycleState::Default]);
         self.state = VTabLifecycleState::Connected;

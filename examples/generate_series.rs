@@ -17,7 +17,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
 
     fn connect(
         db: &mut VTabConnection,
-        _aux: Option<&'vtab Self::Aux>,
+        _aux: &'vtab Self::Aux,
         _args: &[&str],
     ) -> Result<(String, Self)> {
         let _ = db.set_risk(RiskLevel::Innocuous);
@@ -206,7 +206,7 @@ impl VTabCursor for Cursor {
 
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
-    db.create_module("generate_series", GenerateSeries::module(), None)?;
+    db.create_module("generate_series", GenerateSeries::module(), ())?;
     Ok(())
 }
 

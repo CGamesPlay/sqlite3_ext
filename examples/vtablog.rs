@@ -113,7 +113,7 @@ impl<'vtab> VTab<'vtab> for VTabLog {
 
     fn connect(
         _: &'vtab mut VTabConnection,
-        _: Option<&'vtab Self::Aux>,
+        _: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)> {
         Self::connect_create(args, "connect")
@@ -141,7 +141,7 @@ impl<'vtab> CreateVTab<'vtab> for VTabLog {
 
     fn create(
         _: &'vtab mut VTabConnection,
-        _: Option<&'vtab Self::Aux>,
+        _: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)> {
         Self::connect_create(args, "create")
@@ -308,7 +308,7 @@ impl<'vtab> VTabTransaction for VTabLogTransaction<'vtab> {
 
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
-    db.create_module("vtablog", VTabLog::module(), None)?;
+    db.create_module("vtablog", VTabLog::module(), ())?;
     Ok(())
 }
 

@@ -37,7 +37,7 @@ impl Connection {
         &self,
         name: &str,
         vtab: impl vtab::Module<'vtab, T> + 'vtab,
-        aux: Option<T::Aux>,
+        aux: T::Aux,
     ) -> Result<()> {
         vtab.register(self, name, aux)
     }

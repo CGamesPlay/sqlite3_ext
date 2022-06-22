@@ -38,7 +38,7 @@ where
     fn module(&mut self) -> &mut ffi::sqlite3_module;
 
     /// Register this virtual table module with the provided connection.
-    fn register(mut self, db: &Connection, name: &str, aux: Option<T::Aux>) -> Result<()> {
+    fn register(mut self, db: &Connection, name: &str, aux: T::Aux) -> Result<()> {
         let name = CString::new(name).unwrap();
         let vtab = self.module().clone();
         let handle = Box::new(ModuleHandle::<'vtab, T> { vtab, aux });

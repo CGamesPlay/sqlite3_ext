@@ -37,7 +37,7 @@ pub trait VTab<'vtab> {
     /// contain invalid UTF-8.
     fn connect(
         db: &'vtab mut VTabConnection,
-        aux: Option<&'vtab Self::Aux>,
+        aux: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)>
     where
@@ -77,7 +77,7 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
     /// for more details.
     fn create(
         db: &'vtab mut VTabConnection,
-        aux: Option<&'vtab Self::Aux>,
+        aux: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)>
     where
@@ -290,5 +290,5 @@ impl VTabConnection {
 /// unloaded.
 pub(crate) struct ModuleHandle<'vtab, T: VTab<'vtab>> {
     pub vtab: ffi::sqlite3_module,
-    pub aux: Option<T::Aux>,
+    pub aux: T::Aux,
 }

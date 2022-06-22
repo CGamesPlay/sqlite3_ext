@@ -18,7 +18,7 @@ struct StandardVTab {
 impl<'vtab> StandardVTab {
     fn connect_create(
         _db: &mut VTabConnection,
-        aux: Option<&'vtab Vec<i32>>,
+        aux: &'vtab Vec<i32>,
         args: &[&str],
     ) -> Result<(String, Self)> {
         let rowid_offset = if args.len() > 3 {
@@ -28,17 +28,14 @@ impl<'vtab> StandardVTab {
         } else {
             -1
         };
-        match aux {
-            Some(data) => Ok((
-                "CREATE TABLE x ( value INTEGER NOT NULL )".to_owned(),
-                StandardVTab {
-                    lifecycle: VTabLifecycle::default(),
-                    data: data.clone(),
-                    rowid_offset,
-                },
-            )),
-            None => Err(Error::Module("no data provided".to_owned())),
-        }
+        Ok((
+            "CREATE TABLE x ( value INTEGER NOT NULL )".to_owned(),
+            StandardVTab {
+                lifecycle: VTabLifecycle::default(),
+                data: aux.clone(),
+                rowid_offset,
+            },
+        ))
     }
 }
 
@@ -48,7 +45,7 @@ impl<'vtab> VTab<'vtab> for StandardVTab {
 
     fn connect(
         db: &mut VTabConnection,
-        aux: Option<&'vtab Self::Aux>,
+        aux: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)> {
         let (sql, mut vtab) = Self::connect_create(db, aux, args)?;
@@ -75,7 +72,7 @@ impl<'vtab> VTab<'vtab> for StandardVTab {
 impl<'vtab> CreateVTab<'vtab> for StandardVTab {
     fn create(
         db: &mut VTabConnection,
-        aux: Option<&'vtab Self::Aux>,
+        aux: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)> {
         let (sql, mut vtab) = Self::connect_create(db, aux, args)?;
@@ -169,7 +166,7 @@ fn eponymous_only_vtab() -> rusqlite::Result<()> {
         EponymousOnlyModule::<StandardVTab>::new()
             .unwrap()
             .with_rename(),
-        Some(vec![10, 12, 14, 16, 18]),
+        vec![10, 12, 14, 16, 18],
     )?;
     match conn.execute(
         "CREATE VIRTUAL TABLE tbl USING eponymous_only_vtab(300)",
@@ -198,7 +195,7 @@ fn eponymous_vtab() -> rusqlite::Result<()> {
     Connection::from_rusqlite(&conn).create_module(
         "eponymous_vtab",
         EponymousModule::<StandardVTab>::new().with_rename(),
-        Some(vec![20, 22, 24, 26, 28]),
+        vec![20, 22, 24, 26, 28],
     )?;
     conn.execute("CREATE VIRTUAL TABLE tbl USING eponymous_vtab(200)", [])?;
     check_table(
@@ -232,7 +229,7 @@ fn standard_vtab() -> rusqlite::Result<()> {
     Connection::from_rusqlite(&conn).create_module(
         "standard_vtab",
         StandardModule::<StandardVTab>::new().with_rename(),
-        Some(vec![30, 32, 34, 36, 38]),
+        vec![30, 32, 34, 36, 38],
     )?;
     conn.execute("CREATE VIRTUAL TABLE tbl USING standard_vtab(300)", [])?;
     match conn.prepare("SELECT * FROM standard_vtab") {

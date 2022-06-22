@@ -197,7 +197,7 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// #[sqlite3_ext_main]
 /// fn init(db: &Connection) -> Result<()> {
-///     db.create_module("my_table_function", MyTableFunction::module(), None)?;
+///     db.create_module("my_table_function", MyTableFunction::module(), ())?;
 ///     Ok(())
 /// }
 /// ```
@@ -214,7 +214,7 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// #[sqlite3_ext_main]
 /// fn init(db: &Connection) -> Result<()> {
-///     db.create_module("my_table", MyTable::module(), None)?;
+///     db.create_module("my_table", MyTable::module(), ())?;
 ///     Ok(())
 /// }
 /// ```
@@ -231,7 +231,7 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// #[sqlite3_ext_main]
 /// fn init(db: &Connection) -> Result<()> {
-///     db.create_module("my_table", MyTable::module()?, None)?;
+///     db.create_module("my_table", MyTable::module()?, ())?;
 ///     Ok(())
 /// }
 /// ```
@@ -296,13 +296,13 @@ pub fn sqlite3_ext_doctest_impl(item: TokenStream) -> TokenStream {
             type Aux = ();
             type Cursor = Cursor;
 
-            fn connect(_: &'vtab mut ::sqlite3_ext::vtab::VTabConnection, _: Option<&'vtab Self::Aux>, _: &[&str]) -> std::result::Result<(String, Self), ::sqlite3_ext::Error> { todo!() }
+            fn connect(_: &'vtab mut ::sqlite3_ext::vtab::VTabConnection, _: &'vtab Self::Aux, _: &[&str]) -> std::result::Result<(String, Self), ::sqlite3_ext::Error> { todo!() }
             fn best_index(&self, _: &mut ::sqlite3_ext::vtab::IndexInfo) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
             fn open(&'vtab mut self) -> std::result::Result<Self::Cursor, ::sqlite3_ext::Error> { todo!() }
         }
 
         impl<'vtab> ::sqlite3_ext::vtab::CreateVTab<'vtab> for #item {
-            fn create(_: &'vtab mut ::sqlite3_ext::vtab::VTabConnection, _: Option<&'vtab Self::Aux>, _: &[&str]) -> std::result::Result<(String, Self), ::sqlite3_ext::Error> { todo!() }
+            fn create(_: &'vtab mut ::sqlite3_ext::vtab::VTabConnection, _: &'vtab Self::Aux, _: &[&str]) -> std::result::Result<(String, Self), ::sqlite3_ext::Error> { todo!() }
             fn destroy(&mut self) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
         }
 

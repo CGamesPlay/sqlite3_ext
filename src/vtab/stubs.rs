@@ -6,6 +6,28 @@ use std::{
     ptr, slice,
 };
 
+#[repr(C)]
+struct VTabHandle<'vtab, T: VTab<'vtab>> {
+    base: ffi::sqlite3_vtab,
+    // Declare txn before vtab to drop it first
+    vtab: T,
+    txn: Option<*mut c_void>,
+    phantom: PhantomData<&'vtab T>,
+}
+
+#[repr(C)]
+struct VTabCursorHandle<'vtab, T: VTab<'vtab>> {
+    base: ffi::sqlite3_vtab_cursor,
+    cursor: T::Cursor,
+    phantom: PhantomData<&'vtab T>,
+}
+
+impl<'vtab, T: VTab<'vtab>> ModuleHandle<'vtab, T> {
+    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a ModuleHandle<'vtab, T> {
+        &*(ptr as *mut ModuleHandle<'vtab, T>)
+    }
+}
+
 macro_rules! vtab_connect {
     ($name:ident, $trait:ident, $func:ident) => {
         pub unsafe extern "C" fn $name<'vtab, T: $trait<'vtab> + 'vtab>(
@@ -61,6 +83,39 @@ macro_rules! vtab_connect {
 
 vtab_connect!(vtab_create, CreateVTab, create);
 vtab_connect!(vtab_connect, VTab, connect);
+
+pub unsafe extern "C" fn vtab_connect_transaction<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
+    db: *mut ffi::sqlite3,
+    module: *mut c_void,
+    argc: i32,
+    argv: *const *const i8,
+    p_vtab: *mut *mut ffi::sqlite3_vtab,
+    err_msg: *mut *mut i8,
+) -> c_int {
+    match vtab_connect::<T>(db, module, argc, argv, p_vtab, err_msg) {
+        ffi::SQLITE_OK => (),
+        rc => return rc,
+    }
+    vtab_begin::<T>(*p_vtab)
+}
+
+pub unsafe extern "C" fn vtab_create_transaction<
+    'vtab,
+    T: TransactionVTab<'vtab> + CreateVTab<'vtab> + 'vtab,
+>(
+    db: *mut ffi::sqlite3,
+    module: *mut c_void,
+    argc: i32,
+    argv: *const *const i8,
+    p_vtab: *mut *mut ffi::sqlite3_vtab,
+    err_msg: *mut *mut i8,
+) -> c_int {
+    match vtab_create::<T>(db, module, argc, argv, p_vtab, err_msg) {
+        ffi::SQLITE_OK => (),
+        rc => return rc,
+    }
+    vtab_begin::<T>(*p_vtab)
+}
 
 pub unsafe extern "C" fn vtab_best_index<'vtab, T: VTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
@@ -215,6 +270,9 @@ pub unsafe extern "C" fn vtab_begin<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
 ) -> c_int {
     let vtab = &mut *(vtab as *mut VTabHandle<T>);
+    if let Some(x) = vtab.txn.take() {
+        Box::from_raw(x as *mut T::Transaction);
+    }
     match vtab.vtab.begin() {
         Ok(txn) => {
             vtab.txn.replace(Box::into_raw(Box::new(txn)) as _);
@@ -228,39 +286,24 @@ pub unsafe extern "C" fn vtab_sync<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
 ) -> c_int {
     let vtab = &mut *(vtab as *mut VTabHandle<T>);
-    match vtab.txn {
-        Some(txn) => {
-            let txn = &mut *(txn as *mut T::Transaction);
-            ffi::handle_result(txn.sync(), &mut vtab.base.zErrMsg)
-        }
-        None => ffi::SQLITE_OK,
-    }
+    let txn = &mut *(vtab.txn.unwrap() as *mut T::Transaction);
+    ffi::handle_result(txn.sync(), &mut vtab.base.zErrMsg)
 }
 
 pub unsafe extern "C" fn vtab_commit<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
 ) -> c_int {
     let vtab = &mut *(vtab as *mut VTabHandle<T>);
-    match vtab.txn.take() {
-        Some(txn) => {
-            let txn = Box::from_raw(txn as *mut T::Transaction);
-            ffi::handle_result(txn.commit(), &mut vtab.base.zErrMsg)
-        }
-        None => ffi::SQLITE_OK,
-    }
+    let txn = Box::from_raw(vtab.txn.take().unwrap() as *mut T::Transaction);
+    ffi::handle_result(txn.commit(), &mut vtab.base.zErrMsg)
 }
 
 pub unsafe extern "C" fn vtab_rollback<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
 ) -> c_int {
     let vtab = &mut *(vtab as *mut VTabHandle<T>);
-    match vtab.txn.take() {
-        Some(txn) => {
-            let txn = Box::from_raw(txn as *mut T::Transaction);
-            ffi::handle_result(txn.rollback(), &mut vtab.base.zErrMsg)
-        }
-        None => ffi::SQLITE_OK,
-    }
+    let txn = Box::from_raw(vtab.txn.take().unwrap() as *mut T::Transaction);
+    ffi::handle_result(txn.rollback(), &mut vtab.base.zErrMsg)
 }
 
 pub unsafe extern "C" fn vtab_rename<'vtab, T: RenameVTab<'vtab> + 'vtab>(
@@ -276,4 +319,31 @@ pub unsafe extern "C" fn vtab_rename<'vtab, T: RenameVTab<'vtab> + 'vtab>(
         Err(e) => return ffi::handle_error(e, &mut vtab.base.zErrMsg),
     };
     ffi::handle_result(vtab.vtab.rename(name), &mut vtab.base.zErrMsg)
+}
+
+pub unsafe extern "C" fn vtab_savepoint<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
+    vtab: *mut ffi::sqlite3_vtab,
+    n: c_int,
+) -> c_int {
+    let vtab = &mut *(vtab as *mut VTabHandle<T>);
+    let txn = &mut *(vtab.txn.unwrap() as *mut T::Transaction);
+    ffi::handle_result(txn.savepoint(n), &mut vtab.base.zErrMsg)
+}
+
+pub unsafe extern "C" fn vtab_release<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
+    vtab: *mut ffi::sqlite3_vtab,
+    n: c_int,
+) -> c_int {
+    let vtab = &mut *(vtab as *mut VTabHandle<T>);
+    let txn = &mut *(vtab.txn.unwrap() as *mut T::Transaction);
+    ffi::handle_result(txn.release(n), &mut vtab.base.zErrMsg)
+}
+
+pub unsafe extern "C" fn vtab_rollback_to<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
+    vtab: *mut ffi::sqlite3_vtab,
+    n: c_int,
+) -> c_int {
+    let vtab = &mut *(vtab as *mut VTabHandle<T>);
+    let txn = &mut *(vtab.txn.unwrap() as *mut T::Transaction);
+    ffi::handle_result(txn.rollback_to(n), &mut vtab.base.zErrMsg)
 }

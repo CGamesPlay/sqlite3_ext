@@ -18,5 +18,5 @@ test:
   summary: test all supported configurations
   command: |
     set -e
-    cargo test --all-features
-    cargo test --features=static
+    cargo test --workspace --all-features
+    cargo test --workspace --features=static

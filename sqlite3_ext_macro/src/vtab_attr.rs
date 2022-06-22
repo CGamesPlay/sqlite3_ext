@@ -11,9 +11,9 @@ pub struct VTabAttr {
 }
 
 pub enum VTabBase {
-    Standard(kw::standard),
-    Eponymous(kw::eponymous),
-    EponymousOnly(kw::eponymous_only),
+    Standard(kw::StandardModule),
+    Eponymous(kw::EponymousModule),
+    EponymousOnly(kw::EponymousOnlyModule),
 }
 
 pub enum VTabTrait {
@@ -21,7 +21,6 @@ pub enum VTabTrait {
     TransactionVTab(kw::TransactionVTab),
     FindFunctionVTab(kw::FindFunctionVTab),
     RenameVTab(kw::RenameVTab),
-    SavepointVTab(kw::SavepointVTab),
     ShadowNameVTab(kw::ShadowNameVTab),
 }
 
@@ -40,11 +39,11 @@ impl Parse for VTabAttr {
 impl Parse for VTabBase {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
-        if lookahead.peek(kw::standard) {
+        if lookahead.peek(kw::StandardModule) {
             input.parse().map(VTabBase::Standard)
-        } else if lookahead.peek(kw::eponymous) {
+        } else if lookahead.peek(kw::EponymousModule) {
             input.parse().map(VTabBase::Eponymous)
-        } else if lookahead.peek(kw::eponymous_only) {
+        } else if lookahead.peek(kw::EponymousOnlyModule) {
             input.parse().map(VTabBase::EponymousOnly)
         } else {
             Err(lookahead.error())
@@ -63,8 +62,6 @@ impl Parse for VTabTrait {
             input.parse().map(VTabTrait::FindFunctionVTab)
         } else if lookahead.peek(kw::RenameVTab) {
             input.parse().map(VTabTrait::RenameVTab)
-        } else if lookahead.peek(kw::SavepointVTab) {
-            input.parse().map(VTabTrait::SavepointVTab)
         } else if lookahead.peek(kw::ShadowNameVTab) {
             input.parse().map(VTabTrait::ShadowNameVTab)
         } else {

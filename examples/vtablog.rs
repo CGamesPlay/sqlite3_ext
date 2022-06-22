@@ -48,12 +48,11 @@ mod parsing {
 }
 
 #[sqlite3_ext_vtab(
-    standard,
+    StandardModule,
     UpdateVTab,
     TransactionVTab,
     FindFunctionVTab,
     RenameVTab,
-    SavepointVTab,
     ShadowNameVTab
 )]
 struct VTabLog {
@@ -193,13 +192,20 @@ impl<'vtab> RenameVTab<'vtab> for VTabLog {
     }
 }
 
-impl<'vtab> SavepointVTab<'vtab> for VTabLog {}
-
 impl<'vtab> ShadowNameVTab<'vtab> for VTabLog {}
 
 impl Drop for VTabLog {
     fn drop(&mut self) {
         println!("drop(tab={})", self.id);
+    }
+}
+
+impl Drop for VTabLogTransaction<'_> {
+    fn drop(&mut self) {
+        println!(
+            "drop_transaction(tab={}, transaction={})",
+            self.vtab.id, self.id
+        );
     }
 }
 
@@ -273,6 +279,30 @@ impl<'vtab> VTabTransaction for VTabLogTransaction<'vtab> {
 
     fn rollback(self) -> Result<()> {
         println!("rollback(tab={}, transaction={})", self.vtab.id, self.id);
+        Ok(())
+    }
+
+    fn savepoint(&mut self, n: i32) -> Result<()> {
+        println!(
+            "savepoint(tab={}, transaction={}, n={})",
+            self.vtab.id, self.id, n
+        );
+        Ok(())
+    }
+
+    fn release(&mut self, n: i32) -> Result<()> {
+        println!(
+            "release(tab={}, transaction={}, n={})",
+            self.vtab.id, self.id, n
+        );
+        Ok(())
+    }
+
+    fn rollback_to(&mut self, n: i32) -> Result<()> {
+        println!(
+            "rollback_to(tab={}, transaction={}, n={})",
+            self.vtab.id, self.id, n
+        );
         Ok(())
     }
 }

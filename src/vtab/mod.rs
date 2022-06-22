@@ -1,36 +1,26 @@
 //! Wrappers for creating virtual tables.
 
-use super::{
-    ffi, function::Context, sqlite3_libversion_number, sqlite3_require_version, types::*,
-    value::Value, Connection,
-};
+use super::{ffi, function::Context, sqlite3_require_version, types::*, value::Value, Connection};
 pub use index_info::*;
-use std::{marker::PhantomData, os::raw::c_void};
+pub use module::*;
 
 mod index_info;
-pub mod stubs;
+mod module;
+pub(crate) mod stubs;
 
-union ModuleBytes {
-    bytes: [u8; std::mem::size_of::<ffi::sqlite3_module>()],
-    module: ffi::sqlite3_module,
-}
-
-// We use this empty module hack to avoid specifying all of the fields for the module here. In
-// general, we present the most modern API that we can, but use Result types to indicate when a
-// feature is not available due to the runtime SQLite version. When statically linking, we
-// emulate the same behavior, but we have to be a bit more cautious, since we are using the
-// libsqlite3_sys presented API, which might otherwise cause compilation errors.
-const EMPTY_MODULE: ffi::sqlite3_module = unsafe {
-    ModuleBytes {
-        bytes: [0_u8; std::mem::size_of::<ffi::sqlite3_module>()],
-    }
-    .module
-};
-
-/// Functionality required by all virtual tables. A read-only, eponymous-only virtual table
-/// (e.g. a table-valued function) can implement only this trait.
+/// A virtual table.
+///
+/// This trait defines functionality required by all virtual tables. A read-only,
+/// eponymous-only virtual table (e.g. a table-valued function) can implement only this trait.
 pub trait VTab<'vtab> {
+    /// Additional data associated with the virtual table module.
+    ///
+    /// When registering the module with [Module::register], additional data can be passed
+    /// as a parameter. This data will be passed to [connect](VTab::connect) and
+    /// [create](CreateVTab::create). It can be used for any purpose.
     type Aux;
+
+    /// Cursor implementation for this virtual table.
     type Cursor: VTabCursor;
 
     /// Corresponds to xConnect.
@@ -109,21 +99,13 @@ pub trait UpdateVTab<'vtab>: VTab<'vtab> {
     fn delete(&mut self, rowid: &Value) -> Result<()>;
 }
 
-/// A virtual table that requires additional work to implement transactions.
+/// A virtual table that supports ROLLBACK.
 ///
-/// Virtual tables which modify resources outside of the database in which they are defined may
-/// require additional code in order to safely implement transactions. If the virtual table
-/// only modifies data inside of the database in which it is defined, then SQLite's built-in
-/// transaction support is sufficient.
+/// See [VTabTransaction] for details.
 pub trait TransactionVTab<'vtab>: UpdateVTab<'vtab> {
     type Transaction: VTabTransaction;
 
     /// Begin a transaction.
-    ///
-    /// This method will always be followed by a call to either commit or rollback. Virtual
-    /// table transactions do not nest, so the xBegin method will not be invoked more than
-    /// once on a single virtual table without an intervening call to either commit or
-    /// rollback.
     fn begin(&'vtab mut self) -> Result<Self::Transaction>;
 }
 
@@ -134,8 +116,6 @@ pub trait RenameVTab<'vtab>: VTab<'vtab> {
     /// Corresponds to xRename, when ALTER TABLE RENAME is run on the virtual table.
     fn rename(&mut self, name: &str) -> Result<()>;
 }
-
-pub trait SavepointVTab<'vtab>: VTab<'vtab> {}
 
 pub trait ShadowNameVTab<'vtab>: VTab<'vtab> {}
 
@@ -153,10 +133,41 @@ pub trait VTabCursor {
 }
 
 /// Implementation of the transaction type for a virtual table.
+///
+/// Virtual tables which modify resources outside of the database in which they are defined may
+/// require additional work in order to safely implement fallible transactions. If the virtual
+/// table only modifies data inside of the database in which it is defined, then SQLite's
+/// built-in transaction support is sufficient and implementing [TransactionVTab] is not
+/// necessary. The most important methods of this trait are
+/// [rollback](VTabTransaction::rollback) and [rollback_to](VTabTransaction::rollback_to). If
+/// it is not possible to correctly implement these methods for the virtual table, then there
+/// is no need to implement [TransactionVTab] at all.
+///
+/// Virtual table transactions do not nest, so there will never be more than one instance of
+/// this trait per virtual table. Instances are always dropped in a call to either
+/// [commit](VTabTransaction::commit) or [rollback](VTabTransaction::rollback), with one
+/// exception: eponymous tables implementing this trait automatically begin a transaction after
+/// [VTab::connect], but this transaction will be later on dropped without any methods being
+/// called on it. This is harmless, because if an UPDATE occurs for such a table, a new
+/// transaction will be created, dropping the previous one first.
+///
+/// Note that the [savepoint](VTabTransaction::savepoint), [release](VTabTransaction::release),
+/// and [rollback_to](VTabTransaction::rollback_to) methods require SQLite 3.7.7. On previous
+/// versions of SQLite, these methods will not be called, which may result in unsound behavior.
+/// In the following example, the virtual table will incorrectly commit changes which should
+/// have been rolled back.
+///
+/// ```sql
+/// BEGIN;
+/// SAVEPOINT a;
+/// UPDATE my_virtual_table SET foo = 'bar';
+/// ROLLBACK TO a;
+/// COMMIT;
+/// ```
 pub trait VTabTransaction {
     /// Start a two-phase commit.
     ///
-    /// This method is only invoked prior to an commit or rollback. In order to implement
+    /// This method is only invoked prior to a commit or rollback. In order to implement
     /// two-phase commit, the sync method on all virtual tables is invoked prior to
     /// invoking the commit method on any virtual table. If any of the sync methods fail,
     /// the entire transaction is rolled back.
@@ -169,168 +180,36 @@ pub trait VTabTransaction {
 
     /// Roll back a commit.
     fn rollback(self) -> Result<()>;
-}
 
-#[repr(transparent)]
-pub struct Module<'vtab, T: VTab<'vtab>> {
-    pub(crate) base: ffi::sqlite3_module,
-    phantom: PhantomData<&'vtab T>,
-}
-
-impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
-    /// Declare an eponymous-only virtual table.
+    /// Save current state as a save point.
     ///
-    /// For this virtual table, CREATE VIRTUAL TABLE is forbidden, but the table is
-    /// ambiently available under the module name.
+    /// The current state of the virtual table should be saved as savepoint n. There is
+    /// no guarantee that n starts at zero or increases by 1 in between calls.
     ///
-    /// This feature requires SQLite 3.9.0 or above. Older versions of SQLite do not
-    /// support eponymous virtual tables, meaning they require at least one CREATE VIRTUAL
-    /// TABLE statement to be used. If supporting these versions of SQLite is desired, you
-    /// can either use [Module::eponymous] or [Module::standard] and return an error if
-    /// there is an attempt to instantiate the virtual table more than once.
-    pub fn eponymous_only() -> Result<Self> {
-        const MIN_VERSION: i32 = 3_009_000;
-        if sqlite3_libversion_number() >= MIN_VERSION {
-            Ok(Module {
-                base: ffi::sqlite3_module {
-                    iVersion: 2,
-                    xConnect: Some(stubs::vtab_connect::<T>),
-                    xBestIndex: Some(stubs::vtab_best_index::<T>),
-                    xDisconnect: Some(stubs::vtab_disconnect::<T>),
-                    xOpen: Some(stubs::vtab_open::<T>),
-                    xClose: Some(stubs::vtab_close::<T>),
-                    xFilter: Some(stubs::vtab_filter::<T>),
-                    xNext: Some(stubs::vtab_next::<T>),
-                    xEof: Some(stubs::vtab_eof::<T>),
-                    xColumn: Some(stubs::vtab_column::<T>),
-                    xRowid: Some(stubs::vtab_rowid::<T>),
-                    ..EMPTY_MODULE
-                },
-                phantom: PhantomData,
-            })
-        } else {
-            Err(Error::VersionNotSatisfied(MIN_VERSION))
-        }
-    }
+    /// This method will only be called on SQLite 3.7.7 or later.
+    fn savepoint(&mut self, n: i32) -> Result<()>;
 
-    /// Declare an eponymous virtual table. For this module, the virtual table is available
-    /// ambiently in the database, but CREATE VIRTUAL TABLE can also be used to instantiate
-    /// the table with alternative parameters.
-    pub fn eponymous() -> Self {
-        Module {
-            base: ffi::sqlite3_module {
-                iVersion: 2,
-                xCreate: Some(stubs::vtab_connect::<T>),
-                xConnect: Some(stubs::vtab_connect::<T>),
-                xBestIndex: Some(stubs::vtab_best_index::<T>),
-                xDisconnect: Some(stubs::vtab_disconnect::<T>),
-                xDestroy: Some(stubs::vtab_disconnect::<T>),
-                xOpen: Some(stubs::vtab_open::<T>),
-                xClose: Some(stubs::vtab_close::<T>),
-                xFilter: Some(stubs::vtab_filter::<T>),
-                xNext: Some(stubs::vtab_next::<T>),
-                xEof: Some(stubs::vtab_eof::<T>),
-                xColumn: Some(stubs::vtab_column::<T>),
-                xRowid: Some(stubs::vtab_rowid::<T>),
-                ..EMPTY_MODULE
-            },
-            phantom: PhantomData,
-        }
-    }
-}
+    /// Invalidate previous save points.
+    ///
+    /// All save points numbered >= n should be invalidated. This does not mean the
+    /// changes are ready to be committed, just that there is no need to maintain a record
+    /// of those saved states any more.
+    ///
+    /// Note that there is no guarantee that n will be a value from a previous call to
+    /// [savepoint](VTabTransaction::savepoint).
+    ///
+    /// This method will only be called on SQLite 3.7.7 or later.
+    fn release(&mut self, n: i32) -> Result<()>;
 
-impl<'vtab, T: CreateVTab<'vtab>> Module<'vtab, T> {
-    pub fn standard() -> Self {
-        Module {
-            base: ffi::sqlite3_module {
-                iVersion: 2,
-                xCreate: Some(stubs::vtab_create::<T>),
-                xConnect: Some(stubs::vtab_connect::<T>),
-                xBestIndex: Some(stubs::vtab_best_index::<T>),
-                xDisconnect: Some(stubs::vtab_disconnect::<T>),
-                xDestroy: Some(stubs::vtab_destroy::<T>),
-                xOpen: Some(stubs::vtab_open::<T>),
-                xClose: Some(stubs::vtab_close::<T>),
-                xFilter: Some(stubs::vtab_filter::<T>),
-                xNext: Some(stubs::vtab_next::<T>),
-                xEof: Some(stubs::vtab_eof::<T>),
-                xColumn: Some(stubs::vtab_column::<T>),
-                xRowid: Some(stubs::vtab_rowid::<T>),
-                ..EMPTY_MODULE
-            },
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<'vtab, T: UpdateVTab<'vtab>> Module<'vtab, T> {
-    pub fn with_update(mut self) -> Self {
-        self.base.xUpdate = Some(stubs::vtab_update::<T>);
-        self
-    }
-}
-
-impl<'vtab, T: TransactionVTab<'vtab>> Module<'vtab, T> {
-    pub fn with_transactions(mut self) -> Self {
-        self.base.xBegin = Some(stubs::vtab_begin::<T>);
-        self.base.xSync = Some(stubs::vtab_sync::<T>);
-        self.base.xCommit = Some(stubs::vtab_commit::<T>);
-        self.base.xRollback = Some(stubs::vtab_rollback::<T>);
-        self
-    }
-}
-
-impl<'vtab, T: FindFunctionVTab<'vtab>> Module<'vtab, T> {
-    pub fn with_find_function(mut self) -> Self {
-        self
-    }
-}
-
-impl<'vtab, T: RenameVTab<'vtab>> Module<'vtab, T> {
-    pub fn with_rename(mut self) -> Self {
-        self.base.xRename = Some(stubs::vtab_rename::<T>);
-        self
-    }
-}
-
-impl<'vtab, T: SavepointVTab<'vtab>> Module<'vtab, T> {
-    pub fn with_savepoints(mut self) -> Self {
-        self
-    }
-}
-
-impl<'vtab, T: ShadowNameVTab<'vtab>> Module<'vtab, T> {
-    pub fn with_shadow_name(mut self) -> Self {
-        self
-    }
-}
-
-/// Handle to the module and aux data, so that it can be properly dropped when the module is
-/// unloaded.
-pub(crate) struct ModuleHandle<'vtab, T: VTab<'vtab>> {
-    pub vtab: Module<'vtab, T>,
-    pub aux: Option<T::Aux>,
-}
-
-impl<'vtab, T: VTab<'vtab>> ModuleHandle<'vtab, T> {
-    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a ModuleHandle<'vtab, T> {
-        &*(ptr as *mut ModuleHandle<'vtab, T>)
-    }
-}
-
-#[repr(C)]
-struct VTabHandle<'vtab, T: VTab<'vtab>> {
-    base: ffi::sqlite3_vtab,
-    vtab: T,
-    txn: Option<*mut c_void>,
-    phantom: PhantomData<&'vtab T>,
-}
-
-#[repr(C)]
-struct VTabCursorHandle<'vtab, T: VTab<'vtab>> {
-    base: ffi::sqlite3_vtab_cursor,
-    cursor: T::Cursor,
-    phantom: PhantomData<&'vtab T>,
+    /// Restore a save point.
+    ///
+    /// The virtual table should revert to the state it had when
+    /// [savepoint](VTabTransaction::savepoint) was called the lowest number >= n. There is
+    /// no guarantee that [savepoint](VTabTransaction::savepoint) was ever called with n
+    /// exactly.
+    ///
+    /// This method will only be called on SQLite 3.7.7 or later.
+    fn rollback_to(&mut self, n: i32) -> Result<()>;
 }
 
 pub enum RiskLevel {
@@ -395,4 +274,11 @@ impl VTabConnection {
             ))
         })
     }
+}
+
+/// Handle to the module and aux data, so that it can be properly dropped when the module is
+/// unloaded.
+pub(crate) struct ModuleHandle<'vtab, T: VTab<'vtab>> {
+    pub vtab: ffi::sqlite3_module,
+    pub aux: Option<T::Aux>,
 }

@@ -8,6 +8,7 @@ const COLUMN_START: usize = 1;
 const COLUMN_STOP: usize = 2;
 const COLUMN_STEP: usize = 3;
 
+#[sqlite3_ext_vtab(EponymousModule)]
 struct GenerateSeries {}
 
 impl<'vtab> VTab<'vtab> for GenerateSeries {
@@ -205,11 +206,7 @@ impl VTabCursor for Cursor {
 
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
-    db.create_module(
-        "generate_series",
-        Module::<GenerateSeries>::eponymous(),
-        None,
-    )?;
+    db.create_module("generate_series", GenerateSeries::module(), None)?;
     Ok(())
 }
 

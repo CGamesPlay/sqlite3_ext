@@ -166,7 +166,7 @@ fn eponymous_only_vtab() -> rusqlite::Result<()> {
     let conn = setup()?;
     Connection::from_rusqlite(&conn).create_module(
         "eponymous_only_vtab",
-        Module::<StandardVTab>::eponymous_only()
+        EponymousOnlyModule::<StandardVTab>::new()
             .unwrap()
             .with_rename(),
         Some(vec![10, 12, 14, 16, 18]),
@@ -197,7 +197,7 @@ fn eponymous_vtab() -> rusqlite::Result<()> {
     let conn = setup()?;
     Connection::from_rusqlite(&conn).create_module(
         "eponymous_vtab",
-        Module::<StandardVTab>::eponymous().with_rename(),
+        EponymousModule::<StandardVTab>::new().with_rename(),
         Some(vec![20, 22, 24, 26, 28]),
     )?;
     conn.execute("CREATE VIRTUAL TABLE tbl USING eponymous_vtab(200)", [])?;
@@ -231,7 +231,7 @@ fn standard_vtab() -> rusqlite::Result<()> {
     let conn = setup()?;
     Connection::from_rusqlite(&conn).create_module(
         "standard_vtab",
-        Module::<StandardVTab>::standard().with_rename(),
+        StandardModule::<StandardVTab>::new().with_rename(),
         Some(vec![30, 32, 34, 36, 38]),
     )?;
     conn.execute("CREATE VIRTUAL TABLE tbl USING standard_vtab(300)", [])?;

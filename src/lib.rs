@@ -1,6 +1,6 @@
 pub use extension::Extension;
 pub use sqlite3_ext_macro::*;
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 pub use types::*;
 pub use value::*;
 
@@ -31,30 +31,18 @@ impl Connection {
         &mut *(db as *mut Connection)
     }
 
+    /// A convenience method which calls [Module::register](vtab::Module::register) on the
+    /// vtab.
     pub fn create_module<'vtab, T: vtab::VTab<'vtab> + 'vtab>(
         &self,
         name: &str,
-        vtab: vtab::Module<'vtab, T>,
+        vtab: impl vtab::Module<'vtab, T> + 'vtab,
         aux: Option<T::Aux>,
     ) -> Result<()> {
-        let name = CString::new(name).unwrap();
-        let handle = Box::new(vtab::ModuleHandle { vtab, aux });
-        let rc = unsafe {
-            ffi::sqlite3_create_module_v2(
-                &self.db as *const ffi::sqlite3 as _,
-                name.as_ptr() as _,
-                &handle.vtab.base,
-                Box::into_raw(handle) as _,
-                Some(ffi::drop_boxed::<vtab::ModuleHandle<T>>),
-            )
-        };
-        match rc {
-            ffi::SQLITE_OK => Ok(()),
-            _ => Err(Error::Sqlite(rc)),
-        }
+        vtab.register(self, name, aux)
     }
 
     fn as_ptr(&self) -> *mut ffi::sqlite3 {
-        self as *const Connection as _
+        &self.db as *const ffi::sqlite3 as _
     }
 }

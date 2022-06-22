@@ -12,14 +12,13 @@ mod vtab_attr;
 mod kw {
     syn::custom_keyword!(export);
     syn::custom_keyword!(persistent);
-    syn::custom_keyword!(standard);
-    syn::custom_keyword!(eponymous);
-    syn::custom_keyword!(eponymous_only);
+    syn::custom_keyword!(StandardModule);
+    syn::custom_keyword!(EponymousModule);
+    syn::custom_keyword!(EponymousOnlyModule);
     syn::custom_keyword!(UpdateVTab);
     syn::custom_keyword!(TransactionVTab);
     syn::custom_keyword!(FindFunctionVTab);
     syn::custom_keyword!(RenameVTab);
-    syn::custom_keyword!(SavepointVTab);
     syn::custom_keyword!(ShadowNameVTab);
 }
 
@@ -33,7 +32,10 @@ mod kw {
 /// Specify a persistent extension:
 ///
 /// ```no_run
-/// #[sqlite3_ext_init(persistent)]
+/// # use sqlite3_ext_macro::*;
+/// use sqlite3_ext::*;
+///
+/// #[sqlite3_ext_main(persistent)]
 /// fn init(db: &Connection) -> Result<()> {
 ///     Ok(())
 /// }
@@ -71,7 +73,10 @@ pub fn sqlite3_ext_main(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Specifying a nonstandard entry point name:
 ///
 /// ```no_run
-/// #[sqlite3_ext_init(export = "nonstandard_entry_point", persistent)]
+/// # use sqlite3_ext_macro::*;
+/// use sqlite3_ext::*;
+///
+/// #[sqlite3_ext_init(export = nonstandard_entry_point, persistent)]
 /// fn init(db: &Connection) -> Result<()> {
 ///     Ok(())
 /// }
@@ -168,6 +173,69 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+/// Declare a virtual table module.
+///
+/// This attribute is intended to be applied to the struct which implements VTab and related
+/// traits. The first parameter to the attribute is the type of module to create, which is one
+/// of StandardModule, EponymousModule, EponymousOnlyModule. The subsequent parameter refer to
+/// traits in sqlite3_ext::vtab, and describe the functionality which the virtual table
+/// supports. See the corresponding structs and traits in sqlite3_ext::vtab for more details.
+///
+/// The resulting struct will have an associated method `module` which returns the concrete
+/// type of module specified in the first parameter, or a Result containing it.
+///
+/// # Examples
+///
+/// Declare a table-valued function:
+///
+/// ```no_run
+/// # use sqlite3_ext_macro::*;
+/// use sqlite3_ext::*;
+///
+/// #[sqlite3_ext_vtab(EponymousModule)]
+/// struct MyTableFunction {}
+/// # sqlite3_ext_doctest_impl!(MyTableFunction);
+///
+/// #[sqlite3_ext_main]
+/// fn init(db: &Connection) -> Result<()> {
+///     db.create_module("my_table_function", MyTableFunction::module(), None)?;
+///     Ok(())
+/// }
+/// ```
+///
+/// Declare a standard virtual table that supports updates:
+///
+/// ```no_run
+/// # use sqlite3_ext_macro::*;
+/// use sqlite3_ext::*;
+///
+/// #[sqlite3_ext_vtab(StandardModule, UpdateVTab)]
+/// struct MyTable {}
+/// # sqlite3_ext_doctest_impl!(MyTable);
+///
+/// #[sqlite3_ext_main]
+/// fn init(db: &Connection) -> Result<()> {
+///     db.create_module("my_table", MyTable::module(), None)?;
+///     Ok(())
+/// }
+/// ```
+///
+/// Declare an eponymous-only table that supports updates:
+///
+/// ```no_run
+/// # use sqlite3_ext_macro::*;
+/// use sqlite3_ext::*;
+///
+/// #[sqlite3_ext_vtab(EponymousOnlyModule, UpdateVTab)]
+/// struct MyTable {}
+/// # sqlite3_ext_doctest_impl!(MyTable);
+///
+/// #[sqlite3_ext_main]
+/// fn init(db: &Connection) -> Result<()> {
+///     db.create_module("my_table", MyTable::module()?, None)?;
+///     Ok(())
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr = match parse::<VTabAttr>(attr) {
@@ -181,15 +249,17 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as syn::ItemStruct);
     let struct_ident = &item.ident;
     let struct_generics = &item.generics;
-    let ret = if let VTabBase::EponymousOnly(_) = attr.base {
-        quote!(::sqlite3_ext::Result<::sqlite3_ext::vtab::Module<'a, Self>>)
-    } else {
-        quote!(::sqlite3_ext::vtab::Module<'a, Self>)
+    let base = match attr.base {
+        VTabBase::Standard(_) => quote!(::sqlite3_ext::vtab::StandardModule),
+        VTabBase::Eponymous(_) => quote!(::sqlite3_ext::vtab::EponymousModule),
+        VTabBase::EponymousOnly(_) => quote!(::sqlite3_ext::vtab::EponymousOnlyModule),
     };
-    let mut expr = match attr.base {
-        VTabBase::Standard(_) => quote!(Module::<Self>::standard()),
-        VTabBase::Eponymous(_) => quote!(Module::<Self>::eponymous()),
-        VTabBase::EponymousOnly(_) => quote!(Module::<Self>::eponymous_only()?),
+    let mut expr = quote!(#base::<Self>::new());
+    let ret = if let VTabBase::EponymousOnly(_) = attr.base {
+        expr.extend(quote!(?));
+        quote!(::sqlite3_ext::Result<#base<'a, Self>>)
+    } else {
+        quote!(#base<'a, Self>)
     };
     for t in attr.additional {
         match t {
@@ -197,18 +267,60 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
             VTabTrait::TransactionVTab(_) => expr.extend(quote!(.with_transactions())),
             VTabTrait::FindFunctionVTab(_) => expr.extend(quote!(.with_find_function())),
             VTabTrait::RenameVTab(_) => expr.extend(quote!(.with_rename())),
-            VTabTrait::SavepointVTab(_) => expr.extend(quote!(.with_savepoints())),
             VTabTrait::ShadowNameVTab(_) => expr.extend(quote!(.with_shadow_name())),
         }
     }
+    if let VTabBase::EponymousOnly(_) = attr.base {
+        expr = quote!(Ok(#expr));
+    };
     let expanded = quote! {
         #item
 
         #[automatically_derived]
         impl #struct_ident #struct_generics {
+            /// Return the [Module](::sqlite3_ext::vtab::Module) associated with
+            /// this virtual table.
             pub fn module<'a>() -> #ret {
+                use ::sqlite3_ext::vtab::*;
                 #expr
             }
+        }
+    };
+    TokenStream::from(expanded)
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn sqlite3_ext_doctest_impl(item: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(item as syn::Ident);
+    let expanded = quote! {
+        impl<'vtab> ::sqlite3_ext::vtab::VTab<'vtab> for #item {
+            type Aux = ();
+            type Cursor = Cursor;
+
+            fn connect(_: &'vtab mut ::sqlite3_ext::vtab::VTabConnection, _: Option<&'vtab Self::Aux>, _: &[&str]) -> std::result::Result<(String, Self), ::sqlite3_ext::Error> { todo!() }
+            fn best_index(&self, _: &mut ::sqlite3_ext::vtab::IndexInfo) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
+            fn open(&'vtab mut self) -> std::result::Result<Self::Cursor, ::sqlite3_ext::Error> { todo!() }
+        }
+
+        impl<'vtab> ::sqlite3_ext::vtab::CreateVTab<'vtab> for #item {
+            fn create(_: &'vtab mut ::sqlite3_ext::vtab::VTabConnection, _: Option<&'vtab Self::Aux>, _: &[&str]) -> std::result::Result<(String, Self), ::sqlite3_ext::Error> { todo!() }
+            fn destroy(&mut self) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
+        }
+
+        impl<'vtab> ::sqlite3_ext::vtab::UpdateVTab<'vtab> for #item {
+            fn insert(&mut self, _: &[&::sqlite3_ext::Value]) -> std::result::Result<i64, ::sqlite3_ext::Error> { todo!() }
+            fn update(&mut self, _: &::sqlite3_ext::Value, _: &[&::sqlite3_ext::Value]) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
+            fn delete(&mut self, _: &::sqlite3_ext::Value) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
+        }
+
+        struct Cursor {}
+        impl ::sqlite3_ext::vtab::VTabCursor for Cursor {
+            fn filter(&mut self, _: usize, _: Option<&str>, _: &[&Value]) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
+            fn next(&mut self) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
+            fn eof(&self) -> bool { todo!() }
+            fn column(&self, _: &mut ::sqlite3_ext::function::Context, _: usize) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
+            fn rowid(&self) -> std::result::Result<i64, ::sqlite3_ext::Error> { todo!() }
         }
     };
     TokenStream::from(expanded)

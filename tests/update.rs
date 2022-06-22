@@ -172,7 +172,7 @@ fn update() -> rusqlite::Result<()> {
     let conn = setup()?;
     Connection::from_rusqlite(&conn).create_module(
         "vtab",
-        Module::<ListVTab>::standard().with_update(),
+        StandardModule::<ListVTab>::new().with_update(),
         None,
     )?;
     conn.execute("CREATE VIRTUAL TABLE tbl USING vtab", [])?;

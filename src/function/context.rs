@@ -1,4 +1,4 @@
-use super::ffi;
+use super::super::ffi;
 use std::ffi::CString;
 
 #[repr(transparent)]

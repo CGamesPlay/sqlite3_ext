@@ -39,6 +39,10 @@ impl Value {
         unsafe { ffi::sqlite3_value_int64(self.as_ptr()) }
     }
 
+    pub fn get_f64(&self) -> f64 {
+        unsafe { ffi::sqlite3_value_double(self.as_ptr()) }
+    }
+
     pub fn get_cstr(&self) -> Result<&CStr> {
         let ret = unsafe { ffi::sqlite3_value_text(self.as_ptr()) as *const i8 };
         if ret.is_null() {
@@ -74,7 +78,10 @@ impl std::fmt::Debug for Value {
                 .debug_tuple("Value::Integer")
                 .field(&self.get_i64())
                 .finish(),
-            ValueType::Float => todo!(),
+            ValueType::Float => f
+                .debug_tuple("Value::Float")
+                .field(&self.get_f64())
+                .finish(),
             ValueType::Text => f.debug_tuple("Value::Text").field(&self.get_str()).finish(),
             ValueType::Blob => todo!(),
             ValueType::Null => f.debug_tuple("Value::Null").finish(),

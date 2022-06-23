@@ -20,6 +20,10 @@ impl Error {
     pub fn constraint_violation() -> Error {
         Error::Sqlite(ffi::SQLITE_CONSTRAINT)
     }
+
+    pub fn no_memory() -> Error {
+        Error::Sqlite(ffi::SQLITE_NOMEM)
+    }
 }
 
 impl std::fmt::Display for Error {

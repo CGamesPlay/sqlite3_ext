@@ -2,17 +2,20 @@ use bigdecimal::BigDecimal;
 use sqlite3_ext::{function::*, *};
 use std::{cmp::Ordering, str::FromStr};
 
+fn process_value(a: &Value) -> Result<Option<BigDecimal>> {
+    if a.value_type() == ValueType::Null {
+        Ok(None)
+    } else {
+        Ok(Some(
+            BigDecimal::from_str(a.get_str()?).map_err(|_| Error::InvalidConversion)?,
+        ))
+    }
+}
+
 fn process_args(args: &[&Value]) -> Result<Vec<Option<BigDecimal>>> {
     args.iter()
-        .map(|a| {
-            if a.value_type() == ValueType::Null {
-                Ok(None)
-            } else {
-                Ok(Some(
-                    BigDecimal::from_str(a.get_str()?).map_err(|_| Error::InvalidConversion)?,
-                ))
-            }
-        })
+        .copied()
+        .map(process_value)
         .collect::<Result<_>>()
 }
 
@@ -27,12 +30,10 @@ macro_rules! scalar_method {
             } else {
                 context.set_result(())
             }
+            Ok(())
         }
     };
 }
-
-// decimal_sum
-// decimal collating sequence
 
 scalar_method!(decimal_add as (a, b) => format!("{}", (a + b).normalized()));
 scalar_method!(decimal_sub as (a, b) => format!("{}", (a - b).normalized()));
@@ -45,12 +46,71 @@ scalar_method!(decimal_cmp as (a, b) => {
     }
 });
 
+struct Sum {
+    cur: Result<BigDecimal>,
+}
+
+impl Default for Sum {
+    fn default() -> Self {
+        Sum {
+            cur: Ok(BigDecimal::default()),
+        }
+    }
+}
+
+impl AggregateFunction for Sum {
+    type Return = Option<String>;
+    const DEFAULT_VALUE: Option<String> = None;
+
+    fn step(&mut self, _context: &mut Context, args: &[&Value]) {
+        let cur = match &self.cur {
+            Ok(x) => x,
+            Err(_) => return,
+        };
+        let x = match process_value(args.first().unwrap()) {
+            Ok(Some(x)) => x,
+            Ok(None) => return,
+            Err(x) => {
+                self.cur = Err(x);
+                return;
+            }
+        };
+        self.cur = Ok(cur + x);
+    }
+
+    fn value(&self, _context: &mut Context) -> Result<Self::Return> {
+        match &self.cur {
+            Ok(x) => Ok(Some(format!("{}", x.normalized()))),
+            Err(e) => Err(e.clone()),
+        }
+    }
+
+    fn inverse(&mut self, _context: &mut Context, args: &[&Value]) {
+        let cur = match &self.cur {
+            Ok(x) => x,
+            Err(_) => return,
+        };
+        let x = match process_value(args.first().unwrap()) {
+            Ok(Some(x)) => x,
+            Ok(None) => return,
+            Err(x) => {
+                self.cur = Err(x);
+                return;
+            }
+        };
+        self.cur = Ok(cur - x);
+    }
+}
+
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
     db.create_scalar_function("decimal_add", 2, 0, decimal_add)?;
     db.create_scalar_function("decimal_sub", 2, 0, decimal_sub)?;
     db.create_scalar_function("decimal_mul", 2, 0, decimal_mul)?;
     db.create_scalar_function("decimal_cmp", 2, 0, decimal_cmp)?;
+    db.create_scalar_function("decimal_cmp", 2, 0, decimal_cmp)?;
+    db.create_aggregate_function::<Sum>("decimal_sum", 1, 0)?;
+    // decimal collating sequence
     Ok(())
 }
 
@@ -71,6 +131,7 @@ mod test {
         let conn = setup()?;
         let (sql, expected): (Vec<&str>, Vec<T>) = data.into_iter().unzip();
         let sql = format!("SELECT {}", sql.join(", "));
+        println!("{}", sql);
         let ret: Vec<T> = conn.query_row(&sql, [], |r| {
             (0..expected.len())
                 .map(|i| r.get::<_, T>(i))
@@ -129,5 +190,68 @@ mod test {
             ("decimal_cmp('0', NULL)", None),
             ("decimal_cmp(NULL, NULL)", None),
         ])
+    }
+
+    fn aggregate_case<T: rusqlite::types::FromSql + std::fmt::Debug + PartialEq>(
+        expr: &str,
+        data: Vec<&str>,
+        expected: Vec<T>,
+    ) -> rusqlite::Result<()> {
+        let conn = setup()?;
+        let sql = format!(
+            "SELECT {} FROM ( VALUES {} )",
+            expr,
+            data.iter()
+                .map(|s| format!("({})", s))
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+        println!("{}", sql);
+        let ret: Vec<T> = conn
+            .prepare(&sql)?
+            .query_map([], |r| r.get::<_, T>(0))?
+            .into_iter()
+            .collect::<rusqlite::Result<_>>()?;
+        assert_eq!(ret, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn decimal_sum() -> rusqlite::Result<()> {
+        aggregate_case(
+            "decimal_sum(column1)",
+            vec!["1000000000000000", "0.0000000000000001", "1"],
+            vec![Some("1000000000000001.0000000000000001".to_owned())],
+        )?;
+        aggregate_case(
+            "decimal_sum(column1)",
+            vec!["1", "NULL"],
+            vec![Some("1".to_owned())],
+        )?;
+        aggregate_case(
+            "decimal_sum(column1)",
+            vec!["NULL"],
+            vec![Some("0".to_owned())],
+        )?;
+        case(vec![("decimal_sum(NULL)", Some("0".to_owned()))])?;
+        case(vec![("decimal_sum(1) WHERE 1 = 0", None as Option<String>)])?;
+        aggregate_case(
+            "decimal_sum(column1) OVER ( ROWS 1 PRECEDING )",
+            vec![
+                "1000000000000000",
+                "0.0000000000000001",
+                "NULL",
+                "NULL",
+                "1",
+            ],
+            vec![
+                Some("1000000000000000".to_owned()),
+                Some("1000000000000000.0000000000000001".to_owned()),
+                Some("0.0000000000000001".to_owned()),
+                Some("0".to_owned()),
+                Some("1".to_owned()),
+            ],
+        )?;
+        Ok(())
     }
 }

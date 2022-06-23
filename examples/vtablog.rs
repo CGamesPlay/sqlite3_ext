@@ -328,7 +328,7 @@ mod test {
 
     #[test]
     fn read() -> rusqlite::Result<()> {
-        let mut conn = setup()?;
+        let conn = setup()?;
         let ret = conn
             .prepare("SELECT * FROM log")?
             .query_map([], |row| {
@@ -351,14 +351,14 @@ mod test {
 
     #[test]
     fn update() -> rusqlite::Result<()> {
-        let mut conn = setup()?;
+        let conn = setup()?;
         conn.execute("UPDATE log SET a = b WHERE rowid = 1", [])?;
         Ok(())
     }
 
     #[test]
     fn rename() -> rusqlite::Result<()> {
-        let mut conn = setup()?;
+        let conn = setup()?;
         conn.execute("ALTER TABLE log RENAME to newname", [])?;
         Ok(())
     }
@@ -368,7 +368,7 @@ mod test {
         sqlite3_require_version!(3_026_000, {}, {
             return Ok(());
         });
-        let mut conn = setup()?;
+        let conn = setup()?;
         conn.set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
         match conn.execute("CREATE TABLE log_shadow (a, b, c)", []) {
             Err(_) => Ok(()),

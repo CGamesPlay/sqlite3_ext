@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use sqlite3_ext::{function::*, vtab::*, *};
+use sqlite3_ext::{vtab::*, *};
 
 #[derive(Debug, PartialEq)]
 pub enum VTabLifecycleState {

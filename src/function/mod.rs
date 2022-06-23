@@ -54,7 +54,7 @@ impl Connection {
         }
     }
 
-    pub fn create_aggregate_function<F: AggregateFunction + 'static>(
+    pub fn create_aggregate_function<F: AggregateFunction>(
         &self,
         name: &str,
         n_args: isize,
@@ -90,7 +90,7 @@ unsafe extern "C" fn call_scalar<T: ToContextResult, F: ScalarFunction<T>>(
     context.set_result(ret);
 }
 
-unsafe extern "C" fn aggregate_step<F: AggregateFunction + 'static>(
+unsafe extern "C" fn aggregate_step<F: AggregateFunction>(
     context: *mut ffi::sqlite3_context,
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
@@ -102,9 +102,7 @@ unsafe extern "C" fn aggregate_step<F: AggregateFunction + 'static>(
     agg.step(ctx, args);
 }
 
-unsafe extern "C" fn aggregate_final<F: AggregateFunction + 'static>(
-    context: *mut ffi::sqlite3_context,
-) {
+unsafe extern "C" fn aggregate_final<F: AggregateFunction>(context: *mut ffi::sqlite3_context) {
     let context = InternalContext::from_ptr(context);
     match context.try_aggregate_context::<F>() {
         Some(agg) => context.set_result(agg.value(&context.get())),
@@ -112,9 +110,7 @@ unsafe extern "C" fn aggregate_final<F: AggregateFunction + 'static>(
     };
 }
 
-unsafe extern "C" fn aggregate_value<F: AggregateFunction + 'static>(
-    context: *mut ffi::sqlite3_context,
-) {
+unsafe extern "C" fn aggregate_value<F: AggregateFunction>(context: *mut ffi::sqlite3_context) {
     let context = InternalContext::from_ptr(context);
     let ctx = &context.get();
     let agg = context.aggregate_context::<F>().unwrap();
@@ -122,7 +118,7 @@ unsafe extern "C" fn aggregate_value<F: AggregateFunction + 'static>(
     context.set_result(ret);
 }
 
-unsafe extern "C" fn aggregate_inverse<F: AggregateFunction + 'static>(
+unsafe extern "C" fn aggregate_inverse<F: AggregateFunction>(
     context: *mut ffi::sqlite3_context,
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,

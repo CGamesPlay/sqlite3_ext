@@ -1,4 +1,4 @@
-use super::super::{ffi, types::*, value::*};
+use super::super::{ffi, sqlite3_require_version, types::*, value::*, Connection};
 use std::{
     ffi::CString,
     mem::{size_of, MaybeUninit},
@@ -22,6 +22,16 @@ pub struct Context {
 struct AggregateContext<T> {
     init: bool,
     val: MaybeUninit<T>,
+}
+
+impl Context {
+    pub fn db(&self) -> &Connection {
+        unsafe {
+            Connection::from_ptr(ffi::sqlite3_context_db_handle(
+                &self.base as *const ffi::sqlite3_context as _,
+            ))
+        }
+    }
 }
 
 impl InternalContext {
@@ -95,13 +105,21 @@ to_context!(f64 as (ctx, val) => ffi::sqlite3_result_double(ctx, val));
 to_context!(&'static str as (ctx, val) => {
     let val = val.as_bytes();
     let len = val.len();
-    ffi::sqlite3_result_text64(ctx, val.as_ptr() as _, len as _, None, ffi::SQLITE_UTF8 as _);
+    sqlite3_require_version!(3_008_007, {
+        ffi::sqlite3_result_text64(ctx, val.as_ptr() as _, len as _, None, ffi::SQLITE_UTF8 as _)
+    }, {
+        ffi::sqlite3_result_text(ctx, val.as_ptr() as _, len as _, None)
+    });
 });
 to_context!(String as (ctx, val) => {
     let val = val.as_bytes();
     let len = val.len();
     let cstring = CString::new(val).unwrap().into_raw();
-    ffi::sqlite3_result_text64(ctx, cstring, len as _, Some(ffi::drop_cstring), ffi::SQLITE_UTF8 as _);
+    sqlite3_require_version!(3_008_007, {
+        ffi::sqlite3_result_text64(ctx, cstring, len as _, Some(ffi::drop_cstring), ffi::SQLITE_UTF8 as _);
+    }, {
+        ffi::sqlite3_result_text(ctx, cstring, len as _, None)
+    });
 });
 to_context!(Error as (ctx, err) => {
     if let Error::Sqlite(code) = err {

@@ -2,7 +2,7 @@ use bigdecimal::BigDecimal;
 use sqlite3_ext::{function::*, *};
 use std::{cmp::Ordering, str::FromStr};
 
-fn process_value(a: &Value) -> Result<Option<BigDecimal>> {
+fn process_value(a: &ValueRef) -> Result<Option<BigDecimal>> {
     if a.value_type() == ValueType::Null {
         Ok(None)
     } else {
@@ -12,7 +12,7 @@ fn process_value(a: &Value) -> Result<Option<BigDecimal>> {
     }
 }
 
-fn process_args(args: &[&Value]) -> Result<Vec<Option<BigDecimal>>> {
+fn process_args(args: &[&ValueRef]) -> Result<Vec<Option<BigDecimal>>> {
     args.iter()
         .copied()
         .map(process_value)
@@ -20,25 +20,24 @@ fn process_args(args: &[&Value]) -> Result<Vec<Option<BigDecimal>>> {
 }
 
 macro_rules! scalar_method {
-    ($name:ident as ( $a:ident, $b:ident ) => $ret:expr) => {
-        fn $name(context: &mut Context, args: &[&Value]) -> Result<()> {
+    ($name:ident as ( $a:ident, $b:ident ) -> $ty:ty => $ret:expr) => {
+        fn $name(_: &Context, args: &[&ValueRef]) -> Result<Option<$ty>> {
             let mut args = process_args(args)?.into_iter();
             let a = args.next().unwrap_or(None);
             let b = args.next().unwrap_or(None);
             if let (Some($a), Some($b)) = (a, b) {
-                context.set_result($ret)
+                Ok(Some($ret))
             } else {
-                context.set_result(())
+                Ok(None)
             }
-            Ok(())
         }
     };
 }
 
-scalar_method!(decimal_add as (a, b) => format!("{}", (a + b).normalized()));
-scalar_method!(decimal_sub as (a, b) => format!("{}", (a - b).normalized()));
-scalar_method!(decimal_mul as (a, b) => format!("{}", (a * b).normalized()));
-scalar_method!(decimal_cmp as (a, b) => {
+scalar_method!(decimal_add as (a, b) -> String => format!("{}", (a + b).normalized()));
+scalar_method!(decimal_sub as (a, b) -> String => format!("{}", (a - b).normalized()));
+scalar_method!(decimal_mul as (a, b) -> String => format!("{}", (a * b).normalized()));
+scalar_method!(decimal_cmp as (a, b) -> i32 => {
     match a.cmp(&b) {
         Ordering::Less => -1,
         Ordering::Equal => 0,
@@ -62,7 +61,7 @@ impl AggregateFunction for Sum {
     type Return = Option<String>;
     const DEFAULT_VALUE: Option<String> = None;
 
-    fn step(&mut self, _context: &mut Context, args: &[&Value]) {
+    fn step(&mut self, _context: &Context, args: &[&ValueRef]) {
         let cur = match &self.cur {
             Ok(x) => x,
             Err(_) => return,
@@ -78,14 +77,14 @@ impl AggregateFunction for Sum {
         self.cur = Ok(cur + x);
     }
 
-    fn value(&self, _context: &mut Context) -> Result<Self::Return> {
+    fn value(&self, _context: &Context) -> Result<Self::Return> {
         match &self.cur {
             Ok(x) => Ok(Some(format!("{}", x.normalized()))),
             Err(e) => Err(e.clone()),
         }
     }
 
-    fn inverse(&mut self, _context: &mut Context, args: &[&Value]) {
+    fn inverse(&mut self, _context: &Context, args: &[&ValueRef]) {
         let cur = match &self.cur {
             Ok(x) => x,
             Err(_) => return,

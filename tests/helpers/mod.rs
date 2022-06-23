@@ -73,17 +73,17 @@ impl<'vtab> VTabLifecycle {
         self.state = VTabLifecycleState::Destroyed;
     }
 
-    pub fn xUpdateInsert(&self, args: &[&Value]) {
+    pub fn xUpdateInsert(&self, args: &[&ValueRef]) {
         println!("=== xUpdate INSERT {:?}", args);
         self.assert_state(&[VTabLifecycleState::Connected]);
     }
 
-    pub fn xUpdateUpdate(&self, rowid: &Value, args: &[&Value]) {
+    pub fn xUpdateUpdate(&self, rowid: &ValueRef, args: &[&ValueRef]) {
         println!("=== xUpdate UPDATE {:?} {:?}", rowid, args);
         self.assert_state(&[VTabLifecycleState::Connected]);
     }
 
-    pub fn xUpdateDelete(&self, rowid: &Value) {
+    pub fn xUpdateDelete(&self, rowid: &ValueRef) {
         println!("=== xUpdate DELETE {:?}", rowid);
         self.assert_state(&[VTabLifecycleState::Connected]);
     }
@@ -111,7 +111,7 @@ impl<'vtab> CursorLifecycle<'vtab> {
         }
     }
 
-    pub fn xFilter(&mut self, index_num: usize, index_str: Option<&str>, args: &[&Value]) {
+    pub fn xFilter(&mut self, index_num: usize, index_str: Option<&str>, args: &[&ValueRef]) {
         println!(
             "=== xFilter with {}, {:?}, {:?}",
             index_num, index_str, args
@@ -139,8 +139,8 @@ impl<'vtab> CursorLifecycle<'vtab> {
         );
     }
 
-    pub fn xColumn(&self, context: &Context, i: usize) {
-        println!("=== xColumn with {:?}, {}", context, i);
+    pub fn xColumn(&self, i: usize) {
+        println!("=== xColumn with {}", i);
         self.assert_state(
             VTabLifecycleState::Connected,
             &[CursorLifecycleState::Filtered],

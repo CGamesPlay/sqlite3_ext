@@ -1,6 +1,6 @@
 //! Wrappers for creating virtual tables.
 
-use super::{ffi, function::Context, sqlite3_require_version, types::*, value::Value, Connection};
+use super::{ffi, function::Context, sqlite3_require_version, types::*, value::*, Connection};
 pub use index_info::*;
 pub use module::*;
 use std::ffi::c_void;
@@ -96,20 +96,20 @@ pub trait UpdateVTab<'vtab>: VTab<'vtab> {
     /// ROWID tables, the first value is always NULL. If the first value is NULL and the
     /// table is a rowid table, then the returned i64 must be the rowid of the new row. In
     /// all other cases the returned value is ignored.
-    fn insert(&mut self, args: &[&Value]) -> Result<i64>;
+    fn insert(&mut self, args: &[&ValueRef]) -> Result<i64>;
 
     /// Update an existing row in the virtual table.
     ///
     /// The rowid argument corresponds to the rowid or PRIMARY KEY of the existing row to
     /// update. For rowid tables, the first value of args will be the new rowid for the
     /// row. For WITHOUT ROWID tables, the first value of args will be NULL.
-    fn update(&mut self, rowid: &Value, args: &[&Value]) -> Result<()>;
+    fn update(&mut self, rowid: &ValueRef, args: &[&ValueRef]) -> Result<()>;
 
     /// Delete a row from the virtual table.
     ///
     /// The rowid argument corresopnds to the rowid (or PRIMARY KEY for WITHOUT ROWID
     /// tables) of the row to delete.
-    fn delete(&mut self, rowid: &Value) -> Result<()>;
+    fn delete(&mut self, rowid: &ValueRef) -> Result<()>;
 }
 
 /// A virtual table that supports ROLLBACK.
@@ -132,13 +132,18 @@ pub trait RenameVTab<'vtab>: VTab<'vtab> {
 
 /// Implementation of the cursor type for a virtual table.
 pub trait VTabCursor {
-    fn filter(&mut self, index_num: usize, index_str: Option<&str>, args: &[&Value]) -> Result<()>;
+    fn filter(
+        &mut self,
+        index_num: usize,
+        index_str: Option<&str>,
+        args: &[&ValueRef],
+    ) -> Result<()>;
 
     fn next(&mut self) -> Result<()>;
 
     fn eof(&self) -> bool;
 
-    fn column(&self, context: &mut Context, idx: usize) -> Result<()>;
+    fn column(&self, context: &Context, idx: usize) -> Result<Value>;
 
     fn rowid(&self) -> Result<i64>;
 }

@@ -101,7 +101,12 @@ struct StandardCursor<'vtab> {
 }
 
 impl VTabCursor for StandardCursor<'_> {
-    fn filter(&mut self, index_num: usize, index_str: Option<&str>, args: &[&Value]) -> Result<()> {
+    fn filter(
+        &mut self,
+        index_num: usize,
+        index_str: Option<&str>,
+        args: &[&ValueRef],
+    ) -> Result<()> {
         self.lifecycle.xFilter(index_num, index_str, args);
         self.current = self.iter.next();
         Ok(())
@@ -121,12 +126,12 @@ impl VTabCursor for StandardCursor<'_> {
         }
     }
 
-    fn column(&self, context: &mut Context, i: usize) -> Result<()> {
-        self.lifecycle.xColumn(context, i);
-        if let Some(i) = self.current {
-            context.set_result(*i);
-        }
-        Ok(())
+    fn column(&self, _: &Context, i: usize) -> Result<Value> {
+        self.lifecycle.xColumn(i);
+        Ok(match self.current {
+            Some(i) => (*i).into(),
+            None => ().into(),
+        })
     }
 
     fn rowid(&self) -> Result<i64> {

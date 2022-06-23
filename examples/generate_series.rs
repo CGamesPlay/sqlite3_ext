@@ -125,7 +125,7 @@ struct Cursor {
 }
 
 impl VTabCursor for Cursor {
-    fn filter(&mut self, query_plan: usize, _: Option<&str>, args: &[&Value]) -> Result<()> {
+    fn filter(&mut self, query_plan: usize, _: Option<&str>, args: &[&ValueRef]) -> Result<()> {
         let mut query_plan = query_plan;
         for a in args {
             // If any of the constraints have a NULL value, then return no rows.
@@ -189,14 +189,13 @@ impl VTabCursor for Cursor {
         }
     }
 
-    fn column(&self, context: &mut Context, idx: usize) -> Result<()> {
-        context.set_result(match idx {
+    fn column(&self, _: &Context, idx: usize) -> Result<Value> {
+        Ok(Value::Integer(match idx {
             COLUMN_START => self.min_value,
             COLUMN_STOP => self.max_value,
             COLUMN_STEP => self.step,
             _ => self.value,
-        });
-        Ok(())
+        }))
     }
 
     fn rowid(&self) -> Result<i64> {

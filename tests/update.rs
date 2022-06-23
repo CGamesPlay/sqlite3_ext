@@ -72,20 +72,20 @@ impl<'vtab> CreateVTab<'vtab> for ListVTab {
 }
 
 impl<'vtab> UpdateVTab<'vtab> for ListVTab {
-    fn insert(&mut self, args: &[&Value]) -> Result<i64> {
+    fn insert(&mut self, args: &[&ValueRef]) -> Result<i64> {
         self.lifecycle.xUpdateInsert(args);
         self.rows.push(args[1].get_i64());
         Ok((self.rows.len() - 1) as _)
     }
 
-    fn update(&mut self, rowid: &Value, args: &[&Value]) -> Result<()> {
+    fn update(&mut self, rowid: &ValueRef, args: &[&ValueRef]) -> Result<()> {
         self.lifecycle.xUpdateUpdate(rowid, args);
         let rowid = rowid.get_i64() as usize;
         self.rows[rowid] = args[1].get_i64();
         Ok(())
     }
 
-    fn delete(&mut self, rowid: &Value) -> Result<()> {
+    fn delete(&mut self, rowid: &ValueRef) -> Result<()> {
         self.lifecycle.xUpdateDelete(rowid);
         let rowid = rowid.get_i64() as usize;
         self.rows.remove(rowid);
@@ -110,7 +110,12 @@ impl<'vtab> ListCursor<'vtab> {
 }
 
 impl<'vtab> VTabCursor for ListCursor<'vtab> {
-    fn filter(&mut self, index_num: usize, index_str: Option<&str>, args: &[&Value]) -> Result<()> {
+    fn filter(
+        &mut self,
+        index_num: usize,
+        index_str: Option<&str>,
+        args: &[&ValueRef],
+    ) -> Result<()> {
         self.lifecycle.xFilter(index_num, index_str, args);
         self.current = self.iter.next().map(|v| (0, v));
         Ok(())
@@ -132,12 +137,12 @@ impl<'vtab> VTabCursor for ListCursor<'vtab> {
         }
     }
 
-    fn column(&self, context: &mut Context, i: usize) -> Result<()> {
-        self.lifecycle.xColumn(context, i);
-        if let Some((_, v)) = self.current {
-            context.set_result(v);
-        }
-        Ok(())
+    fn column(&self, _: &Context, i: usize) -> Result<Value> {
+        self.lifecycle.xColumn(i);
+        Ok(match self.current {
+            Some((_, v)) => v.into(),
+            _ => ().into(),
+        })
     }
 
     fn rowid(&self) -> Result<i64> {

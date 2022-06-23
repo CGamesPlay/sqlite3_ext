@@ -13,11 +13,21 @@ pub enum ValueType {
 /// Stores a SQL value. SQLite always owns all value objects, so there is no way to directly
 /// create one.
 #[repr(transparent)]
-pub struct Value {
+pub struct ValueRef {
     base: ffi::sqlite3_value,
 }
 
-impl Value {
+/// Stores an SQLite-compatible value owned by Rust code.
+#[derive(Debug)]
+pub enum Value {
+    Integer(i64),
+    Float(f64),
+    Text(String),
+    Blob(Vec<u8>),
+    Null,
+}
+
+impl ValueRef {
     fn as_ptr(&self) -> *mut ffi::sqlite3_value {
         &self.base as *const ffi::sqlite3_value as _
     }
@@ -65,26 +75,46 @@ impl Value {
     // indeterminate state, perhaps the get methods should move self?
 }
 
-impl From<&Value> for i64 {
-    fn from(val: &Value) -> i64 {
+impl From<&ValueRef> for i64 {
+    fn from(val: &ValueRef) -> i64 {
         val.get_i64()
     }
 }
 
-impl std::fmt::Debug for Value {
+impl std::fmt::Debug for ValueRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self.value_type() {
             ValueType::Integer => f
-                .debug_tuple("Value::Integer")
+                .debug_tuple("ValueRef::Integer")
                 .field(&self.get_i64())
                 .finish(),
             ValueType::Float => f
-                .debug_tuple("Value::Float")
+                .debug_tuple("ValueRef::Float")
                 .field(&self.get_f64())
                 .finish(),
-            ValueType::Text => f.debug_tuple("Value::Text").field(&self.get_str()).finish(),
+            ValueType::Text => f
+                .debug_tuple("ValueRef::Text")
+                .field(&self.get_str())
+                .finish(),
             ValueType::Blob => todo!(),
-            ValueType::Null => f.debug_tuple("Value::Null").finish(),
+            ValueType::Null => f.debug_tuple("ValueRef::Null").finish(),
         }
     }
 }
+
+macro_rules! value_from {
+    ($ty:ty as ($x:ident) => $impl:expr) => {
+        impl From<$ty> for Value {
+            fn from($x: $ty) -> Value {
+                $impl
+            }
+        }
+    };
+}
+
+value_from!(i32 as (x) => Value::Integer(x as _));
+value_from!(i64 as (x) => Value::Integer(x));
+value_from!(f64 as (x) => Value::Float(x));
+value_from!(String as (x) => Value::Text(x));
+value_from!(Vec<u8> as (x) => Value::Blob(x));
+value_from!(() as (_x) => Value::Null);

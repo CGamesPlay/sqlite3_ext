@@ -154,17 +154,17 @@ impl<'vtab> CreateVTab<'vtab> for VTabLog {
 }
 
 impl<'vtab> UpdateVTab<'vtab> for VTabLog {
-    fn insert(&mut self, args: &[&Value]) -> Result<i64> {
+    fn insert(&mut self, args: &[&ValueRef]) -> Result<i64> {
         println!("insert(tab={}, args={:?})", self.id, args);
         Ok(1)
     }
 
-    fn update(&mut self, rowid: &Value, args: &[&Value]) -> Result<()> {
+    fn update(&mut self, rowid: &ValueRef, args: &[&ValueRef]) -> Result<()> {
         println!("update(tab={}, rowid={:?}, args={:?}", self.id, rowid, args);
         Ok(())
     }
 
-    fn delete(&mut self, rowid: &Value) -> Result<()> {
+    fn delete(&mut self, rowid: &ValueRef) -> Result<()> {
         println!("delete(tab={}, rowid={:?})", self.id, rowid);
         Ok(())
     }
@@ -209,7 +209,7 @@ impl Drop for VTabLogTransaction<'_> {
 }
 
 impl VTabCursor for VTabLogCursor<'_> {
-    fn filter(&mut self, _: usize, _: Option<&str>, args: &[&Value]) -> Result<()> {
+    fn filter(&mut self, _: usize, _: Option<&str>, args: &[&ValueRef]) -> Result<()> {
         println!(
             "filter(tab={}, cursor={}, args={:?})",
             self.vtab.id, self.id, args
@@ -236,7 +236,7 @@ impl VTabCursor for VTabLogCursor<'_> {
         ret
     }
 
-    fn column(&self, context: &mut Context, idx: usize) -> Result<()> {
+    fn column(&self, _: &Context, idx: usize) -> Result<Value> {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
         let ret = ALPHABET
             .get(idx)
@@ -246,8 +246,7 @@ impl VTabCursor for VTabLogCursor<'_> {
             "column(tab={}, cursor={}, idx={}) -> {:?}",
             self.vtab.id, self.id, idx, ret
         );
-        context.set_result(ret);
-        Ok(())
+        Ok(Value::Text(ret))
     }
 
     fn rowid(&self) -> Result<i64> {

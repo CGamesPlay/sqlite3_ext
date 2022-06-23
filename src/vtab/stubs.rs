@@ -1,4 +1,4 @@
-use super::super::{ffi, function::Context, types::*, value::*, vtab::*, Connection};
+use super::super::{ffi, function::InternalContext, types::*, value::*, vtab::*, Connection};
 use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn vtab_filter<'vtab, T: VTab<'vtab> + 'vtab>(
     } else {
         CStr::from_ptr(index_str).to_str().ok()
     };
-    let args = slice::from_raw_parts(argv as *mut &Value, argc as _);
+    let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
     ffi::handle_result(
         cursor.cursor.filter(index_num as _, index_str, args),
         &mut (*cursor.base.pVtab).zErrMsg,
@@ -211,11 +211,14 @@ pub unsafe extern "C" fn vtab_column<'vtab, T: VTab<'vtab> + 'vtab>(
     i: i32,
 ) -> c_int {
     let cursor = &mut *(cursor as *mut VTabCursorHandle<T>);
-    let context = &mut *(context as *mut Context);
-    ffi::handle_result(
-        cursor.cursor.column(context, i as _),
-        &mut (*cursor.base.pVtab).zErrMsg,
-    )
+    let context = &mut *(context as *mut InternalContext);
+    match cursor.cursor.column(&context.get(), i as _) {
+        Ok(x) => {
+            context.set_result(x);
+            ffi::SQLITE_OK
+        }
+        Err(e) => ffi::handle_error(e, &mut (*cursor.base.pVtab).zErrMsg),
+    }
 }
 
 pub unsafe extern "C" fn vtab_rowid<'vtab, T: VTab<'vtab> + 'vtab>(
@@ -239,7 +242,7 @@ pub unsafe extern "C" fn vtab_update<'vtab, T: UpdateVTab<'vtab> + 'vtab>(
     p_rowid: *mut i64,
 ) -> c_int {
     let vtab = &mut *(vtab as *mut VTabHandle<T>);
-    let args = slice::from_raw_parts(argv as *mut &Value, argc as _);
+    let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
     if args.len() == 1 {
         ffi::handle_result(vtab.vtab.delete(args[0]), &mut vtab.base.zErrMsg)
     } else {

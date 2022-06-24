@@ -14,7 +14,13 @@ impl<R: ToContextResult, F: Fn(&Context, &[&ValueRef]) -> Result<R>> ScalarFunct
 pub trait AggregateFunction: Default {
     type Return: ToContextResult;
 
-    const DEFAULT_VALUE: Self::Return;
+    /// Return the default value of the aggregate function.
+    ///
+    /// This method is called when the aggregate function is invoked over an empty set of
+    /// rows. The default implementation is equivalent to `Self::default().value(context)`.
+    fn default_value(context: &Context) -> Result<Self::Return> {
+        Self::default().value(context)
+    }
 
     /// Add a new row to the aggregate.
     ///
@@ -109,7 +115,7 @@ unsafe extern "C" fn aggregate_final<F: AggregateFunction>(context: *mut ffi::sq
     let context = InternalContext::from_ptr(context);
     match context.try_aggregate_context::<F>() {
         Some(agg) => context.set_result(agg.value(&context.get())),
-        None => context.set_result(F::DEFAULT_VALUE),
+        None => context.set_result(F::default_value(&context.get())),
     };
 }
 

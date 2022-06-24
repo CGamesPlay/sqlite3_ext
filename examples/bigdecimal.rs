@@ -2,27 +2,29 @@ use bigdecimal::BigDecimal;
 use sqlite3_ext::{function::*, *};
 use std::{cmp::Ordering, str::FromStr};
 
-fn process_value(a: &ValueRef) -> Result<Option<BigDecimal>> {
+// NULL maps to None
+// Valid BigDecimal maps to Some(x)
+// Otherwise Some(0)
+fn process_value(a: &ValueRef) -> Option<BigDecimal> {
     if a.value_type() == ValueType::Null {
-        Ok(None)
+        None
     } else {
-        Ok(Some(
-            BigDecimal::from_str(a.get_str()?).map_err(|_| Error::InvalidConversion)?,
-        ))
+        a.get_str().ok().and_then(|a| {
+            BigDecimal::from_str(a)
+                .ok()
+                .or_else(|| Some(BigDecimal::default()))
+        })
     }
 }
 
-fn process_args(args: &[&ValueRef]) -> Result<Vec<Option<BigDecimal>>> {
-    args.iter()
-        .copied()
-        .map(process_value)
-        .collect::<Result<_>>()
+fn process_args(args: &[&ValueRef]) -> Vec<Option<BigDecimal>> {
+    args.iter().copied().map(process_value).collect()
 }
 
 macro_rules! scalar_method {
     ($name:ident as ( $a:ident, $b:ident ) -> $ty:ty => $ret:expr) => {
         fn $name(_: &Context, args: &[&ValueRef]) -> Result<Option<$ty>> {
-            let mut args = process_args(args)?.into_iter();
+            let mut args = process_args(args).into_iter();
             let a = args.next().unwrap_or(None);
             let b = args.next().unwrap_or(None);
             if let (Some($a), Some($b)) = (a, b) {
@@ -45,59 +47,32 @@ scalar_method!(decimal_cmp as (a, b) -> i32 => {
     }
 });
 
+#[derive(Default)]
 struct Sum {
-    cur: Result<BigDecimal>,
-}
-
-impl Default for Sum {
-    fn default() -> Self {
-        Sum {
-            cur: Ok(BigDecimal::default()),
-        }
-    }
+    cur: BigDecimal,
 }
 
 impl AggregateFunction for Sum {
     type Return = Option<String>;
-    const DEFAULT_VALUE: Option<String> = None;
 
-    fn step(&mut self, _context: &Context, args: &[&ValueRef]) {
-        let cur = match &self.cur {
-            Ok(x) => x,
-            Err(_) => return,
-        };
-        match process_value(args.first().unwrap()) {
-            Ok(Some(x)) => {
-                self.cur = Ok(cur + x);
-            }
-            Ok(None) => (),
-            Err(x) => {
-                self.cur = Err(x);
-            }
-        };
+    fn default_value(_: &Context) -> Result<Self::Return> {
+        Ok(None)
     }
 
-    fn value(&self, _context: &Context) -> Result<Self::Return> {
-        match &self.cur {
-            Ok(x) => Ok(Some(format!("{}", x.normalized()))),
-            Err(e) => Err(e.clone()),
+    fn step(&mut self, _: &Context, args: &[&ValueRef]) {
+        if let Some(x) = process_value(args.first().unwrap()) {
+            self.cur += x;
         }
     }
 
-    fn inverse(&mut self, _context: &Context, args: &[&ValueRef]) {
-        let cur = match &self.cur {
-            Ok(x) => x,
-            Err(_) => return,
-        };
-        match process_value(args.first().unwrap()) {
-            Ok(Some(x)) => {
-                self.cur = Ok(cur - x);
-            }
-            Ok(None) => (),
-            Err(x) => {
-                self.cur = Err(x);
-            }
-        };
+    fn value(&self, _: &Context) -> Result<Self::Return> {
+        Ok(Some(format!("{}", self.cur.normalized())))
+    }
+
+    fn inverse(&mut self, _: &Context, args: &[&ValueRef]) {
+        if let Some(x) = process_value(args.first().unwrap()) {
+            self.cur -= x;
+        }
     }
 }
 
@@ -150,6 +125,7 @@ mod test {
             ("decimal_add(NULL, '0')", None),
             ("decimal_add('0', NULL)", None),
             ("decimal_add(NULL, NULL)", None),
+            ("decimal_add('invalid', 2)", Some("2".to_owned())),
         ])
     }
 
@@ -163,6 +139,7 @@ mod test {
             ("decimal_sub(NULL, '0')", None),
             ("decimal_sub('0', NULL)", None),
             ("decimal_sub(NULL, NULL)", None),
+            ("decimal_sub('invalid', 2)", Some("-2".to_owned())),
         ])
     }
 
@@ -176,6 +153,7 @@ mod test {
             ("decimal_mul(NULL, '0')", None),
             ("decimal_mul('0', NULL)", None),
             ("decimal_mul(NULL, NULL)", None),
+            ("decimal_mul('invalid', 2)", Some("0".to_owned())),
         ])
     }
 
@@ -233,6 +211,7 @@ mod test {
             vec![Some("0".to_owned())],
         )?;
         case(vec![("decimal_sum(NULL)", Some("0".to_owned()))])?;
+        case(vec![("decimal_sum('invalid')", Some("0".to_owned()))])?;
         case(vec![("decimal_sum(1) WHERE 1 = 0", None as Option<String>)])?;
         aggregate_case(
             "decimal_sum(column1) OVER ( ROWS 1 PRECEDING )",

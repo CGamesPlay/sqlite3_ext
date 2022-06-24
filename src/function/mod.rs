@@ -4,8 +4,12 @@ use std::{ffi::CString, ptr, slice};
 
 mod context;
 
-pub trait ScalarFunction<T: ToContextResult>: Fn(&Context, &[&ValueRef]) -> Result<T> {}
-impl<T: ToContextResult, X: Fn(&Context, &[&ValueRef]) -> Result<T>> ScalarFunction<T> for X {}
+pub trait ScalarFunction: Fn(&Context, &[&ValueRef]) -> Result<Self::Return> {
+    type Return: ToContextResult;
+}
+impl<R: ToContextResult, F: Fn(&Context, &[&ValueRef]) -> Result<R>> ScalarFunction for F {
+    type Return = R;
+}
 
 pub trait AggregateFunction: Default {
     type Return: ToContextResult;
@@ -14,9 +18,8 @@ pub trait AggregateFunction: Default {
 
     /// Add a new row to the aggregate.
     ///
-    /// This function should return the current value of the aggregate after adding the
-    /// row. Note that step is not allowed to fail, and so failures must be stored and
-    /// returned by [value](AggregateFunction::value).
+    /// Note that step is not allowed to fail, and so failures must be stored and returned
+    /// by [value](AggregateFunction::value).
     fn step(&mut self, context: &Context, args: &[&ValueRef]);
 
     /// Return the current value of the aggregate function.
@@ -30,7 +33,7 @@ pub trait AggregateFunction: Default {
 }
 
 impl Connection {
-    pub fn create_scalar_function<T: ToContextResult, F: ScalarFunction<T>>(
+    pub fn create_scalar_function<F: ScalarFunction>(
         &self,
         name: &str,
         n_args: isize,
@@ -46,7 +49,7 @@ impl Connection {
                 n_args as _,
                 flags as _,
                 Box::into_raw(func) as _,
-                Some(call_scalar::<T, F>),
+                Some(call_scalar::<F>),
                 None,
                 None,
                 Some(ffi::drop_boxed::<F>),
@@ -78,7 +81,7 @@ impl Connection {
     }
 }
 
-unsafe extern "C" fn call_scalar<T: ToContextResult, F: ScalarFunction<T>>(
+unsafe extern "C" fn call_scalar<F: ScalarFunction>(
     context: *mut ffi::sqlite3_context,
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,

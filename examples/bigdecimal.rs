@@ -66,15 +66,15 @@ impl AggregateFunction for Sum {
             Ok(x) => x,
             Err(_) => return,
         };
-        let x = match process_value(args.first().unwrap()) {
-            Ok(Some(x)) => x,
-            Ok(None) => return,
+        match process_value(args.first().unwrap()) {
+            Ok(Some(x)) => {
+                self.cur = Ok(cur + x);
+            }
+            Ok(None) => (),
             Err(x) => {
                 self.cur = Err(x);
-                return;
             }
         };
-        self.cur = Ok(cur + x);
     }
 
     fn value(&self, _context: &Context) -> Result<Self::Return> {
@@ -89,15 +89,15 @@ impl AggregateFunction for Sum {
             Ok(x) => x,
             Err(_) => return,
         };
-        let x = match process_value(args.first().unwrap()) {
-            Ok(Some(x)) => x,
-            Ok(None) => return,
+        match process_value(args.first().unwrap()) {
+            Ok(Some(x)) => {
+                self.cur = Ok(cur - x);
+            }
+            Ok(None) => (),
             Err(x) => {
                 self.cur = Err(x);
-                return;
             }
         };
-        self.cur = Ok(cur - x);
     }
 }
 

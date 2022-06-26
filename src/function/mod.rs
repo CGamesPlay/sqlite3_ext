@@ -4,7 +4,7 @@
 //! [Connection::create_scalar_function] and [Connection::create_aggregate_function].
 use super::{ffi, sqlite3_require_version, types::*, value::*, Connection, RiskLevel};
 pub use context::*;
-use std::{ffi::CString, mem::transmute, slice};
+use std::{ffi::CString, mem::transmute, ptr::null_mut, slice};
 
 mod context;
 
@@ -301,6 +301,23 @@ impl Connection {
             },
             self.create_legacy_aggregate_function::<F>(name, opts, user_data)
         )
+    }
+
+    /// Remove an application-defined scalar or aggregate function. The name and n_args
+    /// parameters must match the values used when the function was created.
+    pub fn remove_function(&self, name: &str, n_args: i32) -> Result<()> {
+        unsafe {
+            Error::from_sqlite(ffi::sqlite3_create_function(
+                self.as_ptr(),
+                name.as_ptr() as _,
+                n_args,
+                0,
+                null_mut(),
+                None,
+                None,
+                None,
+            ))
+        }
     }
 }
 

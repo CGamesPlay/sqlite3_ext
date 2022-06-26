@@ -1,4 +1,25 @@
-//! Wrappers for creating virtual tables.
+//! Create virtual tables.
+//!
+//! To create a virtual table, define the virtual table module and then register it on each
+//! connection it will be used from. The [sqlite3_ext_vtab](sqlite3_ext_macro::sqlite3_ext_vtab) macro is used to define the virtual table module. It can be registered using [Connection::create_module].
+//!
+//! There are 3 base types of virtual tables:
+//!
+//! - [StandardModule] is a virtual table which is created using the CREATE VIRTUAL TABLE
+//!   command.
+//! - [EponymousModule] is a virtual table which is available ambiently in the database
+//!   connection without being explicitly created.
+//! - [EponymousOnlyModule] is similar to EponymousModule, but CREATE VIRTUAL TABLE is
+//!   explicitly forbidden for these modules.
+//!
+//! In addition to the base type of virtual table, there are several traits which can be
+//! implemented to add behavior.
+//!
+//! - [UpdateVTab] indicates that the table supports INSERT/UPDATE/DELETE.
+//! - [TransactionVTab] indicates that the table supports ROLLBACK.
+//! - [FindFunctionVTab] indicates that the table overrides certain SQL functions when they
+//!   operate on the table.
+//! - [RenameVTab] indicates that the table supports ALTER TABLE RENAME TO.
 
 use super::{ffi, function::Context, sqlite3_require_version, types::*, value::*, Connection};
 pub use index_info::*;

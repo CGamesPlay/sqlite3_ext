@@ -29,6 +29,9 @@ fn set_version(m: &mut ffi::sqlite3_module, val: i32) {
 }
 
 /// A virtual table module.
+///
+/// You generally do not need to use this trait directly, see
+/// [sqlite_ext_vtab](::sqlite3_ext_macro::sqlite3_ext_vtab) for details on how to use this.
 #[sealed]
 pub trait Module<'vtab, T: VTab<'vtab> + 'vtab>
 where

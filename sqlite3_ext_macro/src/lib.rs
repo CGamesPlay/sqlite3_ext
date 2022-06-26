@@ -176,7 +176,7 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// This attribute is intended to be applied to the struct which implements VTab and related
 /// traits. The first parameter to the attribute is the type of module to create, which is one
-/// of StandardModule, EponymousModule, EponymousOnlyModule. The subsequent parameter refer to
+/// of StandardModule, EponymousModule, EponymousOnlyModule. The subsequent parameters refer to
 /// traits in sqlite3_ext::vtab, and describe the functionality which the virtual table
 /// supports. See the corresponding structs and traits in sqlite3_ext::vtab for more details.
 ///

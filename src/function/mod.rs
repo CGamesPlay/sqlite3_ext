@@ -1,3 +1,7 @@
+//! Create application-defined functions.
+//!
+//! The functionality in this module is primarily exposed through
+//! [Connection::create_scalar_function] and [Connection::create_aggregate_function].
 use super::{ffi, types::*, value::*, Connection};
 use bitflags::bitflags;
 pub use context::*;
@@ -6,7 +10,7 @@ use std::{ffi::CString, mem::transmute, slice};
 mod context;
 
 bitflags! {
-    /// Flags used to indicate the behavior of user-defined functions.
+    /// Flags used to indicate the behavior of application-defined functions.
     ///
     /// It is recommended that all functions at least set the
     /// [INNOCUOUS](FunctionFlag::INNOCUOUS) or [DIRECTONLY](FunctionFlag::DIRECTONLY)
@@ -35,8 +39,14 @@ bitflags! {
 
 type ScalarFunction<UserData, Return> = fn(&Context<UserData>, &[&ValueRef]) -> Result<Return>;
 
+/// Implement an application-defined aggregate window function.
+///
+/// The function can be registered with a database connection using
+/// [Connection::create_aggregate_function].
 pub trait AggregateFunction: Default {
+    /// The type of data that is provided to the function when it is created.
     type UserData;
+    /// The output type of the function.
     type Output: ToContextResult;
 
     /// Return the default value of the aggregate function.
@@ -61,6 +71,25 @@ pub trait AggregateFunction: Default {
 }
 
 impl Connection {
+    /// Create a new scalar function.
+    ///
+    /// The function will be available under the given name. Multiple functions may be
+    /// provided under the same name with different n_args values; the implementation will
+    /// be chosen by SQLite based on the number of parameters at the call site. The n_args
+    /// parameter may also be -1, which means that the function accepts any number of
+    /// parameters. Functions which take a specific number of parameters take precedence
+    /// over functions which take any number.
+    ///
+    /// It is recommended that flags includes one of [FunctionFlag::INNOCUOUS] or
+    /// [FunctionFlag::DIRECTONLY].
+    ///
+    /// An additional value can be associated with the function, which will be made
+    /// available using [Context::user_data].
+    ///
+    /// # Panics
+    ///
+    /// This function panics if n_args is outside the range -1..128. This limitation is
+    /// imposed by SQLite.
     pub fn create_scalar_function<U, R: ToContextResult>(
         &self,
         name: &str,
@@ -71,6 +100,7 @@ impl Connection {
     ) -> Result<()> {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
         let user_data = Box::new(FnUserData::new_scalar(user_data, func));
+        assert!((-1..128).contains(&n_args), "n_args invalid");
         unsafe {
             Error::from_sqlite(ffi::sqlite3_create_function_v2(
                 self.as_ptr(),
@@ -86,6 +116,16 @@ impl Connection {
         }
     }
 
+    /// Create a new aggregate function.
+    ///
+    /// Aggregate functions are similar to scalar ones; see
+    /// [create_scalar_function](Connection::create_scalar_function) for a discussion about
+    /// the flags and parameters.
+    ///
+    /// # Panics
+    ///
+    /// This function panics if n_args is outside the range -1..128. This limitation is
+    /// imposed by SQLite.
     pub fn create_aggregate_function<F: AggregateFunction>(
         &self,
         name: &str,
@@ -95,6 +135,7 @@ impl Connection {
     ) -> Result<()> {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
         let user_data = Box::new(FnUserData::new_aggregate(user_data));
+        assert!(n_args >= 0 && n_args <= 127, "n_args invalid");
         unsafe {
             Error::from_sqlite(ffi::sqlite3_create_window_function(
                 self.as_ptr(),

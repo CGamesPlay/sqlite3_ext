@@ -13,11 +13,7 @@ pub(crate) struct InternalContext {
     base: ffi::sqlite3_context,
 }
 
-/// A handle to SQLite context
-///
-/// - get user data
-/// - get db handle
-/// - get/set auxdata
+/// Describes the run-time environment of an application-defined function.
 #[repr(transparent)]
 pub struct Context<UserData> {
     base: ffi::sqlite3_context,
@@ -79,6 +75,7 @@ impl<U> Context<U> {
         &mut *(base as *mut Self)
     }
 
+    /// Return a handle to the current database.
     pub fn db(&self) -> &Connection {
         unsafe {
             Connection::from_ptr(ffi::sqlite3_context_db_handle(
@@ -87,6 +84,10 @@ impl<U> Context<U> {
         }
     }
 
+    /// Return the data associated with this function.
+    ///
+    /// This method returns a reference to the value originally passed when this function
+    /// was created.
     pub fn user_data(&self) -> &U {
         let user_data = unsafe {
             let ctx = &self.base as *const ffi::sqlite3_context as _;
@@ -96,55 +97,67 @@ impl<U> Context<U> {
     }
 }
 
+/// A value that can be returned from an SQL function.
 pub trait ToContextResult {
+    #[doc(hidden)]
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context);
 }
 
-macro_rules! to_context {
-    ($ty:ty as ($ctx:ident, $val:ident) => $impl:expr) => {
+macro_rules! to_context_result {
+    ($($(#[$attr:meta])* match $ty:ty as ($ctx:ident, $val:ident) => $impl:expr),*) => {
+        $(
+        $(#[$attr])*
         impl ToContextResult for $ty {
             unsafe fn assign_to(self, $ctx: *mut ffi::sqlite3_context) {
                 let $val = self;
                 $impl
             }
         }
+        )*
     };
 }
 
-to_context!(() as (ctx, _val) => ffi::sqlite3_result_null(ctx));
-to_context!(i32 as (ctx, val) => ffi::sqlite3_result_int(ctx, val));
-to_context!(i64 as (ctx, val) => ffi::sqlite3_result_int64(ctx, val));
-to_context!(f64 as (ctx, val) => ffi::sqlite3_result_double(ctx, val));
-to_context!(&'static str as (ctx, val) => {
-    let val = val.as_bytes();
-    let len = val.len();
-    sqlite3_require_version!(3_008_007, {
-        ffi::sqlite3_result_text64(ctx, val.as_ptr() as _, len as _, None, ffi::SQLITE_UTF8 as _)
-    }, {
-        ffi::sqlite3_result_text(ctx, val.as_ptr() as _, len as _, None)
-    });
-});
-to_context!(String as (ctx, val) => {
-    let val = val.as_bytes();
-    let len = val.len();
-    let cstring = CString::new(val).unwrap().into_raw();
-    sqlite3_require_version!(3_008_007, {
-        ffi::sqlite3_result_text64(ctx, cstring, len as _, Some(ffi::drop_cstring), ffi::SQLITE_UTF8 as _);
-    }, {
-        ffi::sqlite3_result_text(ctx, cstring, len as _, None)
-    });
-});
-to_context!(Error as (ctx, err) => {
-    if let Error::Sqlite(code) = err {
-        ffi::sqlite3_result_error_code(ctx, code);
-    } else {
-        let msg = format!("{}", err);
-        let msg = msg.as_bytes();
-        let len = msg.len();
-        ffi::sqlite3_result_error(ctx, msg.as_ptr() as _, len as _);
+to_context_result! {
+    /// Assign NULL to the context result.
+    match () as (ctx, _val) => ffi::sqlite3_result_null(ctx),
+    match i32 as (ctx, val) => ffi::sqlite3_result_int(ctx, val),
+    match i64 as (ctx, val) => ffi::sqlite3_result_int64(ctx, val),
+    match f64 as (ctx, val) => ffi::sqlite3_result_double(ctx, val),
+    /// Assign a static string to the context result.
+    match &'static str as (ctx, val) => {
+        let val = val.as_bytes();
+        let len = val.len();
+        sqlite3_require_version!(3_008_007, {
+            ffi::sqlite3_result_text64(ctx, val.as_ptr() as _, len as _, None, ffi::SQLITE_UTF8 as _)
+        }, {
+            ffi::sqlite3_result_text(ctx, val.as_ptr() as _, len as _, None)
+        });
+    },
+    /// Assign an owned string to the context result.
+    match String as (ctx, val) => {
+        let val = val.as_bytes();
+        let len = val.len();
+        let cstring = CString::new(val).unwrap().into_raw();
+        sqlite3_require_version!(3_008_007, {
+            ffi::sqlite3_result_text64(ctx, cstring, len as _, Some(ffi::drop_cstring), ffi::SQLITE_UTF8 as _);
+        }, {
+            ffi::sqlite3_result_text(ctx, cstring, len as _, None)
+        });
+    },
+    /// Sets the context error to this error.
+    match Error as (ctx, err) => {
+        if let Error::Sqlite(code) = err {
+            ffi::sqlite3_result_error_code(ctx, code);
+        } else {
+            let msg = format!("{}", err);
+            let msg = msg.as_bytes();
+            let len = msg.len();
+            ffi::sqlite3_result_error(ctx, msg.as_ptr() as _, len as _);
+        }
     }
-});
+}
 
+/// Sets the context result to the contained value or NULL.
 impl<T: ToContextResult> ToContextResult for Option<T> {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
         match self {
@@ -154,6 +167,7 @@ impl<T: ToContextResult> ToContextResult for Option<T> {
     }
 }
 
+/// Sets either the context result or error, depending on the result.
 impl<T: ToContextResult> ToContextResult for Result<T> {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
         match self {
@@ -163,6 +177,7 @@ impl<T: ToContextResult> ToContextResult for Result<T> {
     }
 }
 
+/// Sets a dynamically typed [Value] to the context result.
 impl ToContextResult for Value {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
         match self {

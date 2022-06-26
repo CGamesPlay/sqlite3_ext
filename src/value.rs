@@ -10,7 +10,7 @@ pub enum ValueType {
     Null,
 }
 
-/// Stores a SQL value. SQLite always owns all value objects, so there is no way to directly
+/// Stores an SQL value. SQLite always owns all value objects, so there is no way to directly
 /// create one.
 #[repr(transparent)]
 pub struct ValueRef {

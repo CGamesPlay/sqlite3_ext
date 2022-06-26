@@ -2,7 +2,7 @@
 //!
 //! For more information, consult [the original implementation](https://sqlite.org/src/file/ext/misc/vtablog.c).
 
-use sqlite3_ext::{function::*, vtab::*, *};
+use sqlite3_ext::{vtab::*, *};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 enum VTabArg {
@@ -236,7 +236,7 @@ impl VTabCursor for VTabLogCursor<'_> {
         ret
     }
 
-    fn column(&self, _: &Context<()>, idx: usize) -> Result<Value> {
+    fn column(&self, idx: usize) -> Result<Value> {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
         let ret = ALPHABET
             .get(idx)

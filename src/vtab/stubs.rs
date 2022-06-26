@@ -212,14 +212,8 @@ pub unsafe extern "C" fn vtab_column<'vtab, T: VTab<'vtab> + 'vtab>(
 ) -> c_int {
     let cursor = &mut *(cursor as *mut VTabCursorHandle<T>);
     let ic = InternalContext::from_ptr(context);
-    let ctx = Context::from_ptr(context);
-    match cursor.cursor.column(ctx, i as _) {
-        Ok(x) => {
-            ic.set_result(x);
-            ffi::SQLITE_OK
-        }
-        Err(e) => ffi::handle_error(e, &mut (*cursor.base.pVtab).zErrMsg),
-    }
+    ic.set_result(cursor.cursor.column(i as _));
+    ffi::SQLITE_OK
 }
 
 pub unsafe extern "C" fn vtab_rowid<'vtab, T: VTab<'vtab> + 'vtab>(

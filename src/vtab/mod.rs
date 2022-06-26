@@ -21,7 +21,7 @@
 //!   operate on the table.
 //! - [RenameVTab] indicates that the table supports ALTER TABLE RENAME TO.
 
-use super::{ffi, function::Context, sqlite3_require_version, types::*, value::*, Connection};
+use super::{ffi, sqlite3_require_version, types::*, value::*, Connection};
 pub use index_info::*;
 pub use module::*;
 use std::ffi::c_void;
@@ -164,7 +164,7 @@ pub trait VTabCursor {
 
     fn eof(&self) -> bool;
 
-    fn column(&self, context: &Context<()>, idx: usize) -> Result<Value>;
+    fn column(&self, idx: usize) -> Result<Value>;
 
     fn rowid(&self) -> Result<i64>;
 }

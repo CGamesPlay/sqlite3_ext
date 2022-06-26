@@ -2,7 +2,7 @@
 //!
 //! For more information, consult [the SQLite documentation](https://www.sqlite.org/series.html).
 
-use sqlite3_ext::{function::*, vtab::*, *};
+use sqlite3_ext::{vtab::*, *};
 
 const COLUMN_START: usize = 1;
 const COLUMN_STOP: usize = 2;
@@ -189,7 +189,7 @@ impl VTabCursor for Cursor {
         }
     }
 
-    fn column(&self, _: &Context<()>, idx: usize) -> Result<Value> {
+    fn column(&self, idx: usize) -> Result<Value> {
         Ok(Value::Integer(match idx {
             COLUMN_START => self.min_value,
             COLUMN_STOP => self.max_value,

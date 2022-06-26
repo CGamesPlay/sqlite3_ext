@@ -1,6 +1,10 @@
-use super::super::{ffi, sqlite3_require_version, types::*, value::*, Connection};
+use super::{
+    super::{ffi, sqlite3_require_version, types::*, value::*, Connection},
+    FnUserData,
+};
 use std::{
     ffi::CString,
+    marker::PhantomData,
     mem::{size_of, MaybeUninit},
 };
 
@@ -15,8 +19,9 @@ pub(crate) struct InternalContext {
 /// - get db handle
 /// - get/set auxdata
 #[repr(transparent)]
-pub struct Context {
+pub struct Context<UserData> {
     base: ffi::sqlite3_context,
+    phantom: PhantomData<UserData>,
 }
 
 struct AggregateContext<T> {
@@ -24,23 +29,9 @@ struct AggregateContext<T> {
     val: MaybeUninit<T>,
 }
 
-impl Context {
-    pub fn db(&self) -> &Connection {
-        unsafe {
-            Connection::from_ptr(ffi::sqlite3_context_db_handle(
-                &self.base as *const ffi::sqlite3_context as _,
-            ))
-        }
-    }
-}
-
 impl InternalContext {
-    pub unsafe fn from_ptr<'a>(base: *mut ffi::sqlite3_context) -> &'a mut InternalContext {
-        &mut *(base as *mut InternalContext)
-    }
-
-    pub fn get(&self) -> Context {
-        Context { base: self.base }
+    pub unsafe fn from_ptr<'a>(base: *mut ffi::sqlite3_context) -> &'a mut Self {
+        &mut *(base as *mut Self)
     }
 
     pub fn as_ptr(&self) -> *mut ffi::sqlite3_context {
@@ -80,6 +71,28 @@ impl InternalContext {
             context.init = false;
             Some(context.val.assume_init_read())
         }
+    }
+}
+
+impl<U> Context<U> {
+    pub(crate) unsafe fn from_ptr<'a>(base: *mut ffi::sqlite3_context) -> &'a mut Self {
+        &mut *(base as *mut Self)
+    }
+
+    pub fn db(&self) -> &Connection {
+        unsafe {
+            Connection::from_ptr(ffi::sqlite3_context_db_handle(
+                &self.base as *const ffi::sqlite3_context as _,
+            ))
+        }
+    }
+
+    pub fn user_data(&self) -> &U {
+        let user_data = unsafe {
+            let ctx = &self.base as *const ffi::sqlite3_context as _;
+            &*(ffi::sqlite3_user_data(ctx) as *const FnUserData<U>)
+        };
+        &user_data.user_data
     }
 }
 

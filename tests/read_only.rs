@@ -126,7 +126,7 @@ impl VTabCursor for StandardCursor<'_> {
         }
     }
 
-    fn column(&self, _: &Context, i: usize) -> Result<Value> {
+    fn column(&self, _: &Context<()>, i: usize) -> Result<Value> {
         self.lifecycle.xColumn(i);
         Ok(match self.current {
             Some(i) => (*i).into(),

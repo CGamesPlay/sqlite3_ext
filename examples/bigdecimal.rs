@@ -5,26 +5,19 @@ use std::{cmp::Ordering, str::FromStr};
 // NULL maps to None
 // Valid BigDecimal maps to Some(x)
 // Otherwise Some(0)
-fn process_value(a: &ValueRef) -> Option<BigDecimal> {
-    if a.value_type() == ValueType::Null {
-        None
-    } else {
-        a.get_str().ok().and_then(|a| {
-            BigDecimal::from_str(a)
-                .ok()
-                .or_else(|| Some(BigDecimal::default()))
-        })
-    }
+fn process_value(a: &ValueRef) -> Result<Option<BigDecimal>> {
+    Ok(a.get_str()?
+        .map(|a| BigDecimal::from_str(a).unwrap_or_else(|_| BigDecimal::default())))
 }
 
-fn process_args(args: &[&ValueRef]) -> Vec<Option<BigDecimal>> {
+fn process_args(args: &[&ValueRef]) -> Result<Vec<Option<BigDecimal>>> {
     args.iter().copied().map(process_value).collect()
 }
 
 macro_rules! scalar_method {
     ($name:ident as ( $a:ident, $b:ident ) -> $ty:ty => $ret:expr) => {
-        fn $name(_: &Context, args: &[&ValueRef]) -> Result<Option<$ty>> {
-            let mut args = process_args(args).into_iter();
+        fn $name(_: &Context<()>, args: &[&ValueRef]) -> Result<Option<$ty>> {
+            let mut args = process_args(args)?.into_iter();
             let a = args.next().unwrap_or(None);
             let b = args.next().unwrap_or(None);
             if let (Some($a), Some($b)) = (a, b) {
@@ -53,37 +46,40 @@ struct Sum {
 }
 
 impl AggregateFunction for Sum {
-    type Return = Option<String>;
+    type UserData = ();
+    type Output = Option<String>;
 
-    fn default_value(_: &Context) -> Result<Self::Return> {
+    fn default_value(_: &Context<()>) -> Result<Self::Output> {
         Ok(None)
     }
 
-    fn step(&mut self, _: &Context, args: &[&ValueRef]) {
-        if let Some(x) = process_value(args.first().unwrap()) {
+    fn step(&mut self, _: &Context<()>, args: &[&ValueRef]) -> Result<()> {
+        if let Some(x) = process_value(args.first().unwrap())? {
             self.cur += x;
         }
+        Ok(())
     }
 
-    fn value(&self, _: &Context) -> Result<Self::Return> {
+    fn value(&self, _: &Context<()>) -> Result<Self::Output> {
         Ok(Some(format!("{}", self.cur.normalized())))
     }
 
-    fn inverse(&mut self, _: &Context, args: &[&ValueRef]) {
-        if let Some(x) = process_value(args.first().unwrap()) {
+    fn inverse(&mut self, _: &Context<()>, args: &[&ValueRef]) -> Result<()> {
+        if let Some(x) = process_value(args.first().unwrap())? {
             self.cur -= x;
         }
+        Ok(())
     }
 }
 
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
-    db.create_scalar_function("decimal_add", 2, 0, decimal_add)?;
-    db.create_scalar_function("decimal_sub", 2, 0, decimal_sub)?;
-    db.create_scalar_function("decimal_mul", 2, 0, decimal_mul)?;
-    db.create_scalar_function("decimal_cmp", 2, 0, decimal_cmp)?;
-    db.create_scalar_function("decimal_cmp", 2, 0, decimal_cmp)?;
-    db.create_aggregate_function::<Sum>("decimal_sum", 1, 0)?;
+    db.create_scalar_function("decimal_add", 2, 0, decimal_add, ())?;
+    db.create_scalar_function("decimal_sub", 2, 0, decimal_sub, ())?;
+    db.create_scalar_function("decimal_mul", 2, 0, decimal_mul, ())?;
+    db.create_scalar_function("decimal_cmp", 2, 0, decimal_cmp, ())?;
+    db.create_scalar_function("decimal_cmp", 2, 0, decimal_cmp, ())?;
+    db.create_aggregate_function::<Sum>("decimal_sum", 1, 0, ())?;
     // decimal collating sequence
     Ok(())
 }

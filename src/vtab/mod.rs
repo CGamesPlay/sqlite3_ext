@@ -143,7 +143,7 @@ pub trait VTabCursor {
 
     fn eof(&self) -> bool;
 
-    fn column(&self, context: &Context, idx: usize) -> Result<Value>;
+    fn column(&self, context: &Context<()>, idx: usize) -> Result<Value>;
 
     fn rowid(&self) -> Result<i64>;
 }

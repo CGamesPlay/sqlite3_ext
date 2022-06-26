@@ -53,18 +53,33 @@ impl ValueRef {
         unsafe { ffi::sqlite3_value_double(self.as_ptr()) }
     }
 
-    pub fn get_cstr(&self) -> Result<&CStr> {
+    /// Interpret the result as `Option<&CStr>`.
+    ///
+    /// This method will fail if SQLite runs out of memory while converting the value. The
+    /// returned value is `None` if the underlying value is SQL NULL.
+    pub fn get_cstr(&self) -> Result<Option<&CStr>> {
         let ret = unsafe { ffi::sqlite3_value_text(self.as_ptr()) as *const i8 };
         if ret.is_null() {
-            return Err(Error::InvalidConversion);
+            if self.value_type() == ValueType::Null {
+                return Ok(None);
+            } else {
+                return Err(Error::no_memory());
+            }
         }
         let ret = unsafe { CStr::from_ptr(ret) };
-        // XXX - check for out of memory
-        Ok(ret)
+        Ok(Some(ret))
     }
 
-    pub fn get_str(&self) -> Result<&str> {
-        self.get_cstr()?.to_str().map_err(|e| Error::Utf8Error(e))
+    /// Interpret the result as `Option<&str>`.
+    ///
+    /// This method will fail if SQLite runs out of memory while converting the value, or
+    /// if the value has invalid UTF-8. The returned value is `None` if the underlying
+    /// value is SQL NULL.
+    pub fn get_str(&self) -> Result<Option<&str>> {
+        match self.get_cstr()? {
+            None => Ok(None),
+            Some(c) => Ok(Some(c.to_str().map_err(|e| Error::Utf8Error(e))?)),
+        }
     }
 
     // XXX - need to figure out how to make this safe. Presently, value_text and value_blob

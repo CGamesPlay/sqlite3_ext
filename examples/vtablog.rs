@@ -236,7 +236,7 @@ impl VTabCursor for VTabLogCursor<'_> {
         ret
     }
 
-    fn column(&self, _: &Context, idx: usize) -> Result<Value> {
+    fn column(&self, _: &Context<()>, idx: usize) -> Result<Value> {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
         let ret = ALPHABET
             .get(idx)

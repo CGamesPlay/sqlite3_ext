@@ -211,10 +211,11 @@ pub unsafe extern "C" fn vtab_column<'vtab, T: VTab<'vtab> + 'vtab>(
     i: i32,
 ) -> c_int {
     let cursor = &mut *(cursor as *mut VTabCursorHandle<T>);
-    let context = &mut *(context as *mut InternalContext);
-    match cursor.cursor.column(&context.get(), i as _) {
+    let ic = InternalContext::from_ptr(context);
+    let ctx = Context::from_ptr(context);
+    match cursor.cursor.column(ctx, i as _) {
         Ok(x) => {
-            context.set_result(x);
+            ic.set_result(x);
             ffi::SQLITE_OK
         }
         Err(e) => ffi::handle_error(e, &mut (*cursor.base.pVtab).zErrMsg),

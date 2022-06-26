@@ -74,13 +74,17 @@ impl AggregateFunction for Sum {
 
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
-    let flags = FunctionFlag::INNOCUOUS | FunctionFlag::DETERMINISTIC;
-    db.create_scalar_function("decimal_add", 2, flags, decimal_add, ())?;
-    db.create_scalar_function("decimal_sub", 2, flags, decimal_sub, ())?;
-    db.create_scalar_function("decimal_mul", 2, flags, decimal_mul, ())?;
-    db.create_scalar_function("decimal_cmp", 2, flags, decimal_cmp, ())?;
-    db.create_scalar_function("decimal_cmp", 2, flags, decimal_cmp, ())?;
-    db.create_aggregate_function::<Sum>("decimal_sum", 1, flags, ())?;
+    let opts = FunctionOptions::default()
+        .set_risk_level(RiskLevel::Innocuous)
+        .set_deterministic(true)
+        .set_n_args(2);
+    db.create_scalar_function("decimal_add", &opts, decimal_add, ())?;
+    db.create_scalar_function("decimal_sub", &opts, decimal_sub, ())?;
+    db.create_scalar_function("decimal_mul", &opts, decimal_mul, ())?;
+    db.create_scalar_function("decimal_cmp", &opts, decimal_cmp, ())?;
+    db.create_scalar_function("decimal_cmp", &opts, decimal_cmp, ())?;
+    let opts = opts.set_n_args(1);
+    db.create_aggregate_function::<Sum>("decimal_sum", &opts, ())?;
     // decimal collating sequence
     Ok(())
 }

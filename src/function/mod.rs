@@ -2,40 +2,11 @@
 //!
 //! The functionality in this module is primarily exposed through
 //! [Connection::create_scalar_function] and [Connection::create_aggregate_function].
-use super::{ffi, types::*, value::*, Connection};
-use bitflags::bitflags;
+use super::{ffi, sqlite3_require_version, types::*, value::*, Connection, RiskLevel};
 pub use context::*;
 use std::{ffi::CString, mem::transmute, slice};
 
 mod context;
-
-bitflags! {
-    /// Flags used to indicate the behavior of application-defined functions.
-    ///
-    /// It is recommended that all functions at least set the
-    /// [INNOCUOUS](FunctionFlag::INNOCUOUS) or [DIRECTONLY](FunctionFlag::DIRECTONLY)
-    /// flag.
-    ///
-    /// For details about all flags, see [the SQLite documentation](https://www.sqlite.org/c3ref/c_deterministic.html).
-    #[repr(transparent)]
-    pub struct FunctionFlag: i32 {
-        /// Indicates that the function is pure. It must have no side effects and the
-        /// value must be determined solely its the parameters.
-        ///
-        /// The SQLite query planner is able to perform additional optimizations on
-        /// deterministic functions, so use of this flag is recommended where possible.
-        const DETERMINISTIC = ffi::SQLITE_DETERMINISTIC;
-        /// Indicates that the function is potentially unsafe. See
-        /// [vtab::RiskLevel](crate::vtab::RiskLevel) for a discussion about risk
-        /// levels.
-        const DIRECTONLY = ffi::SQLITE_DIRECTONLY;
-        /// Indicates that the function is safe to use in untrusted contexts. See
-        /// [vtab::RiskLevel](crate::vtab::RiskLevel) for a discussion about risk
-        /// levels.
-        const INNOCUOUS = ffi::SQLITE_INNOCUOUS;
-        const SUBTYPE = ffi::SQLITE_SUBTYPE;
-    }
-}
 
 type ScalarFunction<UserData, Return> = fn(&Context<UserData>, &[&ValueRef]) -> Return;
 
@@ -70,43 +41,100 @@ pub trait AggregateFunction: Default {
     fn inverse(&mut self, context: &Context<Self::UserData>, args: &[&ValueRef]) -> Result<()>;
 }
 
-impl Connection {
-    /// Create a new scalar function.
-    ///
-    /// The function will be available under the given name. Multiple functions may be
+#[derive(Clone)]
+pub struct FunctionOptions {
+    n_args: i32,
+    flags: i32,
+}
+
+impl Default for FunctionOptions {
+    fn default() -> Self {
+        FunctionOptions {
+            n_args: -1,
+            flags: 0,
+        }
+    }
+}
+
+impl FunctionOptions {
+    /// Set the number of parameters accepted by this function. Multiple functions may be
     /// provided under the same name with different n_args values; the implementation will
-    /// be chosen by SQLite based on the number of parameters at the call site. The n_args
-    /// parameter may also be -1, which means that the function accepts any number of
-    /// parameters. Functions which take a specific number of parameters take precedence
-    /// over functions which take any number.
-    ///
-    /// It is recommended that flags includes one of [FunctionFlag::INNOCUOUS] or
-    /// [FunctionFlag::DIRECTONLY].
-    ///
-    /// An additional value can be associated with the function, which will be made
-    /// available using [Context::user_data].
+    /// be chosen by SQLite based on the number of parameters at the call site. The value
+    /// may also be -1, which means that the function accepts any number of parameters.
+    /// Functions which take a specific number of parameters take precedence over functions
+    /// which take any number.
     ///
     /// # Panics
     ///
     /// This function panics if n_args is outside the range -1..128. This limitation is
     /// imposed by SQLite.
+    pub fn set_n_args(mut self, n_args: i32) -> Self {
+        assert!((-1..128).contains(&n_args), "n_args invalid");
+        self.n_args = n_args;
+        self
+    }
+
+    /// Enable or disable the deterministic flag. This flag indicates that the function is
+    /// pure. It must have no side effects and the value must be determined solely its the
+    /// parameters.
+    ///
+    /// The SQLite query planner is able to perform additional optimizations on
+    /// deterministic functions, so use of this flag is recommended where possible.
+    pub fn set_deterministic(mut self, val: bool) -> Self {
+        if val {
+            self.flags |= ffi::SQLITE_DETERMINISTIC;
+        } else {
+            self.flags &= !ffi::SQLITE_DETERMINISTIC;
+        }
+        self
+    }
+
+    /// Set the level of risk for this function. See the [RiskLevel] enum for details about
+    /// what the individual options mean.
+    ///
+    /// Requires SQLite 3.31.0. On earlier versions of SQLite, this function is a no-op.
+    pub fn set_risk_level(mut self, level: RiskLevel) -> Self {
+        sqlite3_require_version!(
+            3_031_000,
+            {
+                self.flags |= match level {
+                    RiskLevel::Innocuous => ffi::SQLITE_INNOCUOUS,
+                    RiskLevel::DirectOnly => ffi::SQLITE_DIRECTONLY,
+                };
+                self.flags &= match level {
+                    RiskLevel::Innocuous => !ffi::SQLITE_DIRECTONLY,
+                    RiskLevel::DirectOnly => !ffi::SQLITE_INNOCUOUS,
+                };
+            },
+            {
+                let _ = level;
+            }
+        );
+        self
+    }
+}
+
+impl Connection {
+    /// Create a new scalar function.
+    ///
+    /// The function will be available under the given name. The user_data parameter is
+    /// used to associate an additional value with the function, which will be made
+    /// available using [Context::user_data].
     pub fn create_scalar_function<U, R: ToContextResult>(
         &self,
         name: &str,
-        n_args: isize,
-        flags: FunctionFlag,
+        opts: &FunctionOptions,
         func: ScalarFunction<U, R>,
         user_data: U,
     ) -> Result<()> {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
         let user_data = Box::new(FnUserData::new_scalar(user_data, func));
-        assert!((-1..128).contains(&n_args), "n_args invalid");
         unsafe {
             Error::from_sqlite(ffi::sqlite3_create_function_v2(
                 self.as_ptr(),
                 name.as_ptr() as _,
-                n_args as _,
-                flags.bits,
+                opts.n_args,
+                opts.flags,
                 Box::into_raw(user_data) as _,
                 Some(call_scalar::<U, R>),
                 None,
@@ -120,28 +148,21 @@ impl Connection {
     ///
     /// Aggregate functions are similar to scalar ones; see
     /// [create_scalar_function](Connection::create_scalar_function) for a discussion about
-    /// the flags and parameters.
-    ///
-    /// # Panics
-    ///
-    /// This function panics if n_args is outside the range -1..128. This limitation is
-    /// imposed by SQLite.
+    /// the parameters.
     pub fn create_aggregate_function<F: AggregateFunction>(
         &self,
         name: &str,
-        n_args: isize,
-        flags: FunctionFlag,
+        opts: &FunctionOptions,
         user_data: F::UserData,
     ) -> Result<()> {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
         let user_data = Box::new(FnUserData::new_aggregate(user_data));
-        assert!(n_args >= 0 && n_args <= 127, "n_args invalid");
         unsafe {
             Error::from_sqlite(ffi::sqlite3_create_window_function(
                 self.as_ptr(),
                 name.as_ptr() as _,
-                n_args as _,
-                flags.bits,
+                opts.n_args,
+                opts.flags,
                 Box::into_raw(user_data) as _,
                 Some(aggregate_step::<F>),
                 Some(aggregate_final::<F>),

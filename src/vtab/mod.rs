@@ -21,7 +21,9 @@
 //!   operate on the table.
 //! - [RenameVTab] indicates that the table supports ALTER TABLE RENAME TO.
 
-use super::{ffi, sqlite3_require_version, types::*, value::*, Connection};
+use super::{
+    ffi, function::ToContextResult, sqlite3_require_version, types::*, value::*, Connection,
+};
 pub use index_info::*;
 pub use module::*;
 use std::ffi::c_void;
@@ -153,6 +155,14 @@ pub trait RenameVTab<'vtab>: VTab<'vtab> {
 
 /// Implementation of the cursor type for a virtual table.
 pub trait VTabCursor {
+    /// The type of all columns in this virtual table. For tables with columns of varying
+    /// data types, [Value] can be used.
+    type ColumnType: ToContextResult;
+
+    /// Begin a search of the virtual table. This method is always invoked after creating
+    /// the cursor, before any other methods of this trait. After calling this method, the
+    /// cursor should point to the first row of results (or [eof](VTabCursor::eof) should
+    /// return true to indicate there are no results).
     fn filter(
         &mut self,
         index_num: usize,
@@ -160,12 +170,17 @@ pub trait VTabCursor {
         args: &[&ValueRef],
     ) -> Result<()>;
 
+    /// Move the cursor one row forward.
     fn next(&mut self) -> Result<()>;
 
+    /// Check if the cursor currently points beyond the end of the valid results.
     fn eof(&self) -> bool;
 
-    fn column(&self, idx: usize) -> Result<Value>;
+    /// Fetch the column numbered idx for the current row. The indexes correspond to the
+    /// order the columns were declared by [VTab::connect].
+    fn column(&self, idx: usize) -> Self::ColumnType;
 
+    /// Fetch the rowid for the current row.
     fn rowid(&self) -> Result<i64>;
 }
 

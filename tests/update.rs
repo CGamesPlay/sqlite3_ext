@@ -110,6 +110,8 @@ impl<'vtab> ListCursor<'vtab> {
 }
 
 impl<'vtab> VTabCursor for ListCursor<'vtab> {
+    type ColumnType = i64;
+
     fn filter(
         &mut self,
         index_num: usize,
@@ -137,12 +139,9 @@ impl<'vtab> VTabCursor for ListCursor<'vtab> {
         }
     }
 
-    fn column(&self, i: usize) -> Result<Value> {
+    fn column(&self, i: usize) -> i64 {
         self.lifecycle.xColumn(i);
-        Ok(match self.current {
-            Some((_, v)) => v.into(),
-            _ => ().into(),
-        })
+        self.current.unwrap().1
     }
 
     fn rowid(&self) -> Result<i64> {

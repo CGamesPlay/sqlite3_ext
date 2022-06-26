@@ -101,6 +101,8 @@ struct StandardCursor<'vtab> {
 }
 
 impl VTabCursor for StandardCursor<'_> {
+    type ColumnType = i32;
+
     fn filter(
         &mut self,
         index_num: usize,
@@ -126,12 +128,9 @@ impl VTabCursor for StandardCursor<'_> {
         }
     }
 
-    fn column(&self, i: usize) -> Result<Value> {
+    fn column(&self, i: usize) -> i32 {
         self.lifecycle.xColumn(i);
-        Ok(match self.current {
-            Some(i) => (*i).into(),
-            None => ().into(),
-        })
+        *self.current.unwrap()
     }
 
     fn rowid(&self) -> Result<i64> {

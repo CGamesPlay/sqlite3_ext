@@ -209,6 +209,8 @@ impl Drop for VTabLogTransaction<'_> {
 }
 
 impl VTabCursor for VTabLogCursor<'_> {
+    type ColumnType = String;
+
     fn filter(&mut self, _: usize, _: Option<&str>, args: &[&ValueRef]) -> Result<()> {
         println!(
             "filter(tab={}, cursor={}, args={:?})",
@@ -236,7 +238,7 @@ impl VTabCursor for VTabLogCursor<'_> {
         ret
     }
 
-    fn column(&self, idx: usize) -> Result<Value> {
+    fn column(&self, idx: usize) -> String {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
         let ret = ALPHABET
             .get(idx)
@@ -246,7 +248,7 @@ impl VTabCursor for VTabLogCursor<'_> {
             "column(tab={}, cursor={}, idx={}) -> {:?}",
             self.vtab.id, self.id, idx, ret
         );
-        Ok(Value::Text(ret))
+        ret
     }
 
     fn rowid(&self) -> Result<i64> {

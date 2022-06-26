@@ -18,8 +18,8 @@ impl AggregateFunction for Agg {
         Ok(())
     }
 
-    fn value(&self, context: &Context<Self::UserData>) -> Result<Self::Output> {
-        Ok(self.acc.join(context.user_data()))
+    fn value(&self, context: &Context<Self::UserData>) -> Self::Output {
+        self.acc.join(context.user_data())
     }
 
     fn inverse(&mut self, _: &Context<Self::UserData>, _: &[&ValueRef]) -> Result<()> {

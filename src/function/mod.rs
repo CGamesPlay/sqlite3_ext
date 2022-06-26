@@ -37,7 +37,7 @@ bitflags! {
     }
 }
 
-type ScalarFunction<UserData, Return> = fn(&Context<UserData>, &[&ValueRef]) -> Result<Return>;
+type ScalarFunction<UserData, Return> = fn(&Context<UserData>, &[&ValueRef]) -> Return;
 
 /// Implement an application-defined aggregate window function.
 ///
@@ -53,7 +53,7 @@ pub trait AggregateFunction: Default {
     ///
     /// This method is called when the aggregate function is invoked over an empty set of
     /// rows. The default implementation is equivalent to `Self::default().value(context)`.
-    fn default_value(context: &Context<Self::UserData>) -> Result<Self::Output> {
+    fn default_value(context: &Context<Self::UserData>) -> Self::Output {
         Self::default().value(context)
     }
 
@@ -61,7 +61,7 @@ pub trait AggregateFunction: Default {
     fn step(&mut self, context: &Context<Self::UserData>, args: &[&ValueRef]) -> Result<()>;
 
     /// Return the current value of the aggregate function.
-    fn value(&self, context: &Context<Self::UserData>) -> Result<Self::Output>;
+    fn value(&self, context: &Context<Self::UserData>) -> Self::Output;
 
     /// Remove the oldest presently aggregated row.
     ///

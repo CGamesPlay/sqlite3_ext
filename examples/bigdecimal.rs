@@ -49,8 +49,8 @@ impl AggregateFunction for Sum {
     type UserData = ();
     type Output = Option<String>;
 
-    fn default_value(_: &Context<()>) -> Result<Self::Output> {
-        Ok(None)
+    fn default_value(_: &Context<()>) -> Self::Output {
+        None
     }
 
     fn step(&mut self, _: &Context<()>, args: &[&ValueRef]) -> Result<()> {
@@ -60,8 +60,8 @@ impl AggregateFunction for Sum {
         Ok(())
     }
 
-    fn value(&self, _: &Context<()>) -> Result<Self::Output> {
-        Ok(Some(format!("{}", self.cur.normalized())))
+    fn value(&self, _: &Context<()>) -> Self::Output {
+        Some(format!("{}", self.cur.normalized()))
     }
 
     fn inverse(&mut self, _: &Context<()>, args: &[&ValueRef]) -> Result<()> {

@@ -98,6 +98,10 @@ impl<U> Context<U> {
 }
 
 /// A value that can be returned from an SQL function.
+///
+/// For functions which have an output type determined at runtime, [Value] is implemented. For
+/// nullable types, Option\<ToContextResult\> is implemented. For fallible functions,
+/// [Result]\<ToContextResult\> is implemented.
 pub trait ToContextResult {
     #[doc(hidden)]
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context);

@@ -120,6 +120,12 @@ impl Connection {
     /// The function will be available under the given name. The user_data parameter is
     /// used to associate an additional value with the function, which will be made
     /// available using [Context::user_data].
+    ///
+    /// # Compatibility
+    ///
+    /// On versions of SQLite earlier than 3.7.3, this function will leak the user data
+    /// plus 16 bytes of memory. This is because these versions of SQLite did not provide
+    /// the ability to specify a destructor function.
     pub fn create_scalar_function<U, R: ToContextResult>(
         &self,
         name: &str,
@@ -130,17 +136,34 @@ impl Connection {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
         let user_data = Box::new(FnUserData::new_scalar(user_data, func));
         unsafe {
-            Error::from_sqlite(ffi::sqlite3_create_function_v2(
-                self.as_ptr(),
-                name.as_ptr() as _,
-                opts.n_args,
-                opts.flags,
-                Box::into_raw(user_data) as _,
-                Some(call_scalar::<U, R>),
-                None,
-                None,
-                Some(ffi::drop_boxed::<FnUserData<U>>),
-            ))
+            sqlite3_require_version!(
+                3_007_003,
+                {
+                    Error::from_sqlite(ffi::sqlite3_create_function_v2(
+                        self.as_ptr(),
+                        name.as_ptr() as _,
+                        opts.n_args,
+                        opts.flags,
+                        Box::into_raw(user_data) as _,
+                        Some(call_scalar::<U, R>),
+                        None,
+                        None,
+                        Some(ffi::drop_boxed::<FnUserData<U>>),
+                    ))
+                },
+                {
+                    Error::from_sqlite(ffi::sqlite3_create_function(
+                        self.as_ptr(),
+                        name.as_ptr() as _,
+                        opts.n_args,
+                        opts.flags,
+                        Box::into_raw(user_data) as _,
+                        Some(call_scalar::<U, R>),
+                        None,
+                        None,
+                    ))
+                }
+            )
         }
     }
 

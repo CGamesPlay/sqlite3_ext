@@ -228,13 +228,22 @@ pub trait VTabTransaction {
     fn rollback_to(&mut self, n: i32) -> Result<()>;
 }
 
+/// Indicate the risk level for a virtual table.
+///
+/// It is recommended that all functions and virtual table implementations set a risk level,
+/// but the default is [RiskLevel::Innocuous] if TRUSTED_SCHEMA=on and [RiskLevel::DirectOnly]
+/// otherwise.
+///
+/// See [this discussion](https://www.sqlite.org/src/doc/latest/doc/trusted-schema.md) for more
+/// details about the motivation and implications.
 pub enum RiskLevel {
     /// An innocuous function or virtual table is one that can only read content from the
     /// database file in which it resides, and can only alter the database in which it
     /// resides.
     Innocuous,
-    /// Direct-only elements that have side-effects that go outside the database file in
-    /// which it lives, or return information from outside of the database file.
+    /// A direct-only function or virtual table has side-effects that go outside the
+    /// database file in which it lives, or return information from outside of the database
+    /// file.
     DirectOnly,
 }
 
@@ -269,13 +278,7 @@ impl VTabConnection {
 
     /// Set the risk level of this virtual table.
     ///
-    /// See the [RiskLevel] enum for details about what the individual options mean. It is
-    /// recommended that all virtual table implementations set a risk level, but the
-    /// default is [RiskLevel::Innocuous] if TRUSTED_SCHEMA=on and [RiskLevel::DirectOnly]
-    /// otherwise.
-    ///
-    /// See [this discussion](https://www.sqlite.org/src/doc/latest/doc/trusted-schema.md)
-    /// for more details about the motivation and implications.
+    /// See the [RiskLevel] enum for details about what the individual options mean.
     ///
     /// Requires SQLite 3.31.0.
     pub fn set_risk(&mut self, level: RiskLevel) -> Result<()> {

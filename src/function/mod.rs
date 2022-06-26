@@ -1,8 +1,37 @@
 use super::{ffi, types::*, value::*, Connection};
+use bitflags::bitflags;
 pub use context::*;
 use std::{ffi::CString, mem::transmute, slice};
 
 mod context;
+
+bitflags! {
+    /// Flags used to indicate the behavior of user-defined functions.
+    ///
+    /// It is recommended that all functions at least set the
+    /// [INNOCUOUS](FunctionFlag::INNOCUOUS) or [DIRECTONLY](FunctionFlag::DIRECTONLY)
+    /// flag.
+    ///
+    /// For details about all flags, see [the SQLite documentation](https://www.sqlite.org/c3ref/c_deterministic.html).
+    #[repr(transparent)]
+    pub struct FunctionFlag: i32 {
+        /// Indicates that the function is pure. It must have no side effects and the
+        /// value must be determined solely its the parameters.
+        ///
+        /// The SQLite query planner is able to perform additional optimizations on
+        /// deterministic functions, so use of this flag is recommended where possible.
+        const DETERMINISTIC = ffi::SQLITE_DETERMINISTIC;
+        /// Indicates that the function is potentially unsafe. See
+        /// [vtab::RiskLevel](crate::vtab::RiskLevel) for a discussion about risk
+        /// levels.
+        const DIRECTONLY = ffi::SQLITE_DIRECTONLY;
+        /// Indicates that the function is safe to use in untrusted contexts. See
+        /// [vtab::RiskLevel](crate::vtab::RiskLevel) for a discussion about risk
+        /// levels.
+        const INNOCUOUS = ffi::SQLITE_INNOCUOUS;
+        const SUBTYPE = ffi::SQLITE_SUBTYPE;
+    }
+}
 
 type ScalarFunction<UserData, Return> = fn(&Context<UserData>, &[&ValueRef]) -> Result<Return>;
 
@@ -36,7 +65,7 @@ impl Connection {
         &self,
         name: &str,
         n_args: isize,
-        flags: usize,
+        flags: FunctionFlag,
         func: ScalarFunction<U, R>,
         user_data: U,
     ) -> Result<()> {
@@ -47,7 +76,7 @@ impl Connection {
                 self.as_ptr(),
                 name.as_ptr() as _,
                 n_args as _,
-                flags as _,
+                flags.bits,
                 Box::into_raw(user_data) as _,
                 Some(call_scalar::<U, R>),
                 None,
@@ -61,7 +90,7 @@ impl Connection {
         &self,
         name: &str,
         n_args: isize,
-        flags: usize,
+        flags: FunctionFlag,
         user_data: F::UserData,
     ) -> Result<()> {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
@@ -71,7 +100,7 @@ impl Connection {
                 self.as_ptr(),
                 name.as_ptr() as _,
                 n_args as _,
-                flags as _,
+                flags.bits,
                 Box::into_raw(user_data) as _,
                 Some(aggregate_step::<F>),
                 Some(aggregate_final::<F>),

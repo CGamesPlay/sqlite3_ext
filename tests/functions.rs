@@ -30,9 +30,26 @@ impl AggregateFunction for Agg {
 
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
-    db.create_scalar_function("user_data_foo", 0, 0, user_data, "foo")?;
-    db.create_scalar_function("user_data_bar", 0, 0, user_data, "bar")?;
-    db.create_aggregate_function::<Agg>("join_str", 1, 0, "|")?;
+    db.create_scalar_function(
+        "user_data_foo",
+        0,
+        FunctionFlag::INNOCUOUS | FunctionFlag::DETERMINISTIC,
+        user_data,
+        "foo",
+    )?;
+    db.create_scalar_function(
+        "user_data_bar",
+        0,
+        FunctionFlag::INNOCUOUS | FunctionFlag::DETERMINISTIC,
+        user_data,
+        "bar",
+    )?;
+    db.create_aggregate_function::<Agg>(
+        "join_str",
+        1,
+        FunctionFlag::INNOCUOUS | FunctionFlag::DETERMINISTIC,
+        "|",
+    )?;
     Ok(())
 }
 

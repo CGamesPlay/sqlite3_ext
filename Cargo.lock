@@ -266,6 +266,7 @@ name = "sqlite3_ext"
 version = "0.1.0"
 dependencies = [
  "bigdecimal",
+ "bitflags",
  "libsqlite3-sys",
  "nom",
  "proc-macro2",

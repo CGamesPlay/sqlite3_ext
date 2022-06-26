@@ -74,12 +74,13 @@ impl AggregateFunction for Sum {
 
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
-    db.create_scalar_function("decimal_add", 2, 0, decimal_add, ())?;
-    db.create_scalar_function("decimal_sub", 2, 0, decimal_sub, ())?;
-    db.create_scalar_function("decimal_mul", 2, 0, decimal_mul, ())?;
-    db.create_scalar_function("decimal_cmp", 2, 0, decimal_cmp, ())?;
-    db.create_scalar_function("decimal_cmp", 2, 0, decimal_cmp, ())?;
-    db.create_aggregate_function::<Sum>("decimal_sum", 1, 0, ())?;
+    let flags = FunctionFlag::INNOCUOUS | FunctionFlag::DETERMINISTIC;
+    db.create_scalar_function("decimal_add", 2, flags, decimal_add, ())?;
+    db.create_scalar_function("decimal_sub", 2, flags, decimal_sub, ())?;
+    db.create_scalar_function("decimal_mul", 2, flags, decimal_mul, ())?;
+    db.create_scalar_function("decimal_cmp", 2, flags, decimal_cmp, ())?;
+    db.create_scalar_function("decimal_cmp", 2, flags, decimal_cmp, ())?;
+    db.create_aggregate_function::<Sum>("decimal_sum", 1, flags, ())?;
     // decimal collating sequence
     Ok(())
 }

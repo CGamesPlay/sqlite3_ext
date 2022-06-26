@@ -10,6 +10,32 @@ mod context;
 
 type ScalarFunction<UserData, Return> = fn(&Context<UserData>, &[&ValueRef]) -> Return;
 
+/// Implement an application-defined aggregate function which cannot be used as a window
+/// function.
+///
+/// In general, there is no reason to implement this trait instead of [AggregateFunction],
+/// because the latter provides a blanket implementation of the former.
+pub trait LegacyAggregateFunction: Default {
+    /// The type of data that is provided to the function when it is created.
+    type UserData;
+    /// The output type of the function.
+    type Output: ToContextResult;
+
+    /// Return the default value of the aggregate function.
+    ///
+    /// This method is called when the aggregate function is invoked over an empty set of
+    /// rows. The default implementation is equivalent to `Self::default().value(context)`.
+    fn default_value(context: &Context<Self::UserData>) -> Self::Output {
+        Self::default().value(context)
+    }
+
+    /// Add a new row to the aggregate.
+    fn step(&mut self, context: &Context<Self::UserData>, args: &[&ValueRef]) -> Result<()>;
+
+    /// Return the current value of the aggregate function.
+    fn value(&self, context: &Context<Self::UserData>) -> Self::Output;
+}
+
 /// Implement an application-defined aggregate window function.
 ///
 /// The function can be registered with a database connection using
@@ -39,6 +65,23 @@ pub trait AggregateFunction: Default {
     /// The args are the same that were passed to [AggregateFunction::step] when this row
     /// was added.
     fn inverse(&mut self, context: &Context<Self::UserData>, args: &[&ValueRef]) -> Result<()>;
+}
+
+impl<T: AggregateFunction> LegacyAggregateFunction for T {
+    type UserData = T::UserData;
+    type Output = T::Output;
+
+    fn default_value(context: &Context<Self::UserData>) -> Self::Output {
+        <T as AggregateFunction>::default_value(context)
+    }
+
+    fn step(&mut self, context: &Context<Self::UserData>, args: &[&ValueRef]) -> Result<()> {
+        <T as AggregateFunction>::step(self, context, args)
+    }
+
+    fn value(&self, context: &Context<Self::UserData>) -> Self::Output {
+        <T as AggregateFunction>::value(self, context)
+    }
 }
 
 #[derive(Clone)]
@@ -124,7 +167,7 @@ impl Connection {
     /// # Compatibility
     ///
     /// On versions of SQLite earlier than 3.7.3, this function will leak the user data
-    /// plus 16 bytes of memory. This is because these versions of SQLite did not provide
+    /// plus 8 bytes of memory. This is because these versions of SQLite did not provide
     /// the ability to specify a destructor function.
     pub fn create_scalar_function<U, R: ToContextResult>(
         &self,
@@ -167,12 +210,19 @@ impl Connection {
         }
     }
 
-    /// Create a new aggregate function.
+    /// Create a new aggregate function which cannot be used as a window function.
     ///
-    /// Aggregate functions are similar to scalar ones; see
-    /// [create_scalar_function](Connection::create_scalar_function) for a discussion about
-    /// the parameters.
-    pub fn create_aggregate_function<F: AggregateFunction>(
+    /// In general, you should use
+    /// [create_aggregate_function](Connection::create_aggregate_function) instead, which
+    /// provides all of the same features as legacy aggregate functions but also support
+    /// WINDOW.
+    ///
+    /// # Compatibility
+    ///
+    /// On versions of SQLite earlier than 3.7.3, this function will leak the user data
+    /// plus 8 bytes of memory. This is because these versions of SQLite did not provide
+    /// the ability to specify a destructor function.
+    pub fn create_legacy_aggregate_function<F: LegacyAggregateFunction>(
         &self,
         name: &str,
         opts: &FunctionOptions,
@@ -181,19 +231,76 @@ impl Connection {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
         let user_data = Box::new(FnUserData::new_aggregate(user_data));
         unsafe {
-            Error::from_sqlite(ffi::sqlite3_create_window_function(
-                self.as_ptr(),
-                name.as_ptr() as _,
-                opts.n_args,
-                opts.flags,
-                Box::into_raw(user_data) as _,
-                Some(aggregate_step::<F>),
-                Some(aggregate_final::<F>),
-                Some(aggregate_value::<F>),
-                Some(aggregate_inverse::<F>),
-                Some(ffi::drop_boxed::<FnUserData<F::UserData>>),
-            ))
+            sqlite3_require_version!(
+                3_007_003,
+                {
+                    Error::from_sqlite(ffi::sqlite3_create_function_v2(
+                        self.as_ptr(),
+                        name.as_ptr() as _,
+                        opts.n_args,
+                        opts.flags,
+                        Box::into_raw(user_data) as _,
+                        None,
+                        Some(aggregate_step::<F>),
+                        Some(aggregate_final::<F>),
+                        Some(ffi::drop_boxed::<FnUserData<F::UserData>>),
+                    ))
+                },
+                {
+                    Error::from_sqlite(ffi::sqlite3_create_function(
+                        self.as_ptr(),
+                        name.as_ptr() as _,
+                        opts.n_args,
+                        opts.flags,
+                        Box::into_raw(user_data) as _,
+                        None,
+                        Some(aggregate_step::<F>),
+                        Some(aggregate_final::<F>),
+                    ))
+                }
+            )
         }
+    }
+
+    /// Create a new aggregate function.
+    ///
+    /// Aggregate functions are similar to scalar ones; see
+    /// [create_scalar_function](Connection::create_scalar_function) for a discussion about
+    /// the parameters.
+    ///
+    /// # Compatibility
+    ///
+    /// Window functions require SQLite 3.25.0. On earlier versions of SQLite, this
+    /// function will automatically fall back to
+    /// [create_legacy_aggregate_function](Connection::create_legacy_aggregate_function).
+    pub fn create_aggregate_function<F: AggregateFunction>(
+        &self,
+        name: &str,
+        opts: &FunctionOptions,
+        user_data: F::UserData,
+    ) -> Result<()> {
+        sqlite3_require_version!(
+            3_025_000,
+            {
+                let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
+                let user_data = Box::new(FnUserData::new_aggregate(user_data));
+                unsafe {
+                    Error::from_sqlite(ffi::sqlite3_create_window_function(
+                        self.as_ptr(),
+                        name.as_ptr() as _,
+                        opts.n_args,
+                        opts.flags,
+                        Box::into_raw(user_data) as _,
+                        Some(aggregate_step::<F>),
+                        Some(aggregate_final::<F>),
+                        Some(aggregate_value::<F>),
+                        Some(aggregate_inverse::<F>),
+                        Some(ffi::drop_boxed::<FnUserData<F::UserData>>),
+                    ))
+                }
+            },
+            self.create_legacy_aggregate_function::<F>(name, opts, user_data)
+        )
     }
 }
 
@@ -236,7 +343,7 @@ unsafe extern "C" fn call_scalar<U, R: ToContextResult>(
     ic.set_result(ret);
 }
 
-unsafe extern "C" fn aggregate_step<F: AggregateFunction>(
+unsafe extern "C" fn aggregate_step<F: LegacyAggregateFunction>(
     context: *mut ffi::sqlite3_context,
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
@@ -250,7 +357,9 @@ unsafe extern "C" fn aggregate_step<F: AggregateFunction>(
     }
 }
 
-unsafe extern "C" fn aggregate_final<F: AggregateFunction>(context: *mut ffi::sqlite3_context) {
+unsafe extern "C" fn aggregate_final<F: LegacyAggregateFunction>(
+    context: *mut ffi::sqlite3_context,
+) {
     let ic = InternalContext::from_ptr(context);
     let ctx = Context::from_ptr(context);
     match ic.try_aggregate_context::<F>() {

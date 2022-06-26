@@ -3,6 +3,7 @@ use super::{
     FnUserData,
 };
 use std::{
+    any::TypeId,
     ffi::CString,
     marker::PhantomData,
     mem::{size_of, MaybeUninit},
@@ -23,6 +24,11 @@ pub struct Context<UserData> {
 struct AggregateContext<T> {
     init: bool,
     val: MaybeUninit<T>,
+}
+
+struct AuxData<T> {
+    type_id: TypeId,
+    val: T,
 }
 
 impl InternalContext {
@@ -71,17 +77,17 @@ impl InternalContext {
 }
 
 impl<U> Context<U> {
+    pub(crate) fn as_ptr<'a>(&self) -> *mut ffi::sqlite3_context {
+        &self.base as *const ffi::sqlite3_context as _
+    }
+
     pub(crate) unsafe fn from_ptr<'a>(base: *mut ffi::sqlite3_context) -> &'a mut Self {
         &mut *(base as *mut Self)
     }
 
     /// Return a handle to the current database.
     pub fn db(&self) -> &Connection {
-        unsafe {
-            Connection::from_ptr(ffi::sqlite3_context_db_handle(
-                &self.base as *const ffi::sqlite3_context as _,
-            ))
-        }
+        unsafe { Connection::from_ptr(ffi::sqlite3_context_db_handle(self.as_ptr())) }
     }
 
     /// Return the data associated with this function.
@@ -89,11 +95,51 @@ impl<U> Context<U> {
     /// This method returns a reference to the value originally passed when this function
     /// was created.
     pub fn user_data(&self) -> &U {
-        let user_data = unsafe {
-            let ctx = &self.base as *const ffi::sqlite3_context as _;
-            &*(ffi::sqlite3_user_data(ctx) as *const FnUserData<U>)
-        };
+        let user_data =
+            unsafe { &*(ffi::sqlite3_user_data(self.as_ptr()) as *const FnUserData<U>) };
         &user_data.user_data
+    }
+
+    /// Retrieve data about a function parameter that was previously set with
+    /// [set_aux_data](Context::set_aux_data).
+    ///
+    /// This method returns None if T is different from the data type that was stored
+    /// previously.
+    pub fn aux_data<T: 'static>(&self, idx: usize) -> Option<&mut T> {
+        unsafe {
+            let data = ffi::sqlite3_get_auxdata(self.as_ptr(), idx as _) as *mut AuxData<T>;
+            if data.is_null() {
+                None
+            } else {
+                let data = &mut *data;
+                if data.type_id == TypeId::of::<T>() {
+                    Some(&mut data.val)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    /// Set the auxiliary data associated with the corresponding function parameter.
+    ///
+    /// If some processing is necessary in order for a function parameter to be useful (for
+    /// example, compiling a regular expression), this method can be used to cache the
+    /// processed value in case it is later reused in the same query. The cached value can
+    /// be retrieved with the [aux_data](Context::aux_data) method.
+    pub fn set_aux_data<T: 'static>(&self, idx: usize, val: T) {
+        let data = Box::new(AuxData {
+            type_id: TypeId::of::<T>(),
+            val,
+        });
+        unsafe {
+            ffi::sqlite3_set_auxdata(
+                self.as_ptr(),
+                idx as _,
+                Box::into_raw(data) as _,
+                Some(ffi::drop_boxed::<AuxData<T>>),
+            )
+        };
     }
 }
 

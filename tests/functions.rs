@@ -1,7 +1,21 @@
 use sqlite3_ext::{function::*, *};
 
-fn user_data(context: &Context<&'static str>, _: &[&ValueRef]) -> Result<&'static str> {
-    Ok(context.user_data())
+fn user_data(context: &Context<&'static str>, _: &[&ValueRef]) -> &'static str {
+    context.user_data()
+}
+
+// Returns the number of times that the first argument has been passed to the function.
+fn aux_data(context: &Context<()>, _: &[&ValueRef]) -> i64 {
+    match context.aux_data::<i64>(0) {
+        Some(x) => {
+            *x += 1;
+            *x
+        }
+        None => {
+            context.set_aux_data(0, 1i64);
+            1
+        }
+    }
 }
 
 #[derive(Default)]
@@ -36,6 +50,8 @@ fn init(db: &Connection) -> Result<()> {
         .set_n_args(0);
     db.create_scalar_function("user_data_foo", &opts, user_data, "foo")?;
     db.create_scalar_function("user_data_bar", &opts, user_data, "bar")?;
+    let opts = opts.set_n_args(2);
+    db.create_scalar_function("aux_data", &opts, aux_data, ())?;
     let opts = opts.set_n_args(1);
     db.create_aggregate_function::<Agg>("join_str", &opts, "|")?;
     Ok(())
@@ -78,6 +94,17 @@ mod test {
             "join_str(column1) FROM ( VALUES ('a'), ('1'), (NULL) )",
             Some("a|1|".to_owned()),
         )])?;
+        Ok(())
+    }
+
+    #[test]
+    fn aux_data() -> rusqlite::Result<()> {
+        let conn = setup()?;
+        let ret: Vec<i64> = conn
+            .prepare("SELECT aux_data('foo', column1) FROM ( VALUES ((1)), (('a')), ((NULL)) )")?
+            .query_map([], |row| row.get::<_, i64>(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        assert_eq!(ret, vec![1, 2, 3]);
         Ok(())
     }
 }

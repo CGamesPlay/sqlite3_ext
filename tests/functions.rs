@@ -1,4 +1,5 @@
 use sqlite3_ext::{function::*, *};
+use std::cmp::Ordering;
 
 fn user_data(context: &Context<&'static str>, _: &[&ValueRef]) -> &'static str {
     context.user_data()
@@ -42,6 +43,17 @@ impl AggregateFunction for Agg {
     }
 }
 
+fn rot13_collation(_: &(), a: &str, b: &str) -> Ordering {
+    fn rot13(c: char) -> char {
+        match c {
+            'A'..='M' | 'a'..='m' => ((c as u8) + 13) as char,
+            'N'..='Z' | 'n'..='z' => ((c as u8) - 13) as char,
+            _ => c,
+        }
+    }
+    a.chars().map(rot13).cmp(b.chars().map(rot13))
+}
+
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
     let opts = FunctionOptions::default()
@@ -54,6 +66,12 @@ fn init(db: &Connection) -> Result<()> {
     db.create_scalar_function("aux_data", &opts, aux_data, ())?;
     let opts = opts.set_n_args(1);
     db.create_aggregate_function::<Agg>("join_str", &opts, "|")?;
+    db.set_collation_needed_func(|name| {
+        println!("collation needed: {:?}", name);
+        if name == "rot13" {
+            let _ = db.create_collation(name, rot13_collation, ());
+        }
+    })?;
     Ok(())
 }
 
@@ -105,6 +123,27 @@ mod test {
             .query_map([], |row| row.get::<_, i64>(0))?
             .collect::<rusqlite::Result<_>>()?;
         assert_eq!(ret, vec![1, 2, 3]);
+        Ok(())
+    }
+
+    #[test]
+    fn collation() -> rusqlite::Result<()> {
+        let conn = setup()?;
+        let ret: Vec<String> = conn
+            .prepare(
+                "SELECT column1 FROM ( VALUES (('A')), (('N')), (('M')), (('Z')) ) ORDER BY column1 COLLATE rot13",
+            )?
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        assert_eq!(
+            ret,
+            vec![
+                "N".to_owned(),
+                "Z".to_owned(),
+                "A".to_owned(),
+                "M".to_owned()
+            ]
+        );
         Ok(())
     }
 }

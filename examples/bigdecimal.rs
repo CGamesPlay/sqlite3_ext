@@ -72,6 +72,12 @@ impl AggregateFunction for Sum {
     }
 }
 
+fn decimal_collation(_: &(), a: &str, b: &str) -> Ordering {
+    let a = BigDecimal::from_str(a).unwrap_or_else(|_| BigDecimal::default());
+    let b = BigDecimal::from_str(b).unwrap_or_else(|_| BigDecimal::default());
+    a.cmp(&b)
+}
+
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
     let opts = FunctionOptions::default()
@@ -85,7 +91,7 @@ fn init(db: &Connection) -> Result<()> {
     db.create_scalar_function("decimal_cmp", &opts, decimal_cmp, ())?;
     let opts = opts.set_n_args(1);
     db.create_aggregate_function::<Sum>("decimal_sum", &opts, ())?;
-    // decimal collating sequence
+    db.create_collation("decimal", decimal_collation, ())?;
     Ok(())
 }
 
@@ -231,6 +237,22 @@ mod test {
                 Some("1".to_owned()),
             ],
         )?;
+        Ok(())
+    }
+
+    #[test]
+    fn collation() -> rusqlite::Result<()> {
+        let conn = setup()?;
+        let ret: Vec<String> = conn
+            .prepare(
+                "SELECT column1 FROM ( VALUES (('1')), (('0100')), (('.1')) ) ORDER BY column1 COLLATE decimal",
+            )?
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        assert_eq!(
+            ret,
+            vec![".1".to_owned(), "1".to_owned(), "0100".to_owned()]
+        );
         Ok(())
     }
 }

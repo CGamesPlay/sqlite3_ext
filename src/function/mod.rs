@@ -4,11 +4,19 @@
 //! [Connection::create_scalar_function] and [Connection::create_aggregate_function].
 use super::{ffi, sqlite3_require_version, types::*, value::*, Connection, RiskLevel};
 pub use context::*;
-use std::{ffi::CString, mem::transmute, ptr::null_mut, slice};
+use std::{
+    cmp::Ordering,
+    ffi::{c_void, CStr, CString},
+    mem::{drop, transmute},
+    ptr::null_mut,
+    slice,
+    str::from_utf8_unchecked,
+};
 
 mod context;
 
 type ScalarFunction<UserData, Return> = fn(&Context<UserData>, &[&ValueRef]) -> Return;
+type CollationFunction<UserData> = fn(&UserData, &str, &str) -> Ordering;
 
 /// Implement an application-defined aggregate function which cannot be used as a window
 /// function.
@@ -319,6 +327,52 @@ impl Connection {
             ))
         }
     }
+
+    /// Register a new collating sequence.
+    pub fn create_collation<U>(
+        &self,
+        name: &str,
+        func: CollationFunction<U>,
+        user_data: U,
+    ) -> Result<()> {
+        let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
+        let user_data = Box::new(FnUserData::new_collation(user_data, func));
+        unsafe {
+            let user_data = Box::into_raw(user_data);
+            let rc = ffi::sqlite3_create_collation_v2(
+                self.as_ptr(),
+                name.as_ptr() as _,
+                ffi::SQLITE_UTF8,
+                user_data as _,
+                Some(compare::<U>),
+                Some(ffi::drop_boxed::<FnUserData<U>>),
+            );
+            if rc != ffi::SQLITE_OK {
+                // The xDestroy callback is not called if the
+                // sqlite3_create_collation_v2() function fails.
+                drop(Box::from_raw(user_data));
+            }
+            Error::from_sqlite(rc)
+        }
+    }
+
+    /// Register a callback for when SQLite needs a collation sequence. The function will
+    /// be invoked when a collation sequence is needed, and
+    /// [create_collation](Connection::create_collation) can be used to provide the needed
+    /// sequence.
+    ///
+    /// Note: the provided function and any captured variables will be leaked. SQLite does
+    /// not provide any facilities for cleaning up this data.
+    pub fn set_collation_needed_func<F: Fn(&str)>(&self, func: F) -> Result<()> {
+        let func = Box::new(func);
+        unsafe {
+            Error::from_sqlite(ffi::sqlite3_collation_needed(
+                self.as_ptr(),
+                Box::into_raw(func) as _,
+                Some(collation_needed::<F>),
+            ))
+        }
+    }
 }
 
 struct FnUserData<U> {
@@ -341,7 +395,18 @@ impl<U> FnUserData<U> {
         }
     }
 
+    fn new_collation(user_data: U, func: CollationFunction<U>) -> FnUserData<U> {
+        FnUserData {
+            user_data,
+            func: Some(unsafe { transmute(func) }),
+        }
+    }
+
     unsafe fn scalar_func<R: ToContextResult>(&self) -> ScalarFunction<U, R> {
+        transmute(self.func.unwrap())
+    }
+
+    unsafe fn comparison_func(&self) -> CollationFunction<U> {
         transmute(self.func.unwrap())
     }
 }
@@ -405,4 +470,36 @@ unsafe extern "C" fn aggregate_inverse<F: AggregateFunction>(
     if let Err(e) = agg.inverse(ctx, args) {
         ic.set_result(e);
     }
+}
+
+unsafe extern "C" fn compare<U>(
+    user_data: *mut c_void,
+    len_a: i32,
+    bytes_a: *const c_void,
+    len_b: i32,
+    bytes_b: *const c_void,
+) -> i32 {
+    let user_data = &*(user_data as *const FnUserData<U>);
+    let func = user_data.comparison_func();
+    let a = from_utf8_unchecked(slice::from_raw_parts(bytes_a as *const u8, len_a as _));
+    let b = from_utf8_unchecked(slice::from_raw_parts(bytes_b as *const u8, len_b as _));
+    match func(&user_data.user_data, a, b) {
+        Ordering::Less => -1,
+        Ordering::Equal => 0,
+        Ordering::Greater => 1,
+    }
+}
+
+unsafe extern "C" fn collation_needed<F: Fn(&str)>(
+    user_data: *mut c_void,
+    _db: *mut ffi::sqlite3,
+    _text_rep: i32,
+    name: *const i8,
+) {
+    let func = &*(user_data as *const F);
+    let name = match CStr::from_ptr(name).to_str() {
+        Ok(x) => x,
+        Err(_) => return,
+    };
+    func(name);
 }

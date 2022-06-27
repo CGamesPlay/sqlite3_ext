@@ -16,7 +16,7 @@ fn process_args(args: &[&ValueRef]) -> Result<Vec<Option<BigDecimal>>> {
 
 macro_rules! scalar_method {
     ($name:ident as ( $a:ident, $b:ident ) -> $ty:ty => $ret:expr) => {
-        fn $name(_: &Context<()>, args: &[&ValueRef]) -> Result<Option<$ty>> {
+        fn $name(_: &Context, args: &[&ValueRef]) -> Result<Option<$ty>> {
             let mut args = process_args(args)?.into_iter();
             let a = args.next().unwrap_or(None);
             let b = args.next().unwrap_or(None);
@@ -45,26 +45,25 @@ struct Sum {
     cur: BigDecimal,
 }
 
-impl AggregateFunction for Sum {
-    type UserData = ();
+impl AggregateFunction<()> for Sum {
     type Output = Option<String>;
 
-    fn default_value(_: &Context<()>) -> Self::Output {
+    fn default_value(_: &(), _: &Context) -> Self::Output {
         None
     }
 
-    fn step(&mut self, _: &Context<()>, args: &[&ValueRef]) -> Result<()> {
+    fn step(&mut self, _: &Context, args: &[&ValueRef]) -> Result<()> {
         if let Some(x) = process_value(args.first().unwrap())? {
             self.cur += x;
         }
         Ok(())
     }
 
-    fn value(&self, _: &Context<()>) -> Self::Output {
+    fn value(&self, _: &Context) -> Self::Output {
         Some(format!("{}", self.cur.normalized()))
     }
 
-    fn inverse(&mut self, _: &Context<()>, args: &[&ValueRef]) -> Result<()> {
+    fn inverse(&mut self, _: &Context, args: &[&ValueRef]) -> Result<()> {
         if let Some(x) = process_value(args.first().unwrap())? {
             self.cur -= x;
         }
@@ -72,7 +71,7 @@ impl AggregateFunction for Sum {
     }
 }
 
-fn decimal_collation(_: &(), a: &str, b: &str) -> Ordering {
+fn decimal_collation(a: &str, b: &str) -> Ordering {
     let a = BigDecimal::from_str(a).unwrap_or_else(|_| BigDecimal::default());
     let b = BigDecimal::from_str(b).unwrap_or_else(|_| BigDecimal::default());
     a.cmp(&b)
@@ -84,14 +83,13 @@ fn init(db: &Connection) -> Result<()> {
         .set_risk_level(RiskLevel::Innocuous)
         .set_deterministic(true)
         .set_n_args(2);
-    db.create_scalar_function("decimal_add", &opts, decimal_add, ())?;
-    db.create_scalar_function("decimal_sub", &opts, decimal_sub, ())?;
-    db.create_scalar_function("decimal_mul", &opts, decimal_mul, ())?;
-    db.create_scalar_function("decimal_cmp", &opts, decimal_cmp, ())?;
-    db.create_scalar_function("decimal_cmp", &opts, decimal_cmp, ())?;
+    db.create_scalar_function("decimal_add", &opts, decimal_add)?;
+    db.create_scalar_function("decimal_sub", &opts, decimal_sub)?;
+    db.create_scalar_function("decimal_mul", &opts, decimal_mul)?;
+    db.create_scalar_function("decimal_cmp", &opts, decimal_cmp)?;
     let opts = opts.set_n_args(1);
-    db.create_aggregate_function::<Sum>("decimal_sum", &opts, ())?;
-    db.create_collation("decimal", decimal_collation, ())?;
+    db.create_aggregate_function::<_, Sum>("decimal_sum", &opts, ())?;
+    db.create_collation("decimal", decimal_collation)?;
     Ok(())
 }
 

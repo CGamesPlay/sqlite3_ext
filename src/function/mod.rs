@@ -7,7 +7,7 @@ pub use context::*;
 use std::{
     cmp::Ordering,
     ffi::{c_void, CStr, CString},
-    mem::{drop, transmute},
+    mem::drop,
     ptr::null_mut,
     slice,
     str::from_utf8_unchecked,
@@ -15,80 +15,96 @@ use std::{
 
 mod context;
 
-type ScalarFunction<UserData, Return> = fn(&Context<UserData>, &[&ValueRef]) -> Return;
-type CollationFunction<UserData> = fn(&UserData, &str, &str) -> Ordering;
+/// Constructor for aggregate functions.
+///
+/// Aggregate functions are instantiated using user data provided when the function is
+/// registered. There is a blanket implementation for types implementing [Default] for cases
+/// where user data is not required.
+pub trait FromUserData<T> {
+    /// Construct a new instance based on the provided user data.
+    fn from_user_data(data: &T) -> Self;
+}
 
 /// Implement an application-defined aggregate function which cannot be used as a window
 /// function.
 ///
 /// In general, there is no reason to implement this trait instead of [AggregateFunction],
 /// because the latter provides a blanket implementation of the former.
-pub trait LegacyAggregateFunction: Default {
-    /// The type of data that is provided to the function when it is created.
-    type UserData;
+pub trait LegacyAggregateFunction<UserData>: FromUserData<UserData> {
     /// The output type of the function.
     type Output: ToContextResult;
 
     /// Return the default value of the aggregate function.
     ///
     /// This method is called when the aggregate function is invoked over an empty set of
-    /// rows. The default implementation is equivalent to `Self::default().value(context)`.
-    fn default_value(context: &Context<Self::UserData>) -> Self::Output {
-        Self::default().value(context)
+    /// rows. The default implementation is equivalent to
+    /// `Self::from_user_data(user_data).value(context)`.
+    fn default_value(user_data: &UserData, context: &Context) -> Self::Output
+    where
+        Self: Sized,
+    {
+        Self::from_user_data(user_data).value(context)
     }
 
     /// Add a new row to the aggregate.
-    fn step(&mut self, context: &Context<Self::UserData>, args: &[&ValueRef]) -> Result<()>;
+    fn step(&mut self, context: &Context, args: &[&ValueRef]) -> Result<()>;
 
     /// Return the current value of the aggregate function.
-    fn value(&self, context: &Context<Self::UserData>) -> Self::Output;
+    fn value(&self, context: &Context) -> Self::Output;
 }
 
 /// Implement an application-defined aggregate window function.
 ///
 /// The function can be registered with a database connection using
 /// [Connection::create_aggregate_function].
-pub trait AggregateFunction: Default {
-    /// The type of data that is provided to the function when it is created.
-    type UserData;
+pub trait AggregateFunction<UserData>: FromUserData<UserData> {
     /// The output type of the function.
     type Output: ToContextResult;
 
     /// Return the default value of the aggregate function.
     ///
     /// This method is called when the aggregate function is invoked over an empty set of
-    /// rows. The default implementation is equivalent to `Self::default().value(context)`.
-    fn default_value(context: &Context<Self::UserData>) -> Self::Output {
-        Self::default().value(context)
+    /// rows. The default implementation is equivalent to
+    /// `Self::from_user_data(user_data).value(context)`.
+    fn default_value(user_data: &UserData, context: &Context) -> Self::Output
+    where
+        Self: Sized,
+    {
+        Self::from_user_data(user_data).value(context)
     }
 
     /// Add a new row to the aggregate.
-    fn step(&mut self, context: &Context<Self::UserData>, args: &[&ValueRef]) -> Result<()>;
+    fn step(&mut self, context: &Context, args: &[&ValueRef]) -> Result<()>;
 
     /// Return the current value of the aggregate function.
-    fn value(&self, context: &Context<Self::UserData>) -> Self::Output;
+    fn value(&self, context: &Context) -> Self::Output;
 
     /// Remove the oldest presently aggregated row.
     ///
     /// The args are the same that were passed to [AggregateFunction::step] when this row
     /// was added.
-    fn inverse(&mut self, context: &Context<Self::UserData>, args: &[&ValueRef]) -> Result<()>;
+    fn inverse(&mut self, context: &Context, args: &[&ValueRef]) -> Result<()>;
 }
 
-impl<T: AggregateFunction> LegacyAggregateFunction for T {
-    type UserData = T::UserData;
+impl<U, F: Default> FromUserData<U> for F {
+    fn from_user_data(_: &U) -> F {
+        F::default()
+    }
+}
+
+impl<U, T: AggregateFunction<U>> LegacyAggregateFunction<U> for T {
     type Output = T::Output;
 
-    fn default_value(context: &Context<Self::UserData>) -> Self::Output {
-        <T as AggregateFunction>::default_value(context)
+    fn default_value(user_data: &U, context: &Context) -> Self::Output {
+        <T as AggregateFunction<U>>::default_value(user_data, context)
     }
 
-    fn step(&mut self, context: &Context<Self::UserData>, args: &[&ValueRef]) -> Result<()> {
-        <T as AggregateFunction>::step(self, context, args)
+    fn step(&mut self, context: &Context, args: &[&ValueRef]) -> Result<()> {
+        <T as AggregateFunction<U>>::step(self, context, args)
     }
 
-    fn value(&self, context: &Context<Self::UserData>) -> Self::Output {
-        <T as AggregateFunction>::value(self, context)
+    fn value(&self, context: &Context) -> Self::Output {
+        <T as AggregateFunction<U>>::value(self, context)
     }
 }
 
@@ -168,24 +184,19 @@ impl FunctionOptions {
 impl Connection {
     /// Create a new scalar function.
     ///
-    /// The function will be available under the given name. The user_data parameter is
-    /// used to associate an additional value with the function, which will be made
-    /// available using [Context::user_data].
-    ///
     /// # Compatibility
     ///
-    /// On versions of SQLite earlier than 3.7.3, this function will leak the user data
-    /// plus 8 bytes of memory. This is because these versions of SQLite did not provide
-    /// the ability to specify a destructor function.
-    pub fn create_scalar_function<U, R: ToContextResult>(
+    /// On versions of SQLite earlier than 3.7.3, this function will leak the function and
+    /// all bound variables. This is because these versions of SQLite did not provide the
+    /// ability to specify a destructor function.
+    pub fn create_scalar_function<R: ToContextResult, F: Fn(&Context, &[&ValueRef]) -> R>(
         &self,
         name: &str,
         opts: &FunctionOptions,
-        func: ScalarFunction<U, R>,
-        user_data: U,
+        func: F,
     ) -> Result<()> {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
-        let user_data = Box::new(FnUserData::new_scalar(user_data, func));
+        let func = Box::new(func);
         unsafe {
             sqlite3_require_version!(
                 3_007_003,
@@ -195,11 +206,11 @@ impl Connection {
                         name.as_ptr() as _,
                         opts.n_args,
                         opts.flags,
-                        Box::into_raw(user_data) as _,
-                        Some(call_scalar::<U, R>),
+                        Box::into_raw(func) as _,
+                        Some(call_scalar::<R, F>),
                         None,
                         None,
-                        Some(ffi::drop_boxed::<FnUserData<U>>),
+                        Some(ffi::drop_boxed::<F>),
                     ))
                 },
                 {
@@ -208,8 +219,8 @@ impl Connection {
                         name.as_ptr() as _,
                         opts.n_args,
                         opts.flags,
-                        Box::into_raw(user_data) as _,
-                        Some(call_scalar::<U, R>),
+                        Box::into_raw(func) as _,
+                        Some(call_scalar::<R, F>),
                         None,
                         None,
                     ))
@@ -227,17 +238,17 @@ impl Connection {
     ///
     /// # Compatibility
     ///
-    /// On versions of SQLite earlier than 3.7.3, this function will leak the user data
-    /// plus 8 bytes of memory. This is because these versions of SQLite did not provide
-    /// the ability to specify a destructor function.
-    pub fn create_legacy_aggregate_function<F: LegacyAggregateFunction>(
+    /// On versions of SQLite earlier than 3.7.3, this function will leak the user data.
+    /// This is because these versions of SQLite did not provide the ability to specify a
+    /// destructor function.
+    pub fn create_legacy_aggregate_function<U, F: LegacyAggregateFunction<U>>(
         &self,
         name: &str,
         opts: &FunctionOptions,
-        user_data: F::UserData,
+        user_data: U,
     ) -> Result<()> {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
-        let user_data = Box::new(FnUserData::new_aggregate(user_data));
+        let user_data = Box::new(user_data);
         unsafe {
             sqlite3_require_version!(
                 3_007_003,
@@ -249,9 +260,9 @@ impl Connection {
                         opts.flags,
                         Box::into_raw(user_data) as _,
                         None,
-                        Some(aggregate_step::<F>),
-                        Some(aggregate_final::<F>),
-                        Some(ffi::drop_boxed::<FnUserData<F::UserData>>),
+                        Some(aggregate_step::<U, F>),
+                        Some(aggregate_final::<U, F>),
+                        Some(ffi::drop_boxed::<U>),
                     ))
                 },
                 {
@@ -262,8 +273,8 @@ impl Connection {
                         opts.flags,
                         Box::into_raw(user_data) as _,
                         None,
-                        Some(aggregate_step::<F>),
-                        Some(aggregate_final::<F>),
+                        Some(aggregate_step::<U, F>),
+                        Some(aggregate_final::<U, F>),
                     ))
                 }
             )
@@ -272,26 +283,22 @@ impl Connection {
 
     /// Create a new aggregate function.
     ///
-    /// Aggregate functions are similar to scalar ones; see
-    /// [create_scalar_function](Connection::create_scalar_function) for a discussion about
-    /// the parameters.
-    ///
     /// # Compatibility
     ///
     /// Window functions require SQLite 3.25.0. On earlier versions of SQLite, this
     /// function will automatically fall back to
     /// [create_legacy_aggregate_function](Connection::create_legacy_aggregate_function).
-    pub fn create_aggregate_function<F: AggregateFunction>(
+    pub fn create_aggregate_function<U, F: AggregateFunction<U>>(
         &self,
         name: &str,
         opts: &FunctionOptions,
-        user_data: F::UserData,
+        user_data: U,
     ) -> Result<()> {
         sqlite3_require_version!(
             3_025_000,
             {
                 let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
-                let user_data = Box::new(FnUserData::new_aggregate(user_data));
+                let user_data = Box::new(user_data);
                 unsafe {
                     Error::from_sqlite(ffi::sqlite3_create_window_function(
                         self.as_ptr(),
@@ -299,15 +306,15 @@ impl Connection {
                         opts.n_args,
                         opts.flags,
                         Box::into_raw(user_data) as _,
-                        Some(aggregate_step::<F>),
-                        Some(aggregate_final::<F>),
-                        Some(aggregate_value::<F>),
-                        Some(aggregate_inverse::<F>),
-                        Some(ffi::drop_boxed::<FnUserData<F::UserData>>),
+                        Some(aggregate_step::<U, F>),
+                        Some(aggregate_final::<U, F>),
+                        Some(aggregate_value::<U, F>),
+                        Some(aggregate_inverse::<U, F>),
+                        Some(ffi::drop_boxed::<U>),
                     ))
                 }
             },
-            self.create_legacy_aggregate_function::<F>(name, opts, user_data)
+            self.create_legacy_aggregate_function::<U, F>(name, opts, user_data)
         )
     }
 
@@ -329,28 +336,26 @@ impl Connection {
     }
 
     /// Register a new collating sequence.
-    pub fn create_collation<U>(
+    pub fn create_collation<F: Fn(&str, &str) -> Ordering>(
         &self,
         name: &str,
-        func: CollationFunction<U>,
-        user_data: U,
+        func: F,
     ) -> Result<()> {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
-        let user_data = Box::new(FnUserData::new_collation(user_data, func));
+        let func = Box::into_raw(Box::new(func));
         unsafe {
-            let user_data = Box::into_raw(user_data);
             let rc = ffi::sqlite3_create_collation_v2(
                 self.as_ptr(),
                 name.as_ptr() as _,
                 ffi::SQLITE_UTF8,
-                user_data as _,
-                Some(compare::<U>),
-                Some(ffi::drop_boxed::<FnUserData<U>>),
+                func as _,
+                Some(compare::<F>),
+                Some(ffi::drop_boxed::<F>),
             );
             if rc != ffi::SQLITE_OK {
                 // The xDestroy callback is not called if the
                 // sqlite3_create_collation_v2() function fails.
-                drop(Box::from_raw(user_data));
+                drop(Box::from_raw(func));
             }
             Error::from_sqlite(rc)
         }
@@ -375,49 +380,12 @@ impl Connection {
     }
 }
 
-struct FnUserData<U> {
-    user_data: U,
-    func: Option<fn()>,
-}
-
-impl<U> FnUserData<U> {
-    fn new_scalar<R: ToContextResult>(user_data: U, func: ScalarFunction<U, R>) -> FnUserData<U> {
-        FnUserData {
-            user_data,
-            func: Some(unsafe { transmute(func) }),
-        }
-    }
-
-    fn new_aggregate(user_data: U) -> FnUserData<U> {
-        FnUserData {
-            user_data,
-            func: None,
-        }
-    }
-
-    fn new_collation(user_data: U, func: CollationFunction<U>) -> FnUserData<U> {
-        FnUserData {
-            user_data,
-            func: Some(unsafe { transmute(func) }),
-        }
-    }
-
-    unsafe fn scalar_func<R: ToContextResult>(&self) -> ScalarFunction<U, R> {
-        transmute(self.func.unwrap())
-    }
-
-    unsafe fn comparison_func(&self) -> CollationFunction<U> {
-        transmute(self.func.unwrap())
-    }
-}
-
-unsafe extern "C" fn call_scalar<U, R: ToContextResult>(
+unsafe extern "C" fn call_scalar<R: ToContextResult, F: Fn(&Context, &[&ValueRef]) -> R>(
     context: *mut ffi::sqlite3_context,
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
 ) {
-    let user_data = &*(ffi::sqlite3_user_data(context) as *const FnUserData<U>);
-    let func = user_data.scalar_func::<R>();
+    let func = &*(ffi::sqlite3_user_data(context) as *const F);
     let ic = InternalContext::from_ptr(context);
     let ctx = Context::from_ptr(context);
     let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
@@ -425,65 +393,66 @@ unsafe extern "C" fn call_scalar<U, R: ToContextResult>(
     ic.set_result(ret);
 }
 
-unsafe extern "C" fn aggregate_step<F: LegacyAggregateFunction>(
+unsafe extern "C" fn aggregate_step<U, F: LegacyAggregateFunction<U>>(
     context: *mut ffi::sqlite3_context,
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
 ) {
     let ic = InternalContext::from_ptr(context);
     let ctx = Context::from_ptr(context);
-    let agg = ic.aggregate_context::<F>().unwrap();
+    let agg = ic.aggregate_context::<U, F>().unwrap();
     let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
     if let Err(e) = agg.step(ctx, args) {
         ic.set_result(e);
     }
 }
 
-unsafe extern "C" fn aggregate_final<F: LegacyAggregateFunction>(
+unsafe extern "C" fn aggregate_final<U, F: LegacyAggregateFunction<U>>(
     context: *mut ffi::sqlite3_context,
 ) {
     let ic = InternalContext::from_ptr(context);
     let ctx = Context::from_ptr(context);
-    match ic.try_aggregate_context::<F>() {
+    match ic.try_aggregate_context::<U, F>() {
         Some(agg) => ic.set_result(agg.value(ctx)),
-        None => ic.set_result(F::default_value(ctx)),
+        None => ic.set_result(F::default_value(ic.user_data(), ctx)),
     };
 }
 
-unsafe extern "C" fn aggregate_value<F: AggregateFunction>(context: *mut ffi::sqlite3_context) {
+unsafe extern "C" fn aggregate_value<U, F: AggregateFunction<U>>(
+    context: *mut ffi::sqlite3_context,
+) {
     let ic = InternalContext::from_ptr(context);
     let ctx = Context::from_ptr(context);
-    let agg = ic.aggregate_context::<F>().unwrap();
+    let agg = ic.aggregate_context::<U, F>().unwrap();
     let ret = agg.value(ctx);
     ic.set_result(ret);
 }
 
-unsafe extern "C" fn aggregate_inverse<F: AggregateFunction>(
+unsafe extern "C" fn aggregate_inverse<U, F: AggregateFunction<U>>(
     context: *mut ffi::sqlite3_context,
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
 ) {
     let ic = InternalContext::from_ptr(context);
     let ctx = Context::from_ptr(context);
-    let agg = ic.aggregate_context::<F>().unwrap();
+    let agg = ic.aggregate_context::<U, F>().unwrap();
     let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
     if let Err(e) = agg.inverse(ctx, args) {
         ic.set_result(e);
     }
 }
 
-unsafe extern "C" fn compare<U>(
-    user_data: *mut c_void,
+unsafe extern "C" fn compare<F: Fn(&str, &str) -> Ordering>(
+    func: *mut c_void,
     len_a: i32,
     bytes_a: *const c_void,
     len_b: i32,
     bytes_b: *const c_void,
 ) -> i32 {
-    let user_data = &*(user_data as *const FnUserData<U>);
-    let func = user_data.comparison_func();
+    let func = &*(func as *const F);
     let a = from_utf8_unchecked(slice::from_raw_parts(bytes_a as *const u8, len_a as _));
     let b = from_utf8_unchecked(slice::from_raw_parts(bytes_b as *const u8, len_b as _));
-    match func(&user_data.user_data, a, b) {
+    match func(a, b) {
         Ordering::Less => -1,
         Ordering::Equal => 0,
         Ordering::Greater => 1,

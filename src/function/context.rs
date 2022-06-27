@@ -1,11 +1,10 @@
 use super::{
     super::{ffi, sqlite3_require_version, types::*, value::*, Connection},
-    FnUserData,
+    FromUserData,
 };
 use std::{
     any::TypeId,
     ffi::CString,
-    marker::PhantomData,
     mem::{size_of, MaybeUninit},
 };
 
@@ -16,9 +15,8 @@ pub(crate) struct InternalContext {
 
 /// Describes the run-time environment of an application-defined function.
 #[repr(transparent)]
-pub struct Context<UserData> {
+pub struct Context {
     base: ffi::sqlite3_context,
-    phantom: PhantomData<UserData>,
 }
 
 struct AggregateContext<T> {
@@ -44,25 +42,29 @@ impl InternalContext {
         unsafe { val.assign_to(self.as_ptr()) };
     }
 
+    pub unsafe fn user_data<U>(&self) -> &U {
+        &*(ffi::sqlite3_user_data(self.as_ptr()) as *const U)
+    }
+
     /// Get the aggregate context, returning a mutable reference to it.
-    pub(crate) unsafe fn aggregate_context<T: Default>(&mut self) -> Result<&mut T> {
+    pub unsafe fn aggregate_context<U, F: FromUserData<U>>(&mut self) -> Result<&mut F> {
         let ptr =
-            ffi::sqlite3_aggregate_context(self.as_ptr(), size_of::<AggregateContext<T>>() as _)
-                as *mut AggregateContext<T>;
+            ffi::sqlite3_aggregate_context(self.as_ptr(), size_of::<AggregateContext<F>>() as _)
+                as *mut AggregateContext<F>;
         if ptr.is_null() {
             return Err(Error::no_memory());
         }
         let context = &mut *ptr;
         if !context.init {
-            context.val = MaybeUninit::new(T::default());
+            context.val = MaybeUninit::new(F::from_user_data(self.user_data()));
             context.init = true;
         }
         Ok(context.val.assume_init_mut())
     }
 
     /// Try to get the aggregate context, consuming it if it is found.
-    pub(crate) unsafe fn try_aggregate_context<T: Default>(&mut self) -> Option<T> {
-        let ptr = ffi::sqlite3_aggregate_context(self.as_ptr(), 0 as _) as *mut AggregateContext<T>;
+    pub unsafe fn try_aggregate_context<U, F: FromUserData<U>>(&mut self) -> Option<F> {
+        let ptr = ffi::sqlite3_aggregate_context(self.as_ptr(), 0 as _) as *mut AggregateContext<F>;
         if ptr.is_null() {
             return None;
         }
@@ -76,7 +78,7 @@ impl InternalContext {
     }
 }
 
-impl<U> Context<U> {
+impl Context {
     pub(crate) fn as_ptr<'a>(&self) -> *mut ffi::sqlite3_context {
         &self.base as *const ffi::sqlite3_context as _
     }
@@ -88,16 +90,6 @@ impl<U> Context<U> {
     /// Return a handle to the current database.
     pub fn db(&self) -> &Connection {
         unsafe { Connection::from_ptr(ffi::sqlite3_context_db_handle(self.as_ptr())) }
-    }
-
-    /// Return the data associated with this function.
-    ///
-    /// This method returns a reference to the value originally passed when this function
-    /// was created.
-    pub fn user_data(&self) -> &U {
-        let user_data =
-            unsafe { &*(ffi::sqlite3_user_data(self.as_ptr()) as *const FnUserData<U>) };
-        &user_data.user_data
     }
 
     /// Retrieve data about a function parameter that was previously set with

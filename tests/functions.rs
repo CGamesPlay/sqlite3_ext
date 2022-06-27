@@ -1,12 +1,7 @@
 use sqlite3_ext::{function::*, *};
-use std::cmp::Ordering;
-
-fn user_data(context: &Context<&'static str>, _: &[&ValueRef]) -> &'static str {
-    context.user_data()
-}
 
 // Returns the number of times that the first argument has been passed to the function.
-fn aux_data(context: &Context<()>, _: &[&ValueRef]) -> i64 {
+fn aux_data(context: &Context, _: &[&ValueRef]) -> i64 {
     match context.aux_data::<i64>(0) {
         Some(x) => {
             *x += 1;
@@ -19,39 +14,36 @@ fn aux_data(context: &Context<()>, _: &[&ValueRef]) -> i64 {
     }
 }
 
-#[derive(Default)]
 struct Agg {
+    sep: &'static str,
     acc: Vec<String>,
 }
 
-impl AggregateFunction for Agg {
-    type UserData = &'static str;
+impl FromUserData<&'static str> for Agg {
+    fn from_user_data(val: &&'static str) -> Self {
+        Agg {
+            sep: *val,
+            acc: vec![],
+        }
+    }
+}
+
+impl AggregateFunction<&'static str> for Agg {
     type Output = String;
 
-    fn step(&mut self, _: &Context<Self::UserData>, args: &[&ValueRef]) -> Result<()> {
+    fn step(&mut self, _: &Context, args: &[&ValueRef]) -> Result<()> {
         self.acc.push(args[0].get_str()?.unwrap_or("").to_owned());
         Ok(())
     }
 
-    fn value(&self, context: &Context<Self::UserData>) -> Self::Output {
-        self.acc.join(context.user_data())
+    fn value(&self, _: &Context) -> Self::Output {
+        self.acc.join(self.sep)
     }
 
-    fn inverse(&mut self, _: &Context<Self::UserData>, _: &[&ValueRef]) -> Result<()> {
+    fn inverse(&mut self, _: &Context, _: &[&ValueRef]) -> Result<()> {
         self.acc.remove(0);
         Ok(())
     }
-}
-
-fn rot13_collation(_: &(), a: &str, b: &str) -> Ordering {
-    fn rot13(c: char) -> char {
-        match c {
-            'A'..='M' | 'a'..='m' => ((c as u8) + 13) as char,
-            'N'..='Z' | 'n'..='z' => ((c as u8) - 13) as char,
-            _ => c,
-        }
-    }
-    a.chars().map(rot13).cmp(b.chars().map(rot13))
 }
 
 #[sqlite3_ext_main]
@@ -60,16 +52,27 @@ fn init(db: &Connection) -> Result<()> {
         .set_risk_level(RiskLevel::Innocuous)
         .set_deterministic(true)
         .set_n_args(0);
-    db.create_scalar_function("user_data_foo", &opts, user_data, "foo")?;
-    db.create_scalar_function("user_data_bar", &opts, user_data, "bar")?;
+    let user_data = "foo";
+    db.create_scalar_function("user_data", &opts, move |_, _| user_data)?;
+
     let opts = opts.set_n_args(2);
-    db.create_scalar_function("aux_data", &opts, aux_data, ())?;
+    db.create_scalar_function("aux_data", &opts, aux_data)?;
+
     let opts = opts.set_n_args(1);
-    db.create_aggregate_function::<Agg>("join_str", &opts, "|")?;
+    db.create_aggregate_function::<_, Agg>("join_str", &opts, "|")?;
+
     db.set_collation_needed_func(|name| {
-        println!("collation needed: {:?}", name);
         if name == "rot13" {
-            let _ = db.create_collation(name, rot13_collation, ());
+            let _ = db.create_collation(name, |a, b| {
+                fn rot13(c: char) -> char {
+                    match c {
+                        'A'..='M' | 'a'..='m' => ((c as u8) + 13) as char,
+                        'N'..='Z' | 'n'..='z' => ((c as u8) - 13) as char,
+                        _ => c,
+                    }
+                }
+                a.chars().map(rot13).cmp(b.chars().map(rot13))
+            });
         }
     })?;
     Ok(())
@@ -104,10 +107,7 @@ mod test {
 
     #[test]
     fn user_data() -> rusqlite::Result<()> {
-        case(vec![
-            ("user_data_foo()", Some("foo".to_owned())),
-            ("user_data_bar()", Some("bar".to_owned())),
-        ])?;
+        case(vec![("user_data()", Some("foo".to_owned()))])?;
         case(vec![(
             "join_str(column1) FROM ( VALUES ('a'), ('1'), (NULL) )",
             Some("a|1|".to_owned()),

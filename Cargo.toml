@@ -45,7 +45,7 @@ crate-type = [ "staticlib", "cdylib" ]
 test = true
 
 [[example]]
-name = "bigdecimal"
+name = "decimal"
 required-features = [ "bigdecimal" ]
 crate-type = [ "staticlib", "cdylib" ]
 test = true

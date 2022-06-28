@@ -1,4 +1,4 @@
-use super::super::{ffi, function::InternalContext, types::*, value::*, vtab::*, Connection};
+use super::super::{ffi, function::InternalContext, value::*, vtab::*, Connection};
 use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
@@ -34,13 +34,9 @@ macro_rules! vtab_connect {
         ) -> c_int {
             let conn = &*(db as *mut Connection);
             let module = ModuleHandle::<'vtab, T>::from_ptr(module);
-            let args: Result<Vec<&str>> = slice::from_raw_parts(argv, argc as _)
+            let args: std::result::Result<Vec<&str>, _> = slice::from_raw_parts(argv, argc as _)
                 .into_iter()
-                .map(|arg| {
-                    CStr::from_ptr(*arg)
-                        .to_str()
-                        .map_err(|e| Error::Utf8Error(e))
-                })
+                .map(|arg| CStr::from_ptr(*arg).to_str())
                 .collect();
             let args = match args {
                 Ok(x) => x,
@@ -303,9 +299,7 @@ pub unsafe extern "C" fn vtab_rename<'vtab, T: RenameVTab<'vtab> + 'vtab>(
     name: *const i8,
 ) -> c_int {
     let vtab = &mut *(vtab as *mut VTabHandle<T>);
-    let name = CStr::from_ptr(name)
-        .to_str()
-        .map_err(|e| Error::Utf8Error(e));
+    let name = CStr::from_ptr(name).to_str();
     let name = match name {
         Ok(name) => name,
         Err(e) => return ffi::handle_error(e, &mut vtab.base.zErrMsg),

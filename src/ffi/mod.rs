@@ -107,7 +107,8 @@ pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
     }
 }
 
-pub unsafe fn handle_error(err: Error, msg: *mut *mut c_char) -> c_int {
+pub unsafe fn handle_error(err: impl Into<Error>, msg: *mut *mut c_char) -> c_int {
+    let err = err.into();
     if let Error::Sqlite(code) = err {
         if code != SQLITE_OK && code != SQLITE_ROW && code != SQLITE_DONE {
             return code;

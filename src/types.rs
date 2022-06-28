@@ -46,4 +46,10 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+impl From<std::str::Utf8Error> for Error {
+    fn from(err: std::str::Utf8Error) -> Self {
+        Self::Utf8Error(err)
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Error>;

@@ -78,7 +78,7 @@ impl ValueRef {
     pub fn get_str(&self) -> Result<Option<&str>> {
         match self.get_cstr()? {
             None => Ok(None),
-            Some(c) => Ok(Some(c.to_str().map_err(|e| Error::Utf8Error(e))?)),
+            Some(c) => Ok(Some(c.to_str()?)),
         }
     }
 

@@ -19,6 +19,8 @@ sqlite3_ext_macro = { path = "sqlite3_ext_macro" }
 
 [dev-dependencies]
 nom = "7.1.1"
+pretty_assertions = "1.2.1"
+indoc = "1.0"
 
 [build-dependencies]
 proc-macro2 = "1.0"

@@ -3,7 +3,12 @@
 //! For more information, consult [the original implementation](https://sqlite.org/src/file/ext/misc/vtablog.c).
 
 use sqlite3_ext::{vtab::*, *};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    cell::RefCell,
+    fmt::Arguments,
+    io::{stderr, Write},
+    rc::Rc,
+};
 
 enum VTabArg {
     Schema(String),
@@ -47,6 +52,11 @@ mod parsing {
     }
 }
 
+struct DB<O: Write> {
+    out: Rc<RefCell<O>>,
+    n_inst: RefCell<usize>,
+}
+
 #[sqlite3_ext_vtab(
     StandardModule,
     UpdateVTab,
@@ -54,30 +64,40 @@ mod parsing {
     FindFunctionVTab,
     RenameVTab
 )]
-struct VTabLog {
+struct VTabLog<O: Write + 'static> {
+    db: Rc<DB<O>>,
     id: usize,
     num_rows: i64,
     num_cursors: usize,
     num_transactions: usize,
 }
 
-struct VTabLogCursor<'vtab> {
-    vtab: &'vtab VTabLog,
+struct VTabLogCursor<'vtab, O: Write + 'static> {
+    vtab: &'vtab VTabLog<O>,
     id: usize,
     rowid: i64,
 }
 
-struct VTabLogTransaction<'vtab> {
-    vtab: &'vtab VTabLog,
+struct VTabLogTransaction<'vtab, O: Write + 'static> {
+    vtab: &'vtab VTabLog<O>,
     id: usize,
 }
 
-impl VTabLog {
-    fn connect_create(args: &[&str], method: &str) -> Result<(String, Self)> {
-        static N_INST: AtomicUsize = AtomicUsize::new(100);
-        let id = N_INST.fetch_add(100, Ordering::SeqCst);
+impl<O: Write> VTabLog<O> {
+    fn write_fmt(&self, args: Arguments<'_>) -> Result<()> {
+        self.db
+            .out
+            .borrow_mut()
+            .write_fmt(args)
+            .map_err(|e| Error::Module(e.to_string()))
+    }
 
-        println!("{}(tab={}, args={:?})", method, id, args);
+    fn connect_create(db: &Rc<DB<O>>, args: &[&str], method: &str) -> Result<(String, Self)> {
+        let id = {
+            let mut n_inst = db.n_inst.borrow_mut();
+            *n_inst += 100;
+            *n_inst
+        };
 
         let mut num_rows = 0;
         let mut schema = None;
@@ -94,33 +114,38 @@ impl VTabLog {
         }
 
         let schema = schema.ok_or_else(|| Error::Module("schema not provided".to_owned()))?;
+        let vtab = VTabLog {
+            db: db.clone(),
+            id,
+            num_rows,
+            num_cursors: 0,
+            num_transactions: 0,
+        };
 
-        Ok((
-            schema,
-            VTabLog {
-                id,
-                num_rows,
-                num_cursors: 0,
-                num_transactions: 0,
-            },
-        ))
+        writeln!(vtab, "{}(tab={}, args={:?})", method, id, args)?;
+
+        Ok((schema, vtab))
     }
 }
 
-impl<'vtab> VTab<'vtab> for VTabLog {
-    type Aux = ();
-    type Cursor = VTabLogCursor<'vtab>;
+impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
+    type Aux = Rc<DB<O>>;
+    type Cursor = VTabLogCursor<'vtab, O>;
 
     fn connect(
         _: &'vtab mut VTabConnection,
-        _: &'vtab Self::Aux,
+        db: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)> {
-        Self::connect_create(args, "connect")
+        Self::connect_create(db, args, "connect")
     }
 
     fn best_index(&self, index_info: &mut IndexInfo) -> Result<()> {
-        println!("best_index(tab={}, index_info={:?})", self.id, index_info);
+        writeln!(
+            self,
+            "best_index(tab={}, index_info={:?})",
+            self.id, index_info
+        )?;
         Ok(())
     }
 
@@ -131,47 +156,51 @@ impl<'vtab> VTab<'vtab> for VTabLog {
             id: self.id + self.num_cursors,
             rowid: 0,
         };
-        println!("open(tab={}, cursor={})", self.id, ret.id);
+        writeln!(self, "open(tab={}, cursor={})", self.id, ret.id)?;
         Ok(ret)
     }
 }
 
-impl<'vtab> CreateVTab<'vtab> for VTabLog {
+impl<'vtab, O: Write + 'static> CreateVTab<'vtab> for VTabLog<O> {
     const SHADOW_NAMES: &'static [&'static str] = &["shadow"];
 
     fn create(
         _: &'vtab mut VTabConnection,
-        _: &'vtab Self::Aux,
+        db: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)> {
-        Self::connect_create(args, "create")
+        Self::connect_create(db, args, "create")
     }
 
     fn destroy(&mut self) -> Result<()> {
-        println!("destroy(tab={})", self.id);
+        writeln!(self, "destroy(tab={})", self.id)?;
         Ok(())
     }
 }
 
-impl<'vtab> UpdateVTab<'vtab> for VTabLog {
+impl<'vtab, O: Write + 'static> UpdateVTab<'vtab> for VTabLog<O> {
     fn insert(&mut self, args: &[&ValueRef]) -> Result<i64> {
-        println!("insert(tab={}, args={:?})", self.id, args);
+        writeln!(self, "insert(tab={}, args={:?})", self.id, args)?;
         Ok(1)
     }
 
     fn update(&mut self, rowid: &ValueRef, args: &[&ValueRef]) -> Result<()> {
-        println!("update(tab={}, rowid={:?}, args={:?}", self.id, rowid, args);
+        writeln!(
+            self,
+            "update(tab={}, rowid={:?}, args={:?}",
+            self.id, rowid, args
+        )?;
         Ok(())
     }
 
     fn delete(&mut self, rowid: &ValueRef) -> Result<()> {
-        println!("delete(tab={}, rowid={:?})", self.id, rowid);
+        writeln!(self, "delete(tab={}, rowid={:?})", self.id, rowid)?;
         Ok(())
     }
 }
 
-impl<'vtab> TransactionVTab<'vtab> for VTabLog {
-    type Transaction = VTabLogTransaction<'vtab>;
+impl<'vtab, O: Write + 'static> TransactionVTab<'vtab> for VTabLog<O> {
+    type Transaction = VTabLogTransaction<'vtab, O>;
 
     fn begin(&'vtab mut self) -> Result<Self::Transaction> {
         self.num_transactions += 1;
@@ -179,62 +208,60 @@ impl<'vtab> TransactionVTab<'vtab> for VTabLog {
             vtab: self,
             id: self.id + self.num_transactions,
         };
-        println!("begin(tab={}, transaction={})", self.id, ret.id);
+        writeln!(self, "begin(tab={}, transaction={})", self.id, ret.id)?;
         Ok(ret)
     }
 }
 
-impl<'vtab> FindFunctionVTab<'vtab> for VTabLog {}
+impl<'vtab, O: Write + 'static> FindFunctionVTab<'vtab> for VTabLog<O> {}
 
-impl<'vtab> RenameVTab<'vtab> for VTabLog {
+impl<'vtab, O: Write + 'static> RenameVTab<'vtab> for VTabLog<O> {
     fn rename(&mut self, name: &str) -> Result<()> {
-        println!("rename(tab={}, name={:?})", self.id, name);
+        writeln!(self, "rename(tab={}, name={:?})", self.id, name)?;
         Ok(())
     }
 }
 
-impl Drop for VTabLog {
+impl<O: Write> Drop for VTabLog<O> {
     fn drop(&mut self) {
-        println!("drop(tab={})", self.id);
+        writeln!(self, "drop(tab={})", self.id).unwrap();
     }
 }
 
-impl Drop for VTabLogTransaction<'_> {
-    fn drop(&mut self) {
-        println!(
-            "drop_transaction(tab={}, transaction={})",
-            self.vtab.id, self.id
-        );
-    }
-}
-
-impl VTabCursor for VTabLogCursor<'_> {
+impl<O: Write> VTabCursor for VTabLogCursor<'_, O> {
     type ColumnType = String;
 
     fn filter(&mut self, _: usize, _: Option<&str>, args: &[&ValueRef]) -> Result<()> {
-        println!(
+        writeln!(
+            self.vtab,
             "filter(tab={}, cursor={}, args={:?})",
             self.vtab.id, self.id, args
-        );
+        )?;
         self.rowid = 0;
         Ok(())
     }
 
     fn next(&mut self) -> Result<()> {
-        println!(
+        writeln!(
+            self.vtab,
             "next(tab={}, cursor={})\n  rowid {} -> {}",
             self.vtab.id,
             self.id,
             self.rowid,
             self.rowid + 1
-        );
+        )?;
         self.rowid += 1;
         Ok(())
     }
 
     fn eof(&self) -> bool {
         let ret = self.rowid >= self.vtab.num_rows;
-        println!("eof(tab={}, cursor={}) -> {}", self.vtab.id, self.id, ret);
+        writeln!(
+            self.vtab,
+            "eof(tab={}, cursor={}) -> {}",
+            self.vtab.id, self.id, ret
+        )
+        .unwrap();
         ret
     }
 
@@ -244,137 +271,111 @@ impl VTabCursor for VTabLogCursor<'_> {
             .get(idx)
             .map(|l| format!("{}{}", *l as char, self.rowid))
             .unwrap_or_else(|| format!("{{{}}}{}", idx, self.rowid));
-        println!(
+        writeln!(
+            self.vtab,
             "column(tab={}, cursor={}, idx={}) -> {:?}",
             self.vtab.id, self.id, idx, ret
-        );
+        )
+        .unwrap();
         ret
     }
 
     fn rowid(&self) -> Result<i64> {
-        println!(
+        writeln!(
+            self.vtab,
             "rowid(tab={}, cursor={}) -> {}",
             self.vtab.id, self.id, self.rowid
-        );
+        )?;
         Ok(self.rowid)
     }
 }
 
-impl Drop for VTabLogCursor<'_> {
+impl<O: Write> Drop for VTabLogCursor<'_, O> {
     fn drop(&mut self) {
-        println!("drop(tab={}, cursor={})", self.vtab.id, self.id);
+        writeln!(self.vtab, "drop(tab={}, cursor={})", self.vtab.id, self.id).unwrap();
     }
 }
 
-impl<'vtab> VTabTransaction for VTabLogTransaction<'vtab> {
+impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
     fn sync(&mut self) -> Result<()> {
-        println!("sync(tab={}, transaction={})", self.vtab.id, self.id);
+        writeln!(
+            self.vtab,
+            "sync(tab={}, transaction={})",
+            self.vtab.id, self.id
+        )?;
         Ok(())
     }
 
     fn commit(self) -> Result<()> {
-        println!("commit(tab={}, transaction={})", self.vtab.id, self.id);
+        writeln!(
+            self.vtab,
+            "commit(tab={}, transaction={})",
+            self.vtab.id, self.id
+        )?;
         Ok(())
     }
 
     fn rollback(self) -> Result<()> {
-        println!("rollback(tab={}, transaction={})", self.vtab.id, self.id);
+        writeln!(
+            self.vtab,
+            "rollback(tab={}, transaction={})",
+            self.vtab.id, self.id
+        )?;
         Ok(())
     }
 
     fn savepoint(&mut self, n: i32) -> Result<()> {
-        println!(
+        writeln!(
+            self.vtab,
             "savepoint(tab={}, transaction={}, n={})",
             self.vtab.id, self.id, n
-        );
+        )?;
         Ok(())
     }
 
     fn release(&mut self, n: i32) -> Result<()> {
-        println!(
+        writeln!(
+            self.vtab,
             "release(tab={}, transaction={}, n={})",
             self.vtab.id, self.id, n
-        );
+        )?;
         Ok(())
     }
 
     fn rollback_to(&mut self, n: i32) -> Result<()> {
-        println!(
+        writeln!(
+            self.vtab,
             "rollback_to(tab={}, transaction={}, n={})",
             self.vtab.id, self.id, n
-        );
+        )?;
         Ok(())
+    }
+}
+
+impl<O: Write> Drop for VTabLogTransaction<'_, O> {
+    fn drop(&mut self) {
+        writeln!(
+            self.vtab,
+            "drop_transaction(tab={}, transaction={})",
+            self.vtab.id, self.id
+        )
+        .unwrap();
     }
 }
 
 #[sqlite3_ext_main]
-fn init(db: &Connection) -> Result<()> {
-    db.create_module("vtablog", VTabLog::module(), ())?;
+fn init_stderr(db: &Connection) -> Result<()> {
+    init(db, Rc::new(RefCell::new(stderr())))
+}
+
+fn init<O: Write + 'static>(db: &Connection, out: Rc<RefCell<O>>) -> Result<()> {
+    let aux = Rc::new(DB {
+        out,
+        n_inst: RefCell::new(0),
+    });
+    db.create_module("vtablog", VTabLog::module(), aux)?;
     Ok(())
 }
 
 #[cfg(all(test, feature = "static"))]
-mod test {
-    use super::*;
-    use rusqlite;
-
-    fn setup() -> rusqlite::Result<rusqlite::Connection> {
-        let conn = rusqlite::Connection::open_in_memory()?;
-        init(Connection::from_rusqlite(&conn))?;
-        conn.execute(
-            "CREATE VIRTUAL TABLE temp.log USING vtablog(schema='CREATE TABLE x(a,b,c)', rows=3)",
-            [],
-        )?;
-        Ok(conn)
-    }
-
-    #[test]
-    fn read() -> rusqlite::Result<()> {
-        let conn = setup()?;
-        let ret = conn
-            .prepare("SELECT * FROM log")?
-            .query_map([], |row| {
-                Ok(vec![
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                ])
-            })?
-            .into_iter()
-            .collect::<rusqlite::Result<Vec<Vec<String>>>>()?;
-        assert_eq!(
-            ret,
-            (0..3)
-                .map(|i| vec![format!("a{}", i), format!("b{}", i), format!("c{}", i)])
-                .collect::<Vec<Vec<String>>>()
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn update() -> rusqlite::Result<()> {
-        let conn = setup()?;
-        conn.execute("UPDATE log SET a = b WHERE rowid = 1", [])?;
-        Ok(())
-    }
-
-    #[test]
-    fn rename() -> rusqlite::Result<()> {
-        let conn = setup()?;
-        conn.execute("ALTER TABLE log RENAME to newname", [])?;
-        Ok(())
-    }
-
-    #[test]
-    fn shadow_name() -> rusqlite::Result<()> {
-        sqlite3_require_version!(3_026_000, {}, {
-            return Ok(());
-        });
-        let conn = setup()?;
-        conn.set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
-        match conn.execute("CREATE TABLE log_shadow (a, b, c)", []) {
-            Err(_) => Ok(()),
-            _ => panic!("expected error, got ok"),
-        }
-    }
-}
+mod test;

@@ -40,33 +40,6 @@ where
     #[doc(hidden)]
     fn module(&mut self) -> &mut ffi::sqlite3_module;
 
-    /// Register this virtual table module with the provided connection.
-    fn register(mut self, db: &Connection, name: &str, aux: T::Aux) -> Result<()>
-    where
-        // Aux data has to live as long as the module is registered. We could lower
-        // this from 'static by adding a 'db lifetime parameter to Connection and
-        // threading that around everywhere, but wrapping the type in an Rc is
-        // generally a better solution anyways.
-        T::Aux: 'static,
-    {
-        let name = CString::new(name).unwrap();
-        let vtab = self.module().clone();
-        let handle = Box::new(ModuleHandle::<'vtab, T> { vtab, aux });
-        let rc = unsafe {
-            ffi::sqlite3_create_module_v2(
-                db.as_ptr(),
-                name.as_ptr() as _,
-                &handle.vtab,
-                Box::into_raw(handle) as _,
-                Some(ffi::drop_boxed::<ModuleHandle<T>>),
-            )
-        };
-        match rc {
-            ffi::SQLITE_OK => Ok(()),
-            _ => Err(Error::Sqlite(rc)),
-        }
-    }
-
     #[doc(hidden)]
     fn with_update(mut self) -> Self
     where
@@ -281,17 +254,35 @@ impl<'vtab, T: VTab<'vtab>> EponymousOnlyModule<'vtab, T> {
 }
 
 impl Connection {
-    /// A convenience method which calls [Module::register](vtab::Module::register) on the
-    /// vtab.
-    pub fn create_module<'vtab, T: VTab<'vtab> + 'vtab>(
+    /// Register the provided virtual table module with this connection.
+    pub fn create_module<'vtab, T: VTab<'vtab> + 'vtab, M: Module<'vtab, T> + 'vtab>(
         &self,
         name: &str,
-        vtab: impl Module<'vtab, T> + 'vtab,
+        mut vtab: M,
         aux: T::Aux,
     ) -> Result<()>
     where
+        // Aux data has to live as long as the module is registered. We could lower
+        // this from 'static by adding a 'db lifetime parameter to Connection and
+        // threading that around everywhere, but wrapping the type in an Rc is
+        // generally a better solution anyways.
         T::Aux: 'static,
     {
-        vtab.register(self, name, aux)
+        let name = CString::new(name).unwrap();
+        let vtab = vtab.module().clone();
+        let handle = Box::new(ModuleHandle::<'vtab, T> { vtab, aux });
+        let rc = unsafe {
+            ffi::sqlite3_create_module_v2(
+                self.as_ptr(),
+                name.as_ptr() as _,
+                &handle.vtab,
+                Box::into_raw(handle) as _,
+                Some(ffi::drop_boxed::<ModuleHandle<T>>),
+            )
+        };
+        match rc {
+            ffi::SQLITE_OK => Ok(()),
+            _ => Err(Error::Sqlite(rc)),
+        }
     }
 }

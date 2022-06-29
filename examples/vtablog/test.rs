@@ -212,6 +212,7 @@ fn delete() -> rusqlite::Result<()> {
 fn rename() -> rusqlite::Result<()> {
     let (conn, out) = setup()?;
     conn.execute("ALTER TABLE log RENAME to newname", [])?;
+    conn.execute("DROP TABLE newname", [])?;
     drop(conn);
     let out = from_utf8(&out.borrow()).unwrap().to_owned();
     let expected = indoc! {r#"
@@ -222,6 +223,9 @@ fn rename() -> rusqlite::Result<()> {
         drop_transaction(tab=100, transaction=101)
         rename(tab=100, name="newname")
         drop(tab=100)
+        connect(tab=200, args=["vtablog", "temp", "newname", "schema='CREATE TABLE x(a,b,c)'", "rows=3"])
+        destroy(tab=200)
+        drop(tab=200)
     "#};
     assert_eq!(out, expected);
     Ok(())

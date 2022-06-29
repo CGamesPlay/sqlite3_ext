@@ -40,8 +40,8 @@ pub(crate) mod stubs;
 pub trait VTab<'vtab> {
     /// Additional data associated with the virtual table module.
     ///
-    /// When registering the module with [Module::register], additional data can be passed
-    /// as a parameter. This data will be passed to [connect](VTab::connect) and
+    /// When registering the module with [Connection::create_module], additional data can
+    /// be passed as a parameter. This data will be passed to [connect](VTab::connect) and
     /// [create](CreateVTab::create). It can be used for any purpose.
     type Aux;
 

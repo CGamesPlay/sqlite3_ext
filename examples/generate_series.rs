@@ -4,9 +4,9 @@
 
 use sqlite3_ext::{vtab::*, *};
 
-const COLUMN_START: usize = 1;
-const COLUMN_STOP: usize = 2;
-const COLUMN_STEP: usize = 3;
+const COLUMN_START: i32 = 1;
+const COLUMN_STOP: i32 = 2;
+const COLUMN_STEP: i32 = 3;
 
 #[sqlite3_ext_vtab(EponymousModule)]
 struct GenerateSeries {}
@@ -53,7 +53,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
             if constraint.column() < COLUMN_START {
                 continue;
             }
-            let bit = constraint.column() - COLUMN_START;
+            let bit = (constraint.column() - COLUMN_START) as usize;
             assert!(bit <= 2);
             if constraint.column() == COLUMN_START {
                 has_start = true;
@@ -192,7 +192,7 @@ impl VTabCursor for Cursor {
     }
 
     fn column(&self, idx: usize) -> i64 {
-        match idx {
+        match idx as _ {
             COLUMN_START => self.min_value,
             COLUMN_STOP => self.max_value,
             COLUMN_STEP => self.step,

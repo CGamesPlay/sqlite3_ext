@@ -21,6 +21,8 @@ sqlite3_ext_macro = { path = "sqlite3_ext_macro" }
 nom = "7.1.1"
 pretty_assertions = "1.2.1"
 indoc = "1.0"
+regex = "1.5.6"
+lazy_static = "1.4.0"
 
 [build-dependencies]
 proc-macro2 = "1.0"
@@ -30,10 +32,6 @@ quote = "1.0"
 
 [[test]]
 name = "read_only"
-required-features = [ "static" ]
-
-[[test]]
-name = "update"
 required-features = [ "static" ]
 
 [[example]]

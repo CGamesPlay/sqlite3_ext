@@ -319,11 +319,13 @@ version = "0.1.0"
 dependencies = [
  "bigdecimal",
  "indoc",
+ "lazy_static",
  "libsqlite3-sys",
  "nom",
  "pretty_assertions",
  "proc-macro2",
  "quote",
+ "regex",
  "rusqlite",
  "sealed",
  "sqlite3_ext_macro",

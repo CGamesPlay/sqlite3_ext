@@ -176,7 +176,8 @@ impl IndexInfo {
 }
 
 impl IndexInfoConstraint {
-    pub fn column(&self) -> usize {
+    /// 0-based index of columns. The rowid column is index -1.
+    pub fn column(&self) -> i32 {
         self.base.iColumn as _
     }
 
@@ -192,7 +193,7 @@ impl IndexInfoConstraint {
 }
 
 impl IndexInfoOrderBy {
-    pub fn column(&self) -> usize {
+    pub fn column(&self) -> i32 {
         self.base.iColumn as _
     }
 

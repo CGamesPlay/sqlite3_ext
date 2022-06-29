@@ -92,9 +92,9 @@ impl<O: Write> VTabLog<O> {
             .map_err(|e| Error::Module(e.to_string()))
     }
 
-    fn connect_create(db: &Rc<DB<O>>, args: &[&str], method: &str) -> Result<(String, Self)> {
+    fn connect_create(aux: &Rc<DB<O>>, args: &[&str], method: &str) -> Result<(String, Self)> {
         let id = {
-            let mut n_inst = db.n_inst.borrow_mut();
+            let mut n_inst = aux.n_inst.borrow_mut();
             *n_inst += 100;
             *n_inst
         };
@@ -115,7 +115,7 @@ impl<O: Write> VTabLog<O> {
 
         let schema = schema.ok_or_else(|| Error::Module("schema not provided".to_owned()))?;
         let vtab = VTabLog {
-            db: db.clone(),
+            db: aux.clone(),
             id,
             num_rows,
             num_cursors: 0,
@@ -132,11 +132,7 @@ impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
     type Aux = Rc<DB<O>>;
     type Cursor = VTabLogCursor<'vtab, O>;
 
-    fn connect(
-        _: &'vtab mut VTabConnection,
-        db: &'vtab Self::Aux,
-        args: &[&str],
-    ) -> Result<(String, Self)> {
+    fn connect(_: &mut VTabConnection, db: &Self::Aux, args: &[&str]) -> Result<(String, Self)> {
         Self::connect_create(db, args, "connect")
     }
 
@@ -164,11 +160,7 @@ impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
 impl<'vtab, O: Write + 'static> CreateVTab<'vtab> for VTabLog<O> {
     const SHADOW_NAMES: &'static [&'static str] = &["shadow"];
 
-    fn create(
-        _: &'vtab mut VTabConnection,
-        db: &'vtab Self::Aux,
-        args: &[&str],
-    ) -> Result<(String, Self)> {
+    fn create(_: &mut VTabConnection, db: &Self::Aux, args: &[&str]) -> Result<(String, Self)> {
         Self::connect_create(db, args, "create")
     }
 

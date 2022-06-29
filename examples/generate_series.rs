@@ -17,7 +17,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
 
     fn connect(
         db: &mut VTabConnection,
-        _aux: &'vtab Self::Aux,
+        _aux: &Self::Aux,
         _args: &[&str],
     ) -> Result<(String, Self)> {
         let _ = db.set_risk(RiskLevel::Innocuous);
@@ -109,7 +109,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
         Ok(())
     }
 
-    fn open(&'vtab mut self) -> Result<Self::Cursor> {
+    fn open(&mut self) -> Result<Self::Cursor> {
         Ok(Cursor::default())
     }
 }

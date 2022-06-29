@@ -312,16 +312,3 @@ impl VTabConnection {
         })
     }
 }
-
-/// Handle to the module and aux data, so that it can be properly dropped when the module is
-/// unloaded.
-pub(crate) struct ModuleHandle<'vtab, T: VTab<'vtab>> {
-    pub vtab: ffi::sqlite3_module,
-    pub aux: T::Aux,
-}
-
-impl<'vtab, T: VTab<'vtab>> ModuleHandle<'vtab, T> {
-    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a ModuleHandle<'vtab, T> {
-        &*(ptr as *mut ModuleHandle<'vtab, T>)
-    }
-}

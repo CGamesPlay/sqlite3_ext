@@ -28,6 +28,19 @@ fn set_version(m: &mut ffi::sqlite3_module, val: i32) {
     m.iVersion = max(m.iVersion, val);
 }
 
+/// Handle to the module and aux data, so that it can be properly dropped when the module is
+/// unloaded.
+pub(super) struct Handle<'vtab, T: VTab<'vtab>> {
+    pub vtab: ffi::sqlite3_module,
+    pub aux: T::Aux,
+}
+
+impl<'vtab, T: VTab<'vtab>> Handle<'vtab, T> {
+    pub unsafe fn from_ptr<'a>(ptr: *mut c_void) -> &'a Self {
+        &*(ptr as *mut Self)
+    }
+}
+
 /// A virtual table module.
 ///
 /// You generally do not need to use this trait directly, see
@@ -270,14 +283,14 @@ impl Connection {
     {
         let name = CString::new(name).unwrap();
         let vtab = vtab.module().clone();
-        let handle = Box::new(ModuleHandle::<'vtab, T> { vtab, aux });
+        let handle = Box::new(Handle::<'vtab, T> { vtab, aux });
         let rc = unsafe {
             ffi::sqlite3_create_module_v2(
                 self.as_ptr(),
                 name.as_ptr() as _,
                 &handle.vtab,
                 Box::into_raw(handle) as _,
-                Some(ffi::drop_boxed::<ModuleHandle<T>>),
+                Some(ffi::drop_boxed::<Handle<T>>),
             )
         };
         match rc {

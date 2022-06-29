@@ -33,7 +33,7 @@ macro_rules! vtab_connect {
             err_msg: *mut *mut i8,
         ) -> c_int {
             let conn = &*(db as *mut Connection);
-            let module = ModuleHandle::<'vtab, T>::from_ptr(module);
+            let module = module::Handle::<'vtab, T>::from_ptr(module);
             let args: std::result::Result<Vec<&str>, _> = slice::from_raw_parts(argv, argc as _)
                 .into_iter()
                 .map(|arg| CStr::from_ptr(*arg).to_str())

@@ -41,7 +41,14 @@ where
     fn module(&mut self) -> &mut ffi::sqlite3_module;
 
     /// Register this virtual table module with the provided connection.
-    fn register(mut self, db: &Connection, name: &str, aux: T::Aux) -> Result<()> {
+    fn register(mut self, db: &Connection, name: &str, aux: T::Aux) -> Result<()>
+    where
+        // Aux data has to live as long as the module is registered. We could lower
+        // this from 'static by adding a 'db lifetime parameter to Connection and
+        // threading that around everywhere, but wrapping the type in an Rc is
+        // generally a better solution anyways.
+        T::Aux: 'static,
+    {
         let name = CString::new(name).unwrap();
         let vtab = self.module().clone();
         let handle = Box::new(ModuleHandle::<'vtab, T> { vtab, aux });
@@ -270,5 +277,21 @@ impl<'vtab, T: VTab<'vtab>> EponymousOnlyModule<'vtab, T> {
         } else {
             Err(Error::VersionNotSatisfied(MIN_VERSION))
         }
+    }
+}
+
+impl Connection {
+    /// A convenience method which calls [Module::register](vtab::Module::register) on the
+    /// vtab.
+    pub fn create_module<'vtab, T: VTab<'vtab> + 'vtab>(
+        &self,
+        name: &str,
+        vtab: impl Module<'vtab, T> + 'vtab,
+        aux: T::Aux,
+    ) -> Result<()>
+    where
+        T::Aux: 'static,
+    {
+        vtab.register(self, name, aux)
     }
 }

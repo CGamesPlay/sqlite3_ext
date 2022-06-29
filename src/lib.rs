@@ -31,17 +31,6 @@ impl Connection {
         &mut *(db as *mut Connection)
     }
 
-    /// A convenience method which calls [Module::register](vtab::Module::register) on the
-    /// vtab.
-    pub fn create_module<'vtab, T: vtab::VTab<'vtab> + 'vtab>(
-        &self,
-        name: &str,
-        vtab: impl vtab::Module<'vtab, T> + 'vtab,
-        aux: T::Aux,
-    ) -> Result<()> {
-        vtab.register(self, name, aux)
-    }
-
     fn as_ptr(&self) -> *mut ffi::sqlite3 {
         &self.db as *const ffi::sqlite3 as _
     }

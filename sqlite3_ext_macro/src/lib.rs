@@ -1,6 +1,6 @@
 use ext_attr::*;
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use regex::Regex;
 use std::mem::replace;
 use syn::{punctuated::Punctuated, *};
@@ -42,7 +42,7 @@ mod kw {
 #[proc_macro_attribute]
 pub fn sqlite3_ext_main(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr = proc_macro2::TokenStream::from(attr);
-    let item = parse_macro_input!(item as syn::ItemFn);
+    let item = parse_macro_input!(item as ItemFn);
     let crate_name = std::env::var("CARGO_CRATE_NAME").unwrap();
     let export_base = crate_name.to_lowercase();
     let export_base = Regex::new("[^a-z]").unwrap().replace_all(&export_base, "");
@@ -115,8 +115,8 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
     }
-    let mut item = parse_macro_input!(item as syn::ItemFn);
-    let extension_vis = replace(&mut item.vis, syn::Visibility::Inherited);
+    let mut item = parse_macro_input!(item as ItemFn);
+    let extension_vis = replace(&mut item.vis, Visibility::Inherited);
     let name = item.sig.ident.clone();
     let load_result = match persistent {
         None => quote!(::sqlite3_ext::ffi::SQLITE_OK),
@@ -245,9 +245,63 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
             return ret;
         }
     };
-    let item = parse_macro_input!(item as syn::ItemStruct);
-    let struct_ident = &item.ident;
+    let item = parse_macro_input!(item as ItemStruct);
     let struct_generics = &item.generics;
+    let impl_arguments = if struct_generics.params.is_empty() {
+        None
+    } else {
+        Some(AngleBracketedGenericArguments {
+            colon2_token: None,
+            lt_token: token::Lt::default(),
+            args: struct_generics
+                .params
+                .iter()
+                .map(|gp| match gp {
+                    GenericParam::Type(t) => {
+                        GenericArgument::Type(Type::Verbatim(t.ident.to_token_stream()))
+                    }
+                    GenericParam::Lifetime(l) => GenericArgument::Lifetime(l.lifetime.clone()),
+                    GenericParam::Const(c) => {
+                        GenericArgument::Const(Expr::Verbatim(c.ident.to_token_stream()))
+                    }
+                })
+                .collect(),
+            gt_token: token::Gt::default(),
+        })
+    };
+    let struct_generic_def = {
+        let mut segments = Punctuated::default();
+        segments.push_value(PathSegment {
+            ident: item.ident.clone(),
+            arguments: impl_arguments
+                .map(PathArguments::AngleBracketed)
+                .unwrap_or(PathArguments::None),
+        });
+        Type::Path(TypePath {
+            qself: None,
+            path: Path {
+                leading_colon: None,
+                segments,
+            },
+        })
+    };
+    let lifetime = quote!('sqlite3_ext_vtab);
+    let lifetime_bounds: Punctuated<_, Token![+]> = struct_generics
+        .params
+        .iter()
+        .filter_map(|gp| {
+            if let GenericParam::Lifetime(LifetimeDef { lifetime, .. }) = gp {
+                Some(lifetime)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let lifetime_bounds = if lifetime_bounds.is_empty() {
+        quote!()
+    } else {
+        quote!(: #lifetime_bounds)
+    };
     let base = match attr.base {
         VTabBase::Standard(_) => quote!(::sqlite3_ext::vtab::StandardModule),
         VTabBase::Eponymous(_) => quote!(::sqlite3_ext::vtab::EponymousModule),
@@ -256,9 +310,9 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut expr = quote!(#base::<Self>::new());
     let ret = if let VTabBase::EponymousOnly(_) = attr.base {
         expr.extend(quote!(?));
-        quote!(::sqlite3_ext::Result<#base<'a, Self>>)
+        quote!(::sqlite3_ext::Result<#base<#lifetime, Self>>)
     } else {
-        quote!(#base<'a, Self>)
+        quote!(#base<#lifetime, Self>)
     };
     for t in attr.additional {
         match t {
@@ -275,10 +329,10 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
         #item
 
         #[automatically_derived]
-        impl #struct_ident #struct_generics {
+        impl #struct_generics #struct_generic_def {
             /// Return the [Module](::sqlite3_ext::vtab::Module) associated with
             /// this virtual table.
-            pub fn module<'a>() -> #ret {
+            pub fn module<#lifetime #lifetime_bounds> () -> #ret {
                 use ::sqlite3_ext::vtab::*;
                 #expr
             }
@@ -290,7 +344,7 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[doc(hidden)]
 #[proc_macro]
 pub fn sqlite3_ext_doctest_impl(item: TokenStream) -> TokenStream {
-    let item = parse_macro_input!(item as syn::Ident);
+    let item = parse_macro_input!(item as Ident);
     let expanded = quote! {
         impl<'vtab> ::sqlite3_ext::vtab::VTab<'vtab> for #item {
             type Aux = ();

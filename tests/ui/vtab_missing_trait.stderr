@@ -1,0 +1,18 @@
+error[E0277]: the trait bound `MyVTab: VTab<'sqlite3_ext_vtab>` is not satisfied
+   --> tests/ui/vtab_missing_trait.rs:3:1
+    |
+3   | #[sqlite3_ext_vtab(StandardModule)]
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `VTab<'sqlite3_ext_vtab>` is not implemented for `MyVTab`
+    |
+note: required by a bound in `StandardModule`
+   --> src/vtab/module.rs
+    |
+    | / module_base!(
+    | |     /// Declare a virtual table.
+    | |     ///
+    | |     /// See [sqlite_ext_vtab](::sqlite3_ext_macro::sqlite3_ext_vtab) for details on how to
+...   |
+    | |     }
+    | | });
+    | |__^ required by this bound in `StandardModule`
+    = note: this error originates in the attribute macro `sqlite3_ext_vtab` (in Nightly builds, run with -Z macro-backtrace for more info)

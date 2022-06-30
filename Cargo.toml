@@ -23,6 +23,7 @@ pretty_assertions = "1.2.1"
 indoc = "1.0"
 regex = "1.5.6"
 lazy_static = "1.4.0"
+trybuild = "1.0.63"
 
 [build-dependencies]
 proc-macro2 = "1.0"

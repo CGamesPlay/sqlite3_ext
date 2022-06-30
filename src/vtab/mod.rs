@@ -148,7 +148,24 @@ pub trait TransactionVTab<'vtab>: UpdateVTab<'vtab> {
     fn begin(&'vtab mut self) -> Result<Self::Transaction>;
 }
 
+/// A virtual table that overloads some functions.
+///
+/// A virtual table implementation may choose to overload certain functions when the first
+/// argument to the function refers to a column in the virtual table. To do this, add a
+/// [VTabFunctionList] to the virtual table struct and return a reference to it from the
+/// [functions][FindFunctionVTab::functions] method. When a function uses a column from this
+/// virtual table as its first argument, the returned list will be checked to see if the
+/// virtual table would like to overload the function.
+///
+/// Overloading additionally allows the virtual table to indicate that the virtual table is
+/// able to exploit the function to speed up a query result. For this to work, the function
+/// must take exactly two arguments and appear as a boolean in the WHERE clause of a query. The
+/// [ConstraintOp] supplied with the function will then be provided as an [IndexInfoConstraint]
+/// to [VTab::best_index]. This feature additionally requires SQLite 3.25.0.
+///
+/// For more details, see [the SQLite documentation](https://www.sqlite.org/vtab.html#the_xfindfunction_method).
 pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
+    /// Retrieve a reference to the [VTabFunctionList] associated with this virtual table.
     fn functions(&'vtab self) -> &'vtab VTabFunctionList<'vtab, Self>;
 }
 

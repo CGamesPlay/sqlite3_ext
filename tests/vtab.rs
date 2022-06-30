@@ -9,16 +9,15 @@ struct TestCursor {
 
 impl<'vtab> TestVTab<'vtab> {
     fn connect_create() -> Result<(String, Self)> {
-        let mut functions = VTabFunctionList::default();
-        functions.add(2, "like", Self::custom_method);
+        let functions = VTabFunctionList::default();
+        functions.add_method(1, "my_func", None, Self::custom_method);
         Ok((
             "CREATE TABLE x ( value INTEGER NOT NULL )".to_owned(),
             TestVTab { functions },
         ))
     }
 
-    fn custom_method(&self, _ctx: &Context, args: &[&ValueRef]) -> bool {
-        println!("custom_method({:?}", args);
+    fn custom_method(&self, _: &Context, _: &[&ValueRef]) -> bool {
         true
     }
 }
@@ -143,14 +142,17 @@ fn standard_vtab() -> rusqlite::Result<()> {
 #[test]
 fn find_function() -> rusqlite::Result<()> {
     let conn = rusqlite::Connection::open_in_memory()?;
-    Connection::from_rusqlite(&conn).create_module(
-        "standard_vtab",
-        StandardModule::<TestVTab>::new().with_find_function(),
-        (),
-    )?;
+    {
+        let conn = Connection::from_rusqlite(&conn);
+        conn.create_module(
+            "standard_vtab",
+            StandardModule::<TestVTab>::new().with_find_function(),
+            (),
+        )?;
+        conn.create_overloaded_function("my_func", &FunctionOptions::default().set_n_args(1))?;
+    }
     conn.execute("CREATE VIRTUAL TABLE tbl USING standard_vtab()", [])?;
-    conn.query_row("SELECT value FROM tbl WHERE like(value, 'foo')", [], |_| {
-        Ok(())
-    })?;
+    conn.query_row("SELECT value FROM tbl WHERE my_func(value)", [], |_| Ok(()))?;
+    conn.query_row("SELECT value FROM tbl WHERE my_func(value)", [], |_| Ok(()))?;
     Ok(())
 }

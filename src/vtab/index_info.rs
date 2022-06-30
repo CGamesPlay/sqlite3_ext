@@ -1,27 +1,5 @@
 use super::super::{ffi, sqlite3_require_version, types::*};
-use std::{ffi::CStr, mem::transmute, ptr, slice};
-
-#[repr(u8)]
-#[derive(Debug, PartialEq)]
-pub enum ConstraintOp {
-    Eq = 2,
-    GT = 4,
-    LE = 8,
-    LT = 16,
-    GE = 32,
-    Match = 64,
-    Like = 65,      /* 3.10.0 and later */
-    Glob = 66,      /* 3.10.0 and later */
-    Regexp = 67,    /* 3.10.0 and later */
-    NE = 68,        /* 3.21.0 and later */
-    IsNot = 69,     /* 3.21.0 and later */
-    IsNotNull = 70, /* 3.21.0 and later */
-    IsNull = 71,    /* 3.21.0 and later */
-    Is = 72,        /* 3.21.0 and later */
-    Limit = 73,     /* 3.38.0 and later */
-    Offset = 74,    /* 3.38.0 and later */
-    Function = 150, /* 3.25.0 and later */
-}
+use std::{ffi::CStr, ptr, slice};
 
 #[repr(transparent)]
 pub struct IndexInfo {
@@ -41,6 +19,27 @@ pub struct IndexInfoOrderBy {
 #[repr(transparent)]
 pub struct IndexInfoConstraintUsage {
     base: ffi::sqlite3_index_info_sqlite3_index_constraint_usage,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ConstraintOp {
+    Eq,
+    GT,
+    LE,
+    LT,
+    GE,
+    Match,
+    Like,         /* 3.10.0 and later */
+    Glob,         /* 3.10.0 and later */
+    Regexp,       /* 3.10.0 and later */
+    NE,           /* 3.21.0 and later */
+    IsNot,        /* 3.21.0 and later */
+    IsNotNull,    /* 3.21.0 and later */
+    IsNull,       /* 3.21.0 and later */
+    Is,           /* 3.21.0 and later */
+    Limit,        /* 3.38.0 and later */
+    Offset,       /* 3.38.0 and later */
+    Function(u8), /* 3.25.0 and later */
 }
 
 impl IndexInfo {
@@ -182,7 +181,7 @@ impl IndexInfoConstraint {
     }
 
     pub fn op(&self) -> ConstraintOp {
-        unsafe { transmute(self.base.op) }
+        ConstraintOp::from_sqlite(self.base.op)
     }
 
     // XXX - what happens if you use it anyways?
@@ -272,5 +271,39 @@ impl std::fmt::Debug for IndexInfoConstraintUsage {
             .field("argv_index", &self.argv_index())
             .field("omit", &self.omit())
             .finish()
+    }
+}
+
+impl ConstraintOp {
+    pub(crate) fn assert_valid_function_constraint(&self) {
+        if let ConstraintOp::Function(val) = *self {
+            if val >= 150 {
+                return;
+            }
+        }
+        panic!("invalid function constraint")
+    }
+
+    fn from_sqlite(val: u8) -> ConstraintOp {
+        match val as _ {
+            2 => ConstraintOp::Eq,
+            4 => ConstraintOp::GT,
+            8 => ConstraintOp::LE,
+            16 => ConstraintOp::LT,
+            32 => ConstraintOp::GE,
+            64 => ConstraintOp::Match,
+            65 => ConstraintOp::Like,
+            66 => ConstraintOp::Glob,
+            67 => ConstraintOp::Regexp,
+            68 => ConstraintOp::NE,
+            69 => ConstraintOp::IsNot,
+            70 => ConstraintOp::IsNotNull,
+            71 => ConstraintOp::IsNull,
+            72 => ConstraintOp::Is,
+            73 => ConstraintOp::Limit,
+            74 => ConstraintOp::Offset,
+            150..=255 => ConstraintOp::Function(val),
+            _ => panic!("invalid constraint op"),
+        }
     }
 }

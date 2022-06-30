@@ -181,6 +181,27 @@ impl FunctionOptions {
 }
 
 impl Connection {
+    /// Create a stub function that always fails.
+    ///
+    /// This API makes sure a global version of a function with a particular name and
+    /// number of parameters exists. If no such function exists before this API is called,
+    /// a new function is created. The implementation of the new function always causes an
+    /// exception to be thrown. So the new function is not good for anything by itself. Its
+    /// only purpose is to be a placeholder function that can be overloaded by a virtual
+    /// table.
+    ///
+    /// For more information, see [vtab::FindFunctionVTab](super::vtab::FindFunctionVTab).
+    pub fn create_overloaded_function(&self, name: &str, opts: &FunctionOptions) -> Result<()> {
+        let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
+        unsafe {
+            Error::from_sqlite(ffi::sqlite3_overload_function(
+                self.as_ptr(),
+                name.as_ptr() as _,
+                opts.n_args,
+            ))
+        }
+    }
+
     /// Create a new scalar function.
     ///
     /// # Compatibility
@@ -188,7 +209,10 @@ impl Connection {
     /// On versions of SQLite earlier than 3.7.3, this function will leak the function and
     /// all bound variables. This is because these versions of SQLite did not provide the
     /// ability to specify a destructor function.
-    pub fn create_scalar_function<R: ToContextResult, F: Fn(&Context, &[&ValueRef]) -> R>(
+    pub fn create_scalar_function<
+        R: ToContextResult,
+        F: Fn(&Context, &[&ValueRef]) -> R + 'static,
+    >(
         &self,
         name: &str,
         opts: &FunctionOptions,

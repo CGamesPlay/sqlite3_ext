@@ -268,12 +268,14 @@ pub unsafe extern "C" fn vtab_find_function<'vtab, T: FindFunctionVTab<'vtab> + 
         Err(e) => return ffi::handle_error(e, &mut vtab.base.zErrMsg),
     };
     let functions = vtab.vtab.functions();
-    match functions.find(n_args, name) {
-        Some(f) => {
-            *p_func = Some(f.c_func);
-            f.vtab.set(Some(&vtab.vtab));
-            *p_user_data = f as *const _ as *mut _;
-            1
+    match functions.find(&vtab.vtab, n_args, name) {
+        Some(((func, user_data), constraint)) => {
+            *p_func = Some(func);
+            *p_user_data = user_data;
+            match constraint {
+                Some(ConstraintOp::Function(x)) => x as _,
+                _ => 1,
+            }
         }
         None => 0,
     }

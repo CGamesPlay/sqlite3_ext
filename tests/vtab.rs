@@ -1,18 +1,29 @@
-use sqlite3_ext::{vtab::*, *};
+use sqlite3_ext::{function::*, vtab::*, *};
 
-struct TestVTab {}
-struct TestCursor {}
+struct TestVTab<'vtab> {
+    functions: VTabFunctionList<'vtab, Self>,
+}
+struct TestCursor {
+    eof: bool,
+}
 
-impl<'vtab> TestVTab {
+impl<'vtab> TestVTab<'vtab> {
     fn connect_create() -> Result<(String, Self)> {
+        let mut functions = VTabFunctionList::default();
+        functions.add(2, "like", Self::custom_method);
         Ok((
             "CREATE TABLE x ( value INTEGER NOT NULL )".to_owned(),
-            TestVTab {},
+            TestVTab { functions },
         ))
+    }
+
+    fn custom_method(&self, _ctx: &Context, args: &[&ValueRef]) -> bool {
+        println!("custom_method({:?}", args);
+        true
     }
 }
 
-impl<'vtab> VTab<'vtab> for TestVTab {
+impl<'vtab> VTab<'vtab> for TestVTab<'vtab> {
     type Aux = ();
     type Cursor = TestCursor;
 
@@ -29,11 +40,11 @@ impl<'vtab> VTab<'vtab> for TestVTab {
     }
 
     fn open(&mut self) -> Result<Self::Cursor> {
-        Ok(TestCursor {})
+        Ok(TestCursor { eof: false })
     }
 }
 
-impl<'vtab> CreateVTab<'vtab> for TestVTab {
+impl<'vtab> CreateVTab<'vtab> for TestVTab<'vtab> {
     fn create(
         _db: &mut VTabConnection,
         _aux: &Self::Aux,
@@ -44,6 +55,12 @@ impl<'vtab> CreateVTab<'vtab> for TestVTab {
 
     fn destroy(&mut self) -> Result<()> {
         Ok(())
+    }
+}
+
+impl<'vtab> FindFunctionVTab<'vtab> for TestVTab<'vtab> {
+    fn functions(&self) -> &VTabFunctionList<'vtab, Self> {
+        &self.functions
     }
 }
 
@@ -60,19 +77,18 @@ impl VTabCursor for TestCursor {
     }
 
     fn next(&mut self) -> Result<()> {
-        unreachable!()
+        self.eof = true;
+        Ok(())
     }
 
     fn eof(&self) -> bool {
-        true
+        self.eof
     }
 
-    fn column(&self, _: usize) {
-        unreachable!()
-    }
+    fn column(&self, _: usize) {}
 
     fn rowid(&self) -> Result<i64> {
-        unreachable!()
+        Ok(0)
     }
 }
 
@@ -121,5 +137,20 @@ fn standard_vtab() -> rusqlite::Result<()> {
         .unwrap_err();
     assert_eq!(err.to_string(), "no such table: standard_vtab");
     conn.query_row("SELECT COUNT(*) FROM tbl", [], |_| Ok(()))?;
+    Ok(())
+}
+
+#[test]
+fn find_function() -> rusqlite::Result<()> {
+    let conn = rusqlite::Connection::open_in_memory()?;
+    Connection::from_rusqlite(&conn).create_module(
+        "standard_vtab",
+        StandardModule::<TestVTab>::new().with_find_function(),
+        (),
+    )?;
+    conn.execute("CREATE VIRTUAL TABLE tbl USING standard_vtab()", [])?;
+    conn.query_row("SELECT value FROM tbl WHERE like(value, 'foo')", [], |_| {
+        Ok(())
+    })?;
     Ok(())
 }

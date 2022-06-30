@@ -162,6 +162,7 @@ macro_rules! to_context_result {
 to_context_result! {
     /// Assign NULL to the context result.
     match () as (ctx, _val) => ffi::sqlite3_result_null(ctx),
+    match bool as (ctx, val) => ffi::sqlite3_result_int(ctx, val as i32),
     match i32 as (ctx, val) => ffi::sqlite3_result_int(ctx, val),
     match i64 as (ctx, val) => ffi::sqlite3_result_int64(ctx, val),
     match f64 as (ctx, val) => ffi::sqlite3_result_double(ctx, val),

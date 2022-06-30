@@ -25,10 +25,12 @@ use super::{
     ffi, function::ToContextResult, sqlite3_require_version, types::*, value::*, Connection,
     RiskLevel,
 };
+pub use function::*;
 pub use index_info::*;
 pub use module::*;
 use std::ffi::c_void;
 
+mod function;
 mod index_info;
 mod module;
 pub(crate) mod stubs;
@@ -146,7 +148,9 @@ pub trait TransactionVTab<'vtab>: UpdateVTab<'vtab> {
     fn begin(&'vtab mut self) -> Result<Self::Transaction>;
 }
 
-pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {}
+pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
+    fn functions(&'vtab self) -> &'vtab VTabFunctionList<'vtab, Self>;
+}
 
 /// A virtual table that supports ALTER TABLE RENAME.
 pub trait RenameVTab<'vtab>: VTab<'vtab> {

@@ -9,7 +9,6 @@ use std::{
 #[repr(C)]
 struct VTabHandle<'vtab, T: VTab<'vtab>> {
     base: ffi::sqlite3_vtab,
-    // Declare txn before vtab to drop it first
     vtab: T,
     txn: Option<*mut c_void>,
     phantom: PhantomData<&'vtab T>,
@@ -254,6 +253,32 @@ pub unsafe extern "C" fn vtab_update<'vtab, T: UpdateVTab<'vtab> + 'vtab>(
     }
 }
 
+pub unsafe extern "C" fn vtab_find_function<'vtab, T: FindFunctionVTab<'vtab> + 'vtab>(
+    vtab: *mut ffi::sqlite3_vtab,
+    n_args: c_int,
+    name: *const i8,
+    p_func: *mut Option<
+        unsafe extern "C" fn(*mut ffi::sqlite3_context, c_int, *mut *mut ffi::sqlite3_value),
+    >,
+    p_user_data: *mut *mut ::std::os::raw::c_void,
+) -> c_int {
+    let vtab = &mut *(vtab as *mut VTabHandle<T>);
+    let name = match CStr::from_ptr(name).to_str() {
+        Ok(name) => name,
+        Err(e) => return ffi::handle_error(e, &mut vtab.base.zErrMsg),
+    };
+    let functions = vtab.vtab.functions();
+    match functions.find(n_args, name) {
+        Some(f) => {
+            *p_func = Some(f.c_func);
+            f.vtab.set(Some(&vtab.vtab));
+            *p_user_data = f as *const _ as *mut _;
+            1
+        }
+        None => 0,
+    }
+}
+
 pub unsafe extern "C" fn vtab_begin<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
 ) -> c_int {
@@ -299,8 +324,7 @@ pub unsafe extern "C" fn vtab_rename<'vtab, T: RenameVTab<'vtab> + 'vtab>(
     name: *const i8,
 ) -> c_int {
     let vtab = &mut *(vtab as *mut VTabHandle<T>);
-    let name = CStr::from_ptr(name).to_str();
-    let name = match name {
+    let name = match CStr::from_ptr(name).to_str() {
         Ok(name) => name,
         Err(e) => return ffi::handle_error(e, &mut vtab.base.zErrMsg),
     };

@@ -57,13 +57,7 @@ struct DB<O: Write> {
     n_inst: RefCell<usize>,
 }
 
-#[sqlite3_ext_vtab(
-    StandardModule,
-    UpdateVTab,
-    TransactionVTab,
-    FindFunctionVTab,
-    RenameVTab
-)]
+#[sqlite3_ext_vtab(StandardModule, UpdateVTab, TransactionVTab, RenameVTab)]
 struct VTabLog<O: Write + 'static> {
     db: Rc<DB<O>>,
     id: usize,
@@ -204,8 +198,6 @@ impl<'vtab, O: Write + 'static> TransactionVTab<'vtab> for VTabLog<O> {
         Ok(ret)
     }
 }
-
-impl<'vtab, O: Write + 'static> FindFunctionVTab<'vtab> for VTabLog<O> {}
 
 impl<'vtab, O: Write + 'static> RenameVTab<'vtab> for VTabLog<O> {
     fn rename(&mut self, name: &str) -> Result<()> {

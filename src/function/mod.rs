@@ -7,7 +7,6 @@ pub use context::*;
 use std::{
     cmp::Ordering,
     ffi::{c_void, CStr, CString},
-    mem::drop,
     ptr::null_mut,
     slice,
     str::from_utf8_unchecked,
@@ -385,8 +384,8 @@ unsafe extern "C" fn call_scalar<R: ToContextResult, F: Fn(&Context, &[&ValueRef
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
 ) {
-    let func = &*(ffi::sqlite3_user_data(context) as *const F);
     let ic = InternalContext::from_ptr(context);
+    let func = ic.user_data::<F>();
     let ctx = Context::from_ptr(context);
     let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
     let ret = func(ctx, args);

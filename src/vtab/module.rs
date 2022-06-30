@@ -93,6 +93,7 @@ where
     where
         T: FindFunctionVTab<'vtab>,
     {
+        self.module().xFindFunction = Some(stubs::vtab_find_function::<T>);
         self
     }
 

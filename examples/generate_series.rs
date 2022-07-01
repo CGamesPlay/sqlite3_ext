@@ -127,9 +127,14 @@ struct Cursor {
 impl VTabCursor for Cursor {
     type ColumnType = i64;
 
-    fn filter(&mut self, query_plan: usize, _: Option<&str>, args: &[&ValueRef]) -> Result<()> {
+    fn filter(
+        &mut self,
+        query_plan: usize,
+        _: Option<&str>,
+        args: &mut [&mut ValueRef],
+    ) -> Result<()> {
         let mut query_plan = query_plan;
-        for a in args {
+        for a in args.iter() {
             // If any of the constraints have a NULL value, then return no rows.
             // See ticket https://www.sqlite.org/src/info/fac496b61722daf2
             if let ValueType::Null = a.value_type() {
@@ -137,17 +142,17 @@ impl VTabCursor for Cursor {
                 return Ok(());
             }
         }
-        let mut args = args.iter();
+        let mut args = args.into_iter();
         if query_plan & 1 != 0 {
-            self.min_value = (*args.next().unwrap()).into();
+            self.min_value = (*args.next().unwrap()).get_i64();
         }
         if query_plan & 2 != 0 {
-            self.max_value = (*args.next().unwrap()).into();
+            self.max_value = (*args.next().unwrap()).get_i64();
         } else {
             self.max_value = i64::MAX;
         }
         if query_plan & 4 != 0 {
-            self.step = (*args.next().unwrap()).into();
+            self.step = (*args.next().unwrap()).get_i64();
             if self.step == 0 {
                 self.step = 1;
             } else if self.step < 0 {

@@ -4,15 +4,10 @@
 //! [Connection::create_scalar_function] and [Connection::create_aggregate_function].
 use super::{ffi, sqlite3_require_version, types::*, value::*, Connection, RiskLevel};
 pub use context::*;
-use std::{
-    cmp::Ordering,
-    ffi::{c_void, CStr, CString},
-    ptr::null_mut,
-    slice,
-    str::from_utf8_unchecked,
-};
+use std::{cmp::Ordering, ffi::CString, ptr::null_mut};
 
 mod context;
+mod stubs;
 
 /// Constructor for aggregate functions.
 ///
@@ -46,7 +41,7 @@ pub trait LegacyAggregateFunction<UserData>: FromUserData<UserData> {
     }
 
     /// Add a new row to the aggregate.
-    fn step(&mut self, context: &Context, args: &[&ValueRef]) -> Result<()>;
+    fn step(&mut self, context: &Context, args: &mut [&mut ValueRef]) -> Result<()>;
 
     /// Return the current value of the aggregate function.
     fn value(&self, context: &Context) -> Self::Output;
@@ -73,7 +68,7 @@ pub trait AggregateFunction<UserData>: FromUserData<UserData> {
     }
 
     /// Add a new row to the aggregate.
-    fn step(&mut self, context: &Context, args: &[&ValueRef]) -> Result<()>;
+    fn step(&mut self, context: &Context, args: &mut [&mut ValueRef]) -> Result<()>;
 
     /// Return the current value of the aggregate function.
     fn value(&self, context: &Context) -> Self::Output;
@@ -82,7 +77,7 @@ pub trait AggregateFunction<UserData>: FromUserData<UserData> {
     ///
     /// The args are the same that were passed to [AggregateFunction::step] when this row
     /// was added.
-    fn inverse(&mut self, context: &Context, args: &[&ValueRef]) -> Result<()>;
+    fn inverse(&mut self, context: &Context, args: &mut [&mut ValueRef]) -> Result<()>;
 }
 
 impl<U, F: Default> FromUserData<U> for F {
@@ -98,7 +93,7 @@ impl<U, T: AggregateFunction<U>> LegacyAggregateFunction<U> for T {
         <T as AggregateFunction<U>>::default_value(user_data, context)
     }
 
-    fn step(&mut self, context: &Context, args: &[&ValueRef]) -> Result<()> {
+    fn step(&mut self, context: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
         <T as AggregateFunction<U>>::step(self, context, args)
     }
 
@@ -211,7 +206,7 @@ impl Connection {
     /// ability to specify a destructor function.
     pub fn create_scalar_function<
         R: ToContextResult,
-        F: Fn(&Context, &[&ValueRef]) -> R + 'static,
+        F: Fn(&Context, &mut [&mut ValueRef]) -> R + 'static,
     >(
         &self,
         name: &str,
@@ -230,7 +225,7 @@ impl Connection {
                         opts.n_args,
                         opts.flags,
                         Box::into_raw(func) as _,
-                        Some(call_scalar::<R, F>),
+                        Some(stubs::call_scalar::<R, F>),
                         None,
                         None,
                         Some(ffi::drop_boxed::<F>),
@@ -243,7 +238,7 @@ impl Connection {
                         opts.n_args,
                         opts.flags,
                         Box::into_raw(func) as _,
-                        Some(call_scalar::<R, F>),
+                        Some(stubs::call_scalar::<R, F>),
                         None,
                         None,
                     ))
@@ -283,8 +278,8 @@ impl Connection {
                         opts.flags,
                         Box::into_raw(user_data) as _,
                         None,
-                        Some(aggregate_step::<U, F>),
-                        Some(aggregate_final::<U, F>),
+                        Some(stubs::aggregate_step::<U, F>),
+                        Some(stubs::aggregate_final::<U, F>),
                         Some(ffi::drop_boxed::<U>),
                     ))
                 },
@@ -296,8 +291,8 @@ impl Connection {
                         opts.flags,
                         Box::into_raw(user_data) as _,
                         None,
-                        Some(aggregate_step::<U, F>),
-                        Some(aggregate_final::<U, F>),
+                        Some(stubs::aggregate_step::<U, F>),
+                        Some(stubs::aggregate_final::<U, F>),
                     ))
                 }
             )
@@ -329,10 +324,10 @@ impl Connection {
                         opts.n_args,
                         opts.flags,
                         Box::into_raw(user_data) as _,
-                        Some(aggregate_step::<U, F>),
-                        Some(aggregate_final::<U, F>),
-                        Some(aggregate_value::<U, F>),
-                        Some(aggregate_inverse::<U, F>),
+                        Some(stubs::aggregate_step::<U, F>),
+                        Some(stubs::aggregate_final::<U, F>),
+                        Some(stubs::aggregate_value::<U, F>),
+                        Some(stubs::aggregate_inverse::<U, F>),
                         Some(ffi::drop_boxed::<U>),
                     ))
                 }
@@ -372,7 +367,7 @@ impl Connection {
                 name.as_ptr() as _,
                 ffi::SQLITE_UTF8,
                 func as _,
-                Some(compare::<F>),
+                Some(stubs::compare::<F>),
                 Some(ffi::drop_boxed::<F>),
             );
             if rc != ffi::SQLITE_OK {
@@ -397,101 +392,8 @@ impl Connection {
             Error::from_sqlite(ffi::sqlite3_collation_needed(
                 self.as_ptr(),
                 Box::into_raw(func) as _,
-                Some(collation_needed::<F>),
+                Some(stubs::collation_needed::<F>),
             ))
         }
     }
-}
-
-unsafe extern "C" fn call_scalar<R: ToContextResult, F: Fn(&Context, &[&ValueRef]) -> R>(
-    context: *mut ffi::sqlite3_context,
-    argc: i32,
-    argv: *mut *mut ffi::sqlite3_value,
-) {
-    let ic = InternalContext::from_ptr(context);
-    let func = ic.user_data::<F>();
-    let ctx = Context::from_ptr(context);
-    let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
-    let ret = func(ctx, args);
-    ic.set_result(ret);
-}
-
-unsafe extern "C" fn aggregate_step<U, F: LegacyAggregateFunction<U>>(
-    context: *mut ffi::sqlite3_context,
-    argc: i32,
-    argv: *mut *mut ffi::sqlite3_value,
-) {
-    let ic = InternalContext::from_ptr(context);
-    let ctx = Context::from_ptr(context);
-    let agg = ic.aggregate_context::<U, F>().unwrap();
-    let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
-    if let Err(e) = agg.step(ctx, args) {
-        ic.set_result(e);
-    }
-}
-
-unsafe extern "C" fn aggregate_final<U, F: LegacyAggregateFunction<U>>(
-    context: *mut ffi::sqlite3_context,
-) {
-    let ic = InternalContext::from_ptr(context);
-    let ctx = Context::from_ptr(context);
-    match ic.try_aggregate_context::<U, F>() {
-        Some(agg) => ic.set_result(agg.value(ctx)),
-        None => ic.set_result(F::default_value(ic.user_data(), ctx)),
-    };
-}
-
-unsafe extern "C" fn aggregate_value<U, F: AggregateFunction<U>>(
-    context: *mut ffi::sqlite3_context,
-) {
-    let ic = InternalContext::from_ptr(context);
-    let ctx = Context::from_ptr(context);
-    let agg = ic.aggregate_context::<U, F>().unwrap();
-    let ret = agg.value(ctx);
-    ic.set_result(ret);
-}
-
-unsafe extern "C" fn aggregate_inverse<U, F: AggregateFunction<U>>(
-    context: *mut ffi::sqlite3_context,
-    argc: i32,
-    argv: *mut *mut ffi::sqlite3_value,
-) {
-    let ic = InternalContext::from_ptr(context);
-    let ctx = Context::from_ptr(context);
-    let agg = ic.aggregate_context::<U, F>().unwrap();
-    let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
-    if let Err(e) = agg.inverse(ctx, args) {
-        ic.set_result(e);
-    }
-}
-
-unsafe extern "C" fn compare<F: Fn(&str, &str) -> Ordering>(
-    func: *mut c_void,
-    len_a: i32,
-    bytes_a: *const c_void,
-    len_b: i32,
-    bytes_b: *const c_void,
-) -> i32 {
-    let func = &*(func as *const F);
-    let a = from_utf8_unchecked(slice::from_raw_parts(bytes_a as *const u8, len_a as _));
-    let b = from_utf8_unchecked(slice::from_raw_parts(bytes_b as *const u8, len_b as _));
-    match func(a, b) {
-        Ordering::Less => -1,
-        Ordering::Equal => 0,
-        Ordering::Greater => 1,
-    }
-}
-
-unsafe extern "C" fn collation_needed<F: Fn(&str)>(
-    user_data: *mut c_void,
-    _db: *mut ffi::sqlite3,
-    _text_rep: i32,
-    name: *const i8,
-) {
-    let func = &*(user_data as *const F);
-    let name = match CStr::from_ptr(name).to_str() {
-        Ok(x) => x,
-        Err(_) => return,
-    };
-    func(name);
 }

@@ -5,18 +5,18 @@ use std::{cmp::Ordering, str::FromStr};
 // NULL maps to None
 // Valid BigDecimal maps to Some(x)
 // Otherwise Some(0)
-fn process_value(a: &ValueRef) -> Result<Option<BigDecimal>> {
+fn process_value(a: &mut ValueRef) -> Result<Option<BigDecimal>> {
     Ok(a.get_str()?
         .map(|a| BigDecimal::from_str(a).unwrap_or_else(|_| BigDecimal::default())))
 }
 
-fn process_args(args: &[&ValueRef]) -> Result<Vec<Option<BigDecimal>>> {
-    args.iter().copied().map(process_value).collect()
+fn process_args(args: &mut [&mut ValueRef]) -> Result<Vec<Option<BigDecimal>>> {
+    args.into_iter().map(|x| process_value(*x)).collect()
 }
 
 macro_rules! scalar_method {
     ($name:ident as ( $a:ident, $b:ident ) -> $ty:ty => $ret:expr) => {
-        fn $name(_: &Context, args: &[&ValueRef]) -> Result<Option<$ty>> {
+        fn $name(_: &Context, args: &mut [&mut ValueRef]) -> Result<Option<$ty>> {
             let mut args = process_args(args)?.into_iter();
             let a = args.next().unwrap_or(None);
             let b = args.next().unwrap_or(None);
@@ -52,8 +52,8 @@ impl AggregateFunction<()> for Sum {
         None
     }
 
-    fn step(&mut self, _: &Context, args: &[&ValueRef]) -> Result<()> {
-        if let Some(x) = process_value(args.first().unwrap())? {
+    fn step(&mut self, _: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+        if let Some(x) = process_value(*args.first_mut().unwrap())? {
             self.cur += x;
         }
         Ok(())
@@ -63,8 +63,8 @@ impl AggregateFunction<()> for Sum {
         Some(format!("{}", self.cur.normalized()))
     }
 
-    fn inverse(&mut self, _: &Context, args: &[&ValueRef]) -> Result<()> {
-        if let Some(x) = process_value(args.first().unwrap())? {
+    fn inverse(&mut self, _: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+        if let Some(x) = process_value(*args.first_mut().unwrap())? {
             self.cur -= x;
         }
         Ok(())

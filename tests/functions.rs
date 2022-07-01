@@ -1,7 +1,7 @@
 use sqlite3_ext::{function::*, *};
 
 // Returns the number of times that the first argument has been passed to the function.
-fn aux_data(context: &Context, _: &[&ValueRef]) -> i64 {
+fn aux_data(context: &Context, _: &mut [&mut ValueRef]) -> i64 {
     match context.aux_data::<i64>(0) {
         Some(x) => {
             *x += 1;
@@ -31,8 +31,9 @@ impl FromUserData<&'static str> for Agg {
 impl AggregateFunction<&'static str> for Agg {
     type Output = String;
 
-    fn step(&mut self, _: &Context, args: &[&ValueRef]) -> Result<()> {
-        self.acc.push(args[0].get_str()?.unwrap_or("").to_owned());
+    fn step(&mut self, _: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+        let a: &mut ValueRef = args[0];
+        self.acc.push((a).get_str()?.unwrap_or("").to_owned());
         Ok(())
     }
 
@@ -40,7 +41,7 @@ impl AggregateFunction<&'static str> for Agg {
         self.acc.join(self.sep)
     }
 
-    fn inverse(&mut self, _: &Context, _: &[&ValueRef]) -> Result<()> {
+    fn inverse(&mut self, _: &Context, _: &mut [&mut ValueRef]) -> Result<()> {
         self.acc.remove(0);
         Ok(())
     }

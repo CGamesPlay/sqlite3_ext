@@ -52,7 +52,7 @@ impl<'vtab, T: VTab<'vtab> + 'vtab> VTabFunctionList<'vtab, T> {
     ///
     /// The function and all closed variables must live for the duration of the virtual
     /// table.
-    pub fn add<R: ToContextResult + 'vtab, F: Fn(&Context, &[&ValueRef]) -> R + 'vtab>(
+    pub fn add<R: ToContextResult + 'vtab, F: Fn(&Context, &mut [&mut ValueRef]) -> R + 'vtab>(
         &self,
         n_args: i32,
         name: impl Into<Cow<'vtab, str>>,
@@ -70,7 +70,7 @@ impl<'vtab, T: VTab<'vtab> + 'vtab> VTabFunctionList<'vtab, T> {
     /// will receive the virtual table as the first parameter.
     pub fn add_method<
         R: ToContextResult + 'vtab,
-        F: Fn(&'vtab T, &Context, &[&ValueRef]) -> R + 'vtab,
+        F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) -> R + 'vtab,
     >(
         &self,
         n_args: i32,
@@ -169,7 +169,7 @@ macro_rules! declare_vtab_function {
 
 declare_vtab_function!(
     VTabFunctionFree,
-    (T, Fn(&Context, &[&ValueRef]) -> R),
+    (T, Fn(&Context, &mut [&mut ValueRef]) -> R),
     { phantom: PhantomData<T> },
     { phantom: PhantomData },
     |_, _| (),
@@ -177,7 +177,7 @@ declare_vtab_function!(
 );
 declare_vtab_function!(
     VTabFunctionMethod,
-    (T, Fn(&'vtab T, &Context, &[&ValueRef]) -> R),
+    (T, Fn(&'vtab T, &Context, &mut [&mut ValueRef]) -> R),
     { vtab: Cell<Option<&'vtab T>> },
     { vtab: Cell::new(None) },
     |s, vtab| s.vtab.set(Some(vtab)),
@@ -188,7 +188,7 @@ unsafe extern "C" fn call_vtab_free<
     'vtab,
     T: VTab<'vtab> + 'vtab,
     R: ToContextResult,
-    F: Fn(&Context, &[&ValueRef]) -> R,
+    F: Fn(&Context, &mut [&mut ValueRef]) -> R,
 >(
     context: *mut ffi::sqlite3_context,
     argc: i32,
@@ -197,7 +197,7 @@ unsafe extern "C" fn call_vtab_free<
     let ic = InternalContext::from_ptr(context);
     let vtab_function = ic.user_data::<VTabFunctionFree<'vtab, T, R, F>>();
     let ctx = Context::from_ptr(context);
-    let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
+    let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
     let ret = (vtab_function.func)(ctx, args);
     ic.set_result(ret);
 }
@@ -206,7 +206,7 @@ unsafe extern "C" fn call_vtab_method<
     'vtab,
     T: VTab<'vtab> + 'vtab,
     R: ToContextResult,
-    F: Fn(&'vtab T, &Context, &[&ValueRef]) -> R,
+    F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) -> R,
 >(
     context: *mut ffi::sqlite3_context,
     argc: i32,
@@ -215,7 +215,7 @@ unsafe extern "C" fn call_vtab_method<
     let ic = InternalContext::from_ptr(context);
     let vtab_function = ic.user_data::<VTabFunctionMethod<'vtab, T, R, F>>();
     let ctx = Context::from_ptr(context);
-    let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
+    let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
     let ret = (vtab_function.func)(vtab_function.vtab.get().unwrap(), ctx, args);
     ic.set_result(ret);
 }

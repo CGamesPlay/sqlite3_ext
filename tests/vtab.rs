@@ -17,7 +17,7 @@ impl<'vtab> TestVTab<'vtab> {
         ))
     }
 
-    fn custom_method(&self, _: &Context, _: &[&ValueRef]) -> bool {
+    fn custom_method(&self, _: &Context, _: &mut [&mut ValueRef]) -> bool {
         true
     }
 }
@@ -70,7 +70,7 @@ impl VTabCursor for TestCursor {
         &mut self,
         _index_num: usize,
         _index_str: Option<&str>,
-        _args: &[&ValueRef],
+        _args: &mut [&mut ValueRef],
     ) -> Result<()> {
         Ok(())
     }

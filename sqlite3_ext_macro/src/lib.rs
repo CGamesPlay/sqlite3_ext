@@ -361,15 +361,15 @@ pub fn sqlite3_ext_doctest_impl(item: TokenStream) -> TokenStream {
         }
 
         impl<'vtab> ::sqlite3_ext::vtab::UpdateVTab<'vtab> for #item {
-            fn insert(&mut self, _: &[&::sqlite3_ext::ValueRef]) -> std::result::Result<i64, ::sqlite3_ext::Error> { todo!() }
-            fn update(&mut self, _: &::sqlite3_ext::ValueRef, _: &[&::sqlite3_ext::ValueRef]) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
-            fn delete(&mut self, _: &::sqlite3_ext::ValueRef) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
+            fn insert(&mut self, _: &mut [&mut ::sqlite3_ext::ValueRef]) -> std::result::Result<i64, ::sqlite3_ext::Error> { todo!() }
+            fn update(&mut self, _: &mut ::sqlite3_ext::ValueRef, _: &mut [&mut ::sqlite3_ext::ValueRef]) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
+            fn delete(&mut self, _: &mut ::sqlite3_ext::ValueRef) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
         }
 
         struct Cursor {}
         impl ::sqlite3_ext::vtab::VTabCursor for Cursor {
             type ColumnType = ();
-            fn filter(&mut self, _: usize, _: Option<&str>, _: &[&ValueRef]) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
+            fn filter(&mut self, _: usize, _: Option<&str>, _: &mut [&mut ValueRef]) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
             fn next(&mut self) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
             fn eof(&self) -> bool { todo!() }
             fn column(&self, _: usize) { todo!() }

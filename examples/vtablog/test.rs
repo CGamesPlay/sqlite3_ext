@@ -156,7 +156,7 @@ fn update() -> rusqlite::Result<()> {
         next(tab=100, cursor=101)
           rowid 2 -> 3
         eof(tab=100, cursor=101) -> true
-        update(tab=100, rowid=ValueRef::Integer(1), args=[ValueRef::Integer(1), ValueRef::Text(Ok(Some("b1"))), ValueRef::Text(Ok(Some("b1"))), ValueRef::Text(Ok(Some("c1")))]
+        update(tab=100, rowid=ValueRef::Integer(1), args=[ValueRef::Integer(1), ValueRef::Text("b1"), ValueRef::Text("b1"), ValueRef::Text("c1")]
         drop(tab=100, cursor=101)
         sync(tab=100, transaction=102)
         commit(tab=100, transaction=102)

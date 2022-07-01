@@ -165,12 +165,12 @@ impl<'vtab, O: Write + 'static> CreateVTab<'vtab> for VTabLog<O> {
 }
 
 impl<'vtab, O: Write + 'static> UpdateVTab<'vtab> for VTabLog<O> {
-    fn insert(&mut self, args: &[&ValueRef]) -> Result<i64> {
+    fn insert(&mut self, args: &mut [&mut ValueRef]) -> Result<i64> {
         writeln!(self, "insert(tab={}, args={:?})", self.id, args)?;
         Ok(1)
     }
 
-    fn update(&mut self, rowid: &ValueRef, args: &[&ValueRef]) -> Result<()> {
+    fn update(&mut self, rowid: &mut ValueRef, args: &mut [&mut ValueRef]) -> Result<()> {
         writeln!(
             self,
             "update(tab={}, rowid={:?}, args={:?}",
@@ -179,7 +179,7 @@ impl<'vtab, O: Write + 'static> UpdateVTab<'vtab> for VTabLog<O> {
         Ok(())
     }
 
-    fn delete(&mut self, rowid: &ValueRef) -> Result<()> {
+    fn delete(&mut self, rowid: &mut ValueRef) -> Result<()> {
         writeln!(self, "delete(tab={}, rowid={:?})", self.id, rowid)?;
         Ok(())
     }
@@ -215,7 +215,7 @@ impl<O: Write> Drop for VTabLog<O> {
 impl<O: Write> VTabCursor for VTabLogCursor<'_, O> {
     type ColumnType = String;
 
-    fn filter(&mut self, _: usize, _: Option<&str>, args: &[&ValueRef]) -> Result<()> {
+    fn filter(&mut self, _: usize, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
         writeln!(
             self.vtab,
             "filter(tab={}, cursor={}, args={:?})",

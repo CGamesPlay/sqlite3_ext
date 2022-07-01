@@ -179,7 +179,7 @@ pub unsafe extern "C" fn vtab_filter<'vtab, T: VTab<'vtab> + 'vtab>(
     } else {
         CStr::from_ptr(index_str).to_str().ok()
     };
-    let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
+    let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
     ffi::handle_result(
         cursor.cursor.filter(index_num as _, index_str, args),
         &mut (*cursor.base.pVtab).zErrMsg,
@@ -232,12 +232,12 @@ pub unsafe extern "C" fn vtab_update<'vtab, T: UpdateVTab<'vtab> + 'vtab>(
     p_rowid: *mut i64,
 ) -> c_int {
     let vtab = &mut *(vtab as *mut VTabHandle<T>);
-    let args = slice::from_raw_parts(argv as *mut &ValueRef, argc as _);
+    let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
     if args.len() == 1 {
         ffi::handle_result(vtab.vtab.delete(args[0]), &mut vtab.base.zErrMsg)
     } else {
         if args[0].value_type() == ValueType::Null {
-            match vtab.vtab.insert(&args[1..]) {
+            match vtab.vtab.insert(&mut args[1..]) {
                 Ok(rowid) => {
                     *p_rowid = rowid;
                     ffi::SQLITE_OK
@@ -245,10 +245,8 @@ pub unsafe extern "C" fn vtab_update<'vtab, T: UpdateVTab<'vtab> + 'vtab>(
                 Err(e) => ffi::handle_error(e, &mut vtab.base.zErrMsg),
             }
         } else {
-            ffi::handle_result(
-                vtab.vtab.update(args[0], &args[1..]),
-                &mut vtab.base.zErrMsg,
-            )
+            let (rowid, args) = args.split_at_mut(1);
+            ffi::handle_result(vtab.vtab.update(rowid[0], args), &mut vtab.base.zErrMsg)
         }
     }
 }

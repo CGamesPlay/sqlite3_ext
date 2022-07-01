@@ -1,5 +1,5 @@
 use super::{ffi, types::*};
-use std::ffi::CStr;
+use std::{slice, str};
 
 #[derive(Debug, PartialEq)]
 pub enum ValueType {
@@ -10,8 +10,14 @@ pub enum ValueType {
     Null,
 }
 
-/// Stores an SQL value. SQLite always owns all value objects, so there is no way to directly
+/// Stores a protected SQL value. SQLite always owns all value objects, so there is no way to directly
 /// create one.
+///
+/// "Protected" means that SQLite holds a mutex for the lifetime of the reference.
+///
+/// SQLite automatically converts data to any requested type where possible. This conversion is
+/// typically done in-place, which is why many of the conversion methods of this type require
+/// `&mut`.
 #[repr(transparent)]
 pub struct ValueRef {
     base: ffi::sqlite3_value,
@@ -31,6 +37,19 @@ impl ValueRef {
     fn as_ptr(&self) -> *mut ffi::sqlite3_value {
         &self.base as *const ffi::sqlite3_value as _
     }
+
+    /*
+    /// Create a copy of the referenced value.
+    pub fn to_value(&self) -> Value {
+        match self.value_type() {
+            ValueType::Integer => Value::Integer(self.get_i64()),
+            ValueType::Float => Value::Float(self.get_f64()),
+            ValueType::Text => todo!(),
+            ValueType::Blob => todo!(),
+            ValueType::Null => Value::Null,
+        }
+    }
+    */
 
     pub fn value_type(&self) -> ValueType {
         unsafe {
@@ -53,21 +72,32 @@ impl ValueRef {
         unsafe { ffi::sqlite3_value_double(self.as_ptr()) }
     }
 
-    /// Interpret the result as `Option<&CStr>`.
-    ///
-    /// This method will fail if SQLite runs out of memory while converting the value. The
-    /// returned value is `None` if the underlying value is SQL NULL.
-    pub fn get_cstr(&self) -> Result<Option<&CStr>> {
-        let ret = unsafe { ffi::sqlite3_value_text(self.as_ptr()) as *const i8 };
-        if ret.is_null() {
-            if self.value_type() == ValueType::Null {
-                return Ok(None);
+    /// Interpret this value as a BLOB.
+    pub fn get_blob(&mut self) -> Result<Option<&[u8]>> {
+        unsafe {
+            let data = ffi::sqlite3_value_blob(self.as_ptr());
+            let len = ffi::sqlite3_value_bytes(self.as_ptr());
+            if data.is_null() {
+                if self.value_type() == ValueType::Null {
+                    return Ok(None);
+                } else {
+                    return Err(Error::no_memory());
+                }
             } else {
-                return Err(Error::no_memory());
+                Ok(Some(slice::from_raw_parts(data as _, len as _)))
             }
         }
-        let ret = unsafe { CStr::from_ptr(ret) };
-        Ok(Some(ret))
+    }
+
+    /// Get the bytes of this BLOB value.
+    ///
+    /// # Safety
+    ///
+    /// If the underlying value is not a BLOB, the behavior of this function is undefined.
+    pub unsafe fn get_blob_unchecked(&self) -> &[u8] {
+        let len = ffi::sqlite3_value_bytes(self.as_ptr());
+        let data = ffi::sqlite3_value_blob(self.as_ptr());
+        slice::from_raw_parts(data as _, len as _)
     }
 
     /// Interpret the result as `Option<&str>`.
@@ -75,24 +105,20 @@ impl ValueRef {
     /// This method will fail if SQLite runs out of memory while converting the value, or
     /// if the value has invalid UTF-8. The returned value is `None` if the underlying
     /// value is SQL NULL.
-    pub fn get_str(&self) -> Result<Option<&str>> {
-        match self.get_cstr()? {
-            None => Ok(None),
-            Some(c) => Ok(Some(c.to_str()?)),
-        }
+    pub fn get_str(&mut self) -> Result<Option<&str>> {
+        self.get_blob()?
+            .map(|b| str::from_utf8(b))
+            .transpose()
+            .map_err(Error::Utf8Error)
     }
 
-    // XXX - need to figure out how to make this safe. Presently, value_text and value_blob
-    // could both be called, but the reference returned by the first one would be
-    // invalidated by the second call.
-    //
-    // Since any value method can result in a type conversion, which puts the value into an
-    // indeterminate state, perhaps the get methods should move self?
-}
-
-impl From<&ValueRef> for i64 {
-    fn from(val: &ValueRef) -> i64 {
-        val.get_i64()
+    /// Get the underlying TEXT value.
+    ///
+    /// # Safety
+    ///
+    /// If the underlying value is not TEXT, the behavior of this function is undefined.
+    pub unsafe fn get_str_unchecked(&self) -> &str {
+        str::from_utf8_unchecked(self.get_blob_unchecked())
     }
 }
 
@@ -109,9 +135,12 @@ impl std::fmt::Debug for ValueRef {
                 .finish(),
             ValueType::Text => f
                 .debug_tuple("ValueRef::Text")
-                .field(&self.get_str())
+                .field(unsafe { &self.get_str_unchecked() })
                 .finish(),
-            ValueType::Blob => todo!(),
+            ValueType::Blob => f
+                .debug_tuple("ValueRef::Blob")
+                .field(unsafe { &self.get_blob_unchecked() })
+                .finish(),
             ValueType::Null => f.debug_tuple("ValueRef::Null").finish(),
         }
     }

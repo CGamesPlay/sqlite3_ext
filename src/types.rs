@@ -6,7 +6,6 @@ pub enum Error {
     Utf8Error(std::str::Utf8Error),
     VersionNotSatisfied(std::os::raw::c_int),
     Module(String),
-    InvalidConversion,
 }
 
 impl Error {
@@ -39,7 +38,6 @@ impl std::fmt::Display for Error {
                 (v / 1000) % 1000,
                 v % 1000
             ),
-            Error::InvalidConversion => write!(f, "invalid conversion"),
         }
     }
 }

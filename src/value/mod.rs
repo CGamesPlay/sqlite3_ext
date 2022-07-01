@@ -1,5 +1,5 @@
 use super::{ffi, types::*};
-use std::{slice, str};
+use std::{mem::size_of, ptr, slice, str};
 
 mod test;
 
@@ -95,11 +95,37 @@ impl ValueRef {
     ///
     /// # Safety
     ///
-    /// If the underlying value is not a BLOB, the behavior of this function is undefined.
+    /// If the type of this value is not BLOB, the behavior of this function is undefined.
     pub unsafe fn get_blob_unchecked(&self) -> &[u8] {
         let len = ffi::sqlite3_value_bytes(self.as_ptr());
         let data = ffi::sqlite3_value_blob(self.as_ptr());
         slice::from_raw_parts(data as _, len as _)
+    }
+
+    /// Interpret the result as `*const T`.
+    ///
+    /// Using this technique to pass pointers through SQLite is insecure. See [the SQLite
+    /// documentation](https://www.sqlite.org/bindptr.html) for more details.
+    ///
+    /// This method will fail if the underlying value cannot be interpreted as a pointer.
+    pub fn get_ptr<T>(&mut self) -> Result<*const T> {
+        unsafe {
+            let len = ffi::sqlite3_value_bytes(self.as_ptr()) as usize;
+            if len == 0 {
+                Ok(ptr::null_mut())
+            } else if len != size_of::<T>() {
+                Err(Error::Sqlite(ffi::SQLITE_MISMATCH))
+            } else {
+                Ok(ffi::sqlite3_value_blob(self.as_ptr()) as *const T)
+            }
+        }
+    }
+
+    /// Interpret the result as `*mut T`.
+    ///
+    /// See [get_ptr](ValueRef::get_ptr) for details.
+    pub fn get_mut_ptr<T>(&mut self) -> Result<*mut T> {
+        Ok(self.get_ptr::<T>()? as *mut T)
     }
 
     /// Interpret the result as `Option<&str>`.
@@ -116,11 +142,13 @@ impl ValueRef {
 
     /// Get the underlying TEXT value.
     ///
+    /// This method will fail if the value has invalid UTF-8.
+    ///
     /// # Safety
     ///
-    /// If the underlying value is not TEXT, the behavior of this function is undefined.
-    pub unsafe fn get_str_unchecked(&self) -> &str {
-        str::from_utf8_unchecked(self.get_blob_unchecked())
+    /// If the type of this value is not TEXT, the behavior of this function is undefined.
+    pub unsafe fn get_str_unchecked(&self) -> Result<&str> {
+        str::from_utf8(self.get_blob_unchecked()).map_err(Error::Utf8Error)
     }
 }
 

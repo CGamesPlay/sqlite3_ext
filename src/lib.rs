@@ -8,6 +8,7 @@ mod extension;
 pub mod ffi;
 pub mod function;
 pub mod static_ext;
+mod test_helpers;
 pub mod types;
 pub mod value;
 pub mod vtab;

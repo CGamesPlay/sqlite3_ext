@@ -1,6 +1,8 @@
 use super::{ffi, types::*};
 use std::{slice, str};
 
+mod test;
+
 #[derive(Debug, PartialEq)]
 pub enum ValueType {
     Integer,

@@ -29,13 +29,10 @@ fn get_f64() {
 #[test]
 fn get_blob() {
     let h = TestHelpers::new();
-    let bytes = "my string".as_bytes();
+    let bytes = b"my string";
     h.with_value(bytes, |val| {
         assert_eq!(val.value_type(), ValueType::Blob);
-        assert_eq!(
-            val.get_blob()?,
-            Some(vec![109, 121, 32, 115, 116, 114, 105, 110, 103].as_slice())
-        );
+        assert_eq!(val.get_blob()?, Some(b"my string".as_slice()));
         assert_eq!(
             format!("{:?}", val),
             "ValueRef::Blob([109, 121, 32, 115, 116, 114, 105, 110, 103])"
@@ -99,9 +96,7 @@ fn get_ptr_null() {
 #[test]
 fn get_ptr_invalid() {
     let h = TestHelpers::new();
-    let owned_string = "input string".to_owned();
-    let bytes = (&owned_string as *const _ as usize).to_ne_bytes();
-    h.with_value(&bytes[0..3], |val| {
+    h.with_value([1, 2, 3], |val| {
         assert_eq!(val.value_type(), ValueType::Blob);
         val.get_ptr::<()>().expect_err("incorrect length");
         Ok(())

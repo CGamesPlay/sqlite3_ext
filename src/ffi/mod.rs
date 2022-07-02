@@ -2,7 +2,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
-use super::Error;
+use crate::{value::Blob, Error};
 #[cfg(not(feature = "static"))]
 pub use dynamic_link::*;
 #[cfg(feature = "static")]
@@ -133,11 +133,13 @@ pub fn is_version(min: c_int) -> bool {
 }
 
 pub unsafe extern "C" fn drop_boxed<T>(data: *mut c_void) {
-    let data: Box<T> = Box::from_raw(data as _);
-    std::mem::drop(data);
+    drop(Box::<T>::from_raw(data as _));
 }
 
 pub unsafe extern "C" fn drop_cstring(data: *mut c_void) {
-    let data = CString::from_raw(data as _);
-    std::mem::drop(data);
+    drop(CString::from_raw(data as _));
+}
+
+pub unsafe extern "C" fn drop_blob(data: *mut c_void) {
+    drop(Blob::from_raw(data));
 }

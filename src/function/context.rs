@@ -200,6 +200,21 @@ to_context_result! {
     }
 }
 
+impl<T: 'static> ToContextResult for T
+where
+    Blob: From<T>,
+{
+    unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
+        let blob = Blob::from(self);
+        let len = blob.len();
+        sqlite3_require_version!(
+            3_008_007,
+            ffi::sqlite3_result_blob64(context, blob.into_raw(), len as _, Some(ffi::drop_blob),),
+            ffi::sqlite3_result_blob(context, blob.into_raw(), len as _, Some(ffi::drop_blob))
+        )
+    }
+}
+
 /// Sets the context result to the contained value or NULL.
 impl<T: ToContextResult> ToContextResult for Option<T> {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
@@ -227,7 +242,7 @@ impl ToContextResult for Value {
             Value::Integer(x) => x.assign_to(context),
             Value::Float(x) => x.assign_to(context),
             Value::Text(x) => x.assign_to(context),
-            Value::Blob(_) => todo!(),
+            Value::Blob(x) => x.assign_to(context),
             Value::Null => ().assign_to(context),
         }
     }

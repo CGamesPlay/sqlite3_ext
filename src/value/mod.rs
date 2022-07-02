@@ -1,6 +1,8 @@
 use super::{ffi, types::*};
+pub use blob::Blob;
 use std::{mem::size_of, ptr, slice, str};
 
+mod blob;
 mod test;
 
 #[derive(Debug, PartialEq)]
@@ -31,7 +33,7 @@ pub enum Value {
     Integer(i64),
     Float(f64),
     Text(String),
-    Blob(Vec<u8>),
+    Blob(Blob),
     Null,
 }
 
@@ -190,5 +192,5 @@ value_from!(i32 as (x) => Value::Integer(x as _));
 value_from!(i64 as (x) => Value::Integer(x));
 value_from!(f64 as (x) => Value::Float(x));
 value_from!(String as (x) => Value::Text(x));
-value_from!(Vec<u8> as (x) => Value::Blob(x));
+value_from!(Blob as (x) => Value::Blob(x));
 value_from!(() as (_x) => Value::Null);

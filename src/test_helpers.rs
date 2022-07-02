@@ -9,7 +9,7 @@ pub mod prelude {
 }
 
 pub struct TestHelpers {
-    db: rusqlite::Connection,
+    pub db: rusqlite::Connection,
 }
 
 impl TestHelpers {
@@ -53,6 +53,34 @@ impl TestHelpers {
             .unwrap();
         self.sqlite3_ext().remove_function("with_value", 1).unwrap();
     }
+
+    pub fn with_value_from_context_result<
+        T: ToContextResult,
+        F: Fn(&mut ValueRef) -> Result<()>,
+    >(
+        &self,
+        input: T,
+        func: F,
+    ) {
+        let opts = FunctionOptions::default().set_n_args(-1);
+        let input = Cell::new(Some(input));
+        let func: Box<dyn Fn(&mut ValueRef) -> Result<()>> = Box::new(func);
+        // Safe because we remove the function inside this function.
+        let func: Box<dyn 'static + Fn(&mut ValueRef) -> Result<()>> = unsafe { transmute(func) };
+        self.sqlite3_ext()
+            .create_scalar_function("produce", &opts, move |_, _| input.replace(None).unwrap())
+            .unwrap();
+        self.sqlite3_ext()
+            .create_scalar_function("with_value", &opts, move |_, args| func(args[0]))
+            .unwrap();
+        self.db
+            .query_row("SELECT with_value(produce())", [], |_| Ok(()))
+            .unwrap();
+        self.sqlite3_ext()
+            .remove_function("with_value", -1)
+            .unwrap();
+        self.sqlite3_ext().remove_function("produce", -1).unwrap();
+    }
 }
 
 #[test]
@@ -73,6 +101,18 @@ fn with_value_from_sql() {
     let did_run = Cell::new(false);
     h.with_value_from_sql("NULL", |val| {
         assert_eq!(val.value_type(), ValueType::Null);
+        did_run.set(true);
+        Ok(())
+    });
+    assert!(did_run.get());
+}
+
+#[test]
+fn with_value_from_context_result() {
+    let h = TestHelpers::new();
+    let did_run = Cell::new(false);
+    h.with_value_from_context_result("input string", |val| {
+        assert_eq!(val.get_str()?.unwrap(), "input string");
         did_run.set(true);
         Ok(())
     });

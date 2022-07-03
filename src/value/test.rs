@@ -1,6 +1,6 @@
 #![cfg(all(test, feature = "static"))]
 use crate::test_helpers::prelude::*;
-use std::{f64::consts::PI, mem::transmute};
+use std::{f64::consts::PI, mem::size_of};
 
 #[test]
 fn get_i64() {
@@ -56,13 +56,12 @@ fn get_blob_null() {
 #[test]
 fn get_ptr() {
     let h = TestHelpers::new();
-    type T<'a> = &'a String;
     let owned_string = "input string".to_owned();
-    let bits: [u8; 8] = unsafe { transmute::<T, _>(&owned_string) };
-    h.with_value(bits, |val| {
+    let ptr = Box::into_raw(Box::new(owned_string));
+    h.with_value(Blob::with_ptr(ptr), |val| {
         assert_eq!(val.value_type(), ValueType::Blob);
-        let borrowed_string = unsafe { *(val.get_ptr::<T>()?) };
-        assert_eq!(borrowed_string, "input string");
+        let borrowed_string = unsafe { Box::from_raw(val.get_mut_ptr::<String>()?) };
+        assert_eq!(*borrowed_string, "input string");
         Ok(())
     });
 }
@@ -70,13 +69,17 @@ fn get_ptr() {
 #[test]
 fn get_ptr_wide() {
     let h = TestHelpers::new();
-    type T<'a> = &'a [u32];
-    let owned_slice: &[u32] = &[1, 2, 3, 4];
-    let bits: [u8; 16] = unsafe { transmute::<T, _>(owned_slice) };
-    h.with_value(bits, |val| {
+    let slice: &[u32] = &[1, 2, 3, 4];
+    let blob = Blob::with_ptr(slice);
+    assert_ne!(
+        blob.len(),
+        size_of::<*const ()>(),
+        "this isn't a wide pointer"
+    );
+    h.with_value(blob, |val| {
         assert_eq!(val.value_type(), ValueType::Blob);
-        let borrowed_slice = unsafe { *val.get_ptr::<T>()? };
-        assert_eq!(borrowed_slice, [1, 2, 3, 4]);
+        let borrowed_slice = unsafe { &*val.get_ptr::<[u32]>()? };
+        assert_eq!(borrowed_slice, &[1, 2, 3, 4]);
         Ok(())
     });
 }
@@ -137,6 +140,42 @@ fn get_str_invalid() {
             format!("{:?}", val),
             "ValueRef::Text(Err(Utf8Error(Utf8Error { valid_up_to: 1, error_len: Some(1) })))"
         );
+        Ok(())
+    });
+}
+
+#[test]
+fn get_ref() {
+    let h = TestHelpers::new();
+    #[derive(PartialEq, Debug)]
+    struct MyStruct {
+        s: String,
+    }
+    let owned_struct = MyStruct {
+        s: "input string".to_owned(),
+    };
+    h.with_value(PassedRef::new(owned_struct), |val| {
+        assert_eq!(val.value_type(), ValueType::Null);
+        assert_eq!(
+            val.get_ref::<MyStruct>(),
+            Some(&MyStruct {
+                s: "input string".to_owned()
+            })
+        );
+        assert_eq!(
+            format!("{:?}", val),
+            "ValueRef::Null(PassedRef { type_id: TypeId { t: 5212614948118677891 }, .. })"
+        );
+        Ok(())
+    });
+}
+
+#[test]
+fn get_ref_invalid() {
+    let h = TestHelpers::new();
+    h.with_value(PassedRef::new(0i32), |val| {
+        assert_eq!(val.value_type(), ValueType::Null);
+        assert_eq!(val.get_ref::<String>(), None);
         Ok(())
     });
 }

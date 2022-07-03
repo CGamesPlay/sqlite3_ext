@@ -1,7 +1,5 @@
-use super::{
-    super::{ffi, sqlite3_require_version, types::*, value::*, Connection},
-    FromUserData,
-};
+use super::FromUserData;
+use crate::{ffi, sqlite3_require_version, types::*, value::*, Connection};
 use std::{
     any::TypeId,
     ffi::CString,
@@ -24,6 +22,7 @@ struct AggregateContext<T> {
     val: MaybeUninit<T>,
 }
 
+#[repr(C)]
 struct AuxData<T> {
     type_id: TypeId,
     val: T,
@@ -137,9 +136,12 @@ impl Context {
 
 /// A value that can be returned from an SQL function.
 ///
-/// For functions which have an output type determined at runtime, [Value] is implemented. For
-/// nullable types, Option\<ToContextResult\> is implemented. For fallible functions,
-/// [Result]\<ToContextResult\> is implemented.
+/// There are several useful implementations available:
+///
+/// - For nullable values, Option\<ToContextResult\> provides an implementation.
+/// - For fallible functions, [Result]\<ToContextResult\> provides an implementation.
+/// - For types known only at run-time, [Value] provides an implementation.
+/// - For arbitrary Rust objects, [PassedRef] provides an implementation.
 pub trait ToContextResult: 'static {
     #[doc(hidden)]
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context);
@@ -166,6 +168,19 @@ to_context_result! {
     match i32 as (ctx, val) => ffi::sqlite3_result_int(ctx, val),
     match i64 as (ctx, val) => ffi::sqlite3_result_int64(ctx, val),
     match f64 as (ctx, val) => ffi::sqlite3_result_double(ctx, val),
+    /// Sets the context result to NULL with this value as an associated pointer.
+    match PassedRef as (ctx, val) => {
+        sqlite3_require_version!(
+            3_020_000,
+            ffi::sqlite3_result_pointer(
+                ctx,
+                Box::into_raw(Box::new(val)) as _,
+                POINTER_TAG,
+                Some(ffi::drop_boxed::<PassedRef>),
+            ),
+            ()
+        )
+    },
     /// Assign a static string to the context result.
     match &'static str as (ctx, val) => {
         let val = val.as_bytes();

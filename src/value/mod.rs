@@ -1,8 +1,13 @@
-use super::{ffi, types::*};
-pub use blob::Blob;
-use std::{mem::size_of, ptr, slice, str};
+use super::{ffi, sqlite3_require_version, types::*};
+pub use blob::*;
+pub use passed_ref::*;
+use std::{
+    mem::{size_of, zeroed},
+    ptr, slice, str,
+};
 
 mod blob;
+mod passed_ref;
 mod test;
 
 #[derive(Debug, PartialEq)]
@@ -38,7 +43,8 @@ pub enum Value {
 }
 
 impl ValueRef {
-    fn as_ptr(&self) -> *mut ffi::sqlite3_value {
+    /// Get the underlying SQLite handle.
+    pub unsafe fn as_ptr(&self) -> *mut ffi::sqlite3_value {
         &self.base as *const ffi::sqlite3_value as _
     }
 
@@ -50,7 +56,10 @@ impl ValueRef {
             ValueType::Float => Value::Float(self.get_f64()),
             ValueType::Text => todo!(),
             ValueType::Blob => todo!(),
-            ValueType::Null => Value::Null,
+            ValueType::Null => {
+                // XXX - ref
+                Value::Null,
+            }
         }
     }
     */
@@ -104,33 +113,77 @@ impl ValueRef {
         slice::from_raw_parts(data as _, len as _)
     }
 
-    /// Interpret the result as `*const T`.
+    /// Interpret a BLOB as `*const T`.
     ///
-    /// Using this technique to pass pointers through SQLite is insecure. See [the SQLite
-    /// documentation](https://www.sqlite.org/bindptr.html) for more details.
+    /// Using this technique to pass pointers through SQLite is insecure and error-prone. A
+    /// much better solution is available via [get_ref](ValueRef::get_ref). Pointers passed
+    /// through this interface require manual memory management, for example using
+    /// [Box::into_raw] or [std::mem::forget].
     ///
     /// This method will fail if the underlying value cannot be interpreted as a pointer.
-    pub fn get_ptr<T>(&mut self) -> Result<*const T> {
+    /// It will return a null pointer if the underlying value is NULL.
+    ///
+    /// # Examples
+    ///
+    /// This example uses static memory to avoid memory management. See
+    /// [get_mut_ptr](ValueRef::get_mut_ptr) for an example that transfers ownership of a
+    /// value.
+    ///
+    /// ```no_run
+    /// use sqlite3_ext::{Blob, function::Context, Result, ValueRef};
+    ///
+    /// const VAL: &str = "static memory";
+    ///
+    /// fn produce_ptr(ctx: &Context, args: &mut [&mut ValueRef]) -> Blob {
+    ///     Blob::with_ptr(VAL)
+    /// }
+    ///
+    /// fn consume_ptr(ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+    ///     let val = unsafe { args[0].get_ptr::<str>()? };
+    ///     assert_eq!(val, "static memory");
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn get_ptr<T: ?Sized>(&mut self) -> Result<*const T> {
         unsafe {
             let len = ffi::sqlite3_value_bytes(self.as_ptr()) as usize;
             if len == 0 {
-                Ok(ptr::null_mut())
-            } else if len != size_of::<T>() {
+                Ok(zeroed())
+            } else if len != size_of::<&T>() {
                 Err(Error::Sqlite(ffi::SQLITE_MISMATCH))
             } else {
-                Ok(ffi::sqlite3_value_blob(self.as_ptr()) as *const T)
+                let bits = ffi::sqlite3_value_blob(self.as_ptr()) as *const *const T;
+                let ret = ptr::read_unaligned::<*const T>(bits);
+                Ok(ret)
             }
         }
     }
 
-    /// Interpret the result as `*mut T`.
+    /// Interpret a BLOB as `*mut T`.
     ///
-    /// See [get_ptr](ValueRef::get_ptr) for details.
-    pub fn get_mut_ptr<T>(&mut self) -> Result<*mut T> {
-        Ok(self.get_ptr::<T>()? as *mut T)
+    /// See [get_ptr](ValueRef::get_ptr) for more information.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sqlite3_ext::{Blob, function::Context, Result, ValueRef};
+    ///
+    /// fn produce_ptr(ctx: &Context, args: &mut [&mut ValueRef]) -> Blob {
+    ///     let val = Box::new(100u64);
+    ///     Blob::with_ptr(Box::into_raw(val))
+    /// }
+    ///
+    /// fn consume_ptr(ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+    ///     let val = unsafe { Box::from_raw(args[0].get_mut_ptr::<u64>()?) };
+    ///     assert_eq!(*val, 100);
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn get_mut_ptr<T: ?Sized>(&mut self) -> Result<*mut T> {
+        self.get_ptr::<T>().map(|p| p as *mut T)
     }
 
-    /// Interpret the result as `Option<&str>`.
+    /// Interpret the value as `Option<&str>`.
     ///
     /// This method will fail if SQLite runs out of memory while converting the value, or
     /// if the value has invalid UTF-8. The returned value is `None` if the underlying
@@ -151,6 +204,57 @@ impl ValueRef {
     /// If the type of this value is not TEXT, the behavior of this function is undefined.
     pub unsafe fn get_str_unchecked(&self) -> Result<&str> {
         str::from_utf8(self.get_blob_unchecked()).map_err(Error::Utf8Error)
+    }
+
+    /// # Safety
+    ///
+    /// Caller is responsible for enforcing Rust pointer aliasing rules.
+    unsafe fn get_ref_internal(&self) -> Option<&mut PassedRef> {
+        sqlite3_require_version!(
+            3_020_000,
+            (ffi::sqlite3_value_pointer(self.as_ptr(), POINTER_TAG) as *mut PassedRef).as_mut(),
+            None
+        )
+    }
+
+    /// Get the [PassedRef] stored in this value.
+    ///
+    /// This is a safe way of passing arbitrary Rust objects through SQLite, however it
+    /// requires SQLite 3.20.0 to work. On older versions of SQLite, this function will
+    /// always return None. If supporting older versions of SQLite is required,
+    /// [get_ptr](ValueRef::get_ptr) can be used instead.
+    ///
+    /// Requires SQLite 3.20.0.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use sqlite3_ext::{PassedRef, function::Context, Result, ValueRef};
+    ///
+    /// fn produce_ref(ctx: &Context, args: &mut [&mut ValueRef]) -> PassedRef {
+    ///     let val = "owned string".to_owned();
+    ///     PassedRef::new(val)
+    /// }
+    ///
+    /// fn consume_ref(ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+    ///     let val = args[0].get_ref::<String>().unwrap();
+    ///     assert_eq!(val, "owned string");
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn get_ref<T: 'static>(&self) -> Option<&T> {
+        unsafe { self.get_ref_internal() }
+            .map(|x| PassedRef::get(x))
+            .unwrap_or(None)
+    }
+
+    /// Mutable version of [get_ref](ValueRef::get_ref).
+    ///
+    /// Requires SQLite 3.20.0.
+    pub fn get_ref_mut<T: 'static>(&mut self) -> Option<&mut T> {
+        unsafe { self.get_ref_internal() }
+            .map(PassedRef::get_mut)
+            .unwrap_or(None)
     }
 }
 
@@ -173,7 +277,13 @@ impl std::fmt::Debug for ValueRef {
                 .debug_tuple("ValueRef::Blob")
                 .field(unsafe { &self.get_blob_unchecked() })
                 .finish(),
-            ValueType::Null => f.debug_tuple("ValueRef::Null").finish(),
+            ValueType::Null => {
+                if let Some(r) = unsafe { self.get_ref_internal() } {
+                    f.debug_tuple("ValueRef::Null").field(&r).finish()
+                } else {
+                    f.debug_tuple("ValueRef::Null").finish()
+                }
+            }
         }
     }
 }

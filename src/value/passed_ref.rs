@@ -11,13 +11,32 @@ pub(crate) const POINTER_TAG: *const i8 = b"sqlite3_ext:PassedRef\0".as_ptr() as
 /// are `'static`.
 ///
 /// This feature requires SQLite 3.20.0. On earlier versions of SQLite, returning a PassedRef
-/// object from an application-defined function has no effect.
+/// object from an application-defined function has no effect. If supporting older versions of
+/// SQLite is required, [UnsafePtr](super::UnsafePtr) can be used instead.
+///
+/// # Examples
+///
+/// ```no_run
+/// use sqlite3_ext::{PassedRef, function::Context, Result, ValueRef};
+///
+/// fn produce_ref(ctx: &Context, args: &mut [&mut ValueRef]) -> PassedRef {
+///     let val = "owned string".to_owned();
+///     PassedRef::new(val)
+/// }
+///
+/// fn consume_ref(ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+///     let val = args[0].get_ref::<String>().unwrap();
+///     assert_eq!(val, "owned string");
+///     Ok(())
+/// }
+/// ```
 pub struct PassedRef {
     type_id: TypeId,
     value: Box<dyn Any>,
 }
 
 impl PassedRef {
+    /// Create a new PassedRef containing the value.
     pub fn new<T: 'static>(val: T) -> PassedRef {
         PassedRef {
             type_id: val.type_id(),
@@ -25,7 +44,7 @@ impl PassedRef {
         }
     }
 
-    pub fn get<T: 'static>(&self) -> Option<&T> {
+    pub(crate) fn get<T: 'static>(&self) -> Option<&T> {
         if TypeId::of::<T>() == self.type_id {
             self.value.downcast_ref()
         } else {
@@ -33,7 +52,7 @@ impl PassedRef {
         }
     }
 
-    pub fn get_mut<T: 'static>(&mut self) -> Option<&mut T> {
+    pub(crate) fn get_mut<T: 'static>(&mut self) -> Option<&mut T> {
         if TypeId::of::<T>() == self.type_id {
             self.value.downcast_mut()
         } else {

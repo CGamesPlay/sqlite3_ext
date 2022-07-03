@@ -156,27 +156,11 @@ impl ValueRef {
     ///
     /// This is a safe way of passing arbitrary Rust objects through SQLite, however it
     /// requires SQLite 3.20.0 to work. On older versions of SQLite, this function will
-    /// always return None. If supporting older versions of SQLite is required, [UnsafePtr]
-    /// can be used instead.
+    /// always return None.
+    ///
+    /// The mutable version is [get_mut_ref](Self::get_mut_ref).
     ///
     /// Requires SQLite 3.20.0.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use sqlite3_ext::{PassedRef, function::Context, Result, ValueRef};
-    ///
-    /// fn produce_ref(ctx: &Context, args: &mut [&mut ValueRef]) -> PassedRef {
-    ///     let val = "owned string".to_owned();
-    ///     PassedRef::new(val)
-    /// }
-    ///
-    /// fn consume_ref(ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
-    ///     let val = args[0].get_ref::<String>().unwrap();
-    ///     assert_eq!(val, "owned string");
-    ///     Ok(())
-    /// }
-    /// ```
     pub fn get_ref<T: 'static>(&self) -> Option<&T> {
         unsafe { self.get_ref_internal() }
             .map(|x| PassedRef::get(x))
@@ -186,7 +170,7 @@ impl ValueRef {
     /// Mutable version of [get_ref](ValueRef::get_ref).
     ///
     /// Requires SQLite 3.20.0.
-    pub fn get_ref_mut<T: 'static>(&mut self) -> Option<&mut T> {
+    pub fn get_mut_ref<T: 'static>(&mut self) -> Option<&mut T> {
         unsafe { self.get_ref_internal() }
             .map(PassedRef::get_mut)
             .unwrap_or(None)

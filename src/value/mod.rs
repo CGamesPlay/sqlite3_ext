@@ -144,10 +144,10 @@ impl ValueRef {
     /// # Safety
     ///
     /// Caller is responsible for enforcing Rust pointer aliasing rules.
-    unsafe fn get_ref_internal(&self) -> Option<&mut PassedRef> {
+    unsafe fn get_ref_internal<T: 'static>(&self) -> Option<&mut PassedRef<T>> {
         sqlite3_require_version!(
             3_020_000,
-            (ffi::sqlite3_value_pointer(self.as_ptr(), POINTER_TAG) as *mut PassedRef).as_mut(),
+            (ffi::sqlite3_value_pointer(self.as_ptr(), POINTER_TAG) as *mut PassedRef<T>).as_mut(),
             None
         )
     }
@@ -162,7 +162,7 @@ impl ValueRef {
     ///
     /// Requires SQLite 3.20.0.
     pub fn get_ref<T: 'static>(&self) -> Option<&T> {
-        unsafe { self.get_ref_internal() }
+        unsafe { self.get_ref_internal::<T>() }
             .map(|x| PassedRef::get(x))
             .unwrap_or(None)
     }
@@ -171,7 +171,7 @@ impl ValueRef {
     ///
     /// Requires SQLite 3.20.0.
     pub fn get_mut_ref<T: 'static>(&mut self) -> Option<&mut T> {
-        unsafe { self.get_ref_internal() }
+        unsafe { self.get_ref_internal::<T>() }
             .map(PassedRef::get_mut)
             .unwrap_or(None)
     }
@@ -197,7 +197,7 @@ impl std::fmt::Debug for ValueRef {
                 .field(unsafe { &self.get_blob_unchecked() })
                 .finish(),
             ValueType::Null => {
-                if let Some(r) = unsafe { self.get_ref_internal() } {
+                if let Some(r) = unsafe { self.get_ref_internal::<()>() } {
                     f.debug_tuple("ValueRef::Null").field(&r).finish()
                 } else {
                     f.debug_tuple("ValueRef::Null").finish()

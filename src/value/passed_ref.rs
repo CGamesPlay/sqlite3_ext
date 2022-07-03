@@ -30,38 +30,39 @@ pub(crate) const POINTER_TAG: *const i8 = b"sqlite3_ext:PassedRef\0".as_ptr() as
 ///     Ok(())
 /// }
 /// ```
-pub struct PassedRef {
+#[repr(C)]
+pub struct PassedRef<T: 'static> {
     type_id: TypeId,
-    value: Box<dyn Any>,
+    value: T,
 }
 
-impl PassedRef {
+impl<T: 'static> PassedRef<T> {
     /// Create a new PassedRef containing the value.
-    pub fn new<T: 'static>(val: T) -> PassedRef {
+    pub fn new(value: T) -> PassedRef<T> {
         PassedRef {
-            type_id: val.type_id(),
-            value: Box::new(val),
+            type_id: value.type_id(),
+            value,
         }
     }
 
-    pub(crate) fn get<T: 'static>(&self) -> Option<&T> {
+    pub(crate) fn get(&self) -> Option<&T> {
         if TypeId::of::<T>() == self.type_id {
-            self.value.downcast_ref()
+            Some(&self.value)
         } else {
             None
         }
     }
 
-    pub(crate) fn get_mut<T: 'static>(&mut self) -> Option<&mut T> {
+    pub(crate) fn get_mut(&mut self) -> Option<&mut T> {
         if TypeId::of::<T>() == self.type_id {
-            self.value.downcast_mut()
+            Some(&mut self.value)
         } else {
             None
         }
     }
 }
 
-impl std::fmt::Debug for PassedRef {
+impl<T: 'static> std::fmt::Debug for PassedRef<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("PassedRef")
             .field("type_id", &self.type_id)

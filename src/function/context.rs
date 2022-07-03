@@ -168,19 +168,6 @@ to_context_result! {
     match i32 as (ctx, val) => ffi::sqlite3_result_int(ctx, val),
     match i64 as (ctx, val) => ffi::sqlite3_result_int64(ctx, val),
     match f64 as (ctx, val) => ffi::sqlite3_result_double(ctx, val),
-    /// Sets the context result to NULL with this value as an associated pointer.
-    match PassedRef as (ctx, val) => {
-        sqlite3_require_version!(
-            3_020_000,
-            ffi::sqlite3_result_pointer(
-                ctx,
-                Box::into_raw(Box::new(val)) as _,
-                POINTER_TAG,
-                Some(ffi::drop_boxed::<PassedRef>),
-            ),
-            ()
-        )
-    },
     /// Assign a static string to the context result.
     match &'static str as (ctx, val) => {
         let val = val.as_bytes();
@@ -275,5 +262,21 @@ impl<T: 'static + ?Sized> ToContextResult for UnsafePtr<T> {
             },
             self.into_blob().assign_to(context)
         );
+    }
+}
+
+/// Sets the context result to NULL with this value as an associated pointer.
+impl<T: 'static> ToContextResult for PassedRef<T> {
+    unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
+        sqlite3_require_version!(
+            3_020_000,
+            ffi::sqlite3_result_pointer(
+                context,
+                Box::into_raw(Box::new(self)) as _,
+                POINTER_TAG,
+                Some(ffi::drop_boxed::<PassedRef<T>>),
+            ),
+            ()
+        )
     }
 }

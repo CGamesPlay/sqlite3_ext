@@ -1,14 +1,13 @@
 use super::{ffi, sqlite3_require_version, types::*};
 pub use blob::*;
 pub use passed_ref::*;
-use std::{
-    mem::{size_of, zeroed},
-    ptr, slice, str,
-};
+use std::{ptr, slice, str};
+pub use unsafe_ptr::*;
 
 mod blob;
 mod passed_ref;
 mod test;
+mod unsafe_ptr;
 
 #[derive(Debug, PartialEq)]
 pub enum ValueType {
@@ -44,6 +43,12 @@ pub enum Value {
 
 impl ValueRef {
     /// Get the underlying SQLite handle.
+    ///
+    /// # Safety
+    ///
+    /// Invoking SQLite methods on the returned value maay invalidate existing references
+    /// previously returned by this object. This is safe as long as a mutable reference to
+    /// this ValueRef is held.
     pub unsafe fn as_ptr(&self) -> *mut ffi::sqlite3_value {
         &self.base as *const ffi::sqlite3_value as _
     }
@@ -113,76 +118,6 @@ impl ValueRef {
         slice::from_raw_parts(data as _, len as _)
     }
 
-    /// Interpret a BLOB as `*const T`.
-    ///
-    /// Using this technique to pass pointers through SQLite is insecure and error-prone. A
-    /// much better solution is available via [get_ref](ValueRef::get_ref). Pointers passed
-    /// through this interface require manual memory management, for example using
-    /// [Box::into_raw] or [std::mem::forget].
-    ///
-    /// This method will fail if the underlying value cannot be interpreted as a pointer.
-    /// It will return a null pointer if the underlying value is NULL.
-    ///
-    /// # Examples
-    ///
-    /// This example uses static memory to avoid memory management. See
-    /// [get_mut_ptr](ValueRef::get_mut_ptr) for an example that transfers ownership of a
-    /// value.
-    ///
-    /// ```no_run
-    /// use sqlite3_ext::{Blob, function::Context, Result, ValueRef};
-    ///
-    /// const VAL: &str = "static memory";
-    ///
-    /// fn produce_ptr(ctx: &Context, args: &mut [&mut ValueRef]) -> Blob {
-    ///     Blob::with_ptr(VAL)
-    /// }
-    ///
-    /// fn consume_ptr(ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
-    ///     let val = unsafe { args[0].get_ptr::<str>()? };
-    ///     assert_eq!(val, "static memory");
-    ///     Ok(())
-    /// }
-    /// ```
-    pub fn get_ptr<T: ?Sized>(&mut self) -> Result<*const T> {
-        unsafe {
-            let len = ffi::sqlite3_value_bytes(self.as_ptr()) as usize;
-            if len == 0 {
-                Ok(zeroed())
-            } else if len != size_of::<&T>() {
-                Err(Error::Sqlite(ffi::SQLITE_MISMATCH))
-            } else {
-                let bits = ffi::sqlite3_value_blob(self.as_ptr()) as *const *const T;
-                let ret = ptr::read_unaligned::<*const T>(bits);
-                Ok(ret)
-            }
-        }
-    }
-
-    /// Interpret a BLOB as `*mut T`.
-    ///
-    /// See [get_ptr](ValueRef::get_ptr) for more information.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use sqlite3_ext::{Blob, function::Context, Result, ValueRef};
-    ///
-    /// fn produce_ptr(ctx: &Context, args: &mut [&mut ValueRef]) -> Blob {
-    ///     let val = Box::new(100u64);
-    ///     Blob::with_ptr(Box::into_raw(val))
-    /// }
-    ///
-    /// fn consume_ptr(ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
-    ///     let val = unsafe { Box::from_raw(args[0].get_mut_ptr::<u64>()?) };
-    ///     assert_eq!(*val, 100);
-    ///     Ok(())
-    /// }
-    /// ```
-    pub fn get_mut_ptr<T: ?Sized>(&mut self) -> Result<*mut T> {
-        self.get_ptr::<T>().map(|p| p as *mut T)
-    }
-
     /// Interpret the value as `Option<&str>`.
     ///
     /// This method will fail if SQLite runs out of memory while converting the value, or
@@ -221,8 +156,8 @@ impl ValueRef {
     ///
     /// This is a safe way of passing arbitrary Rust objects through SQLite, however it
     /// requires SQLite 3.20.0 to work. On older versions of SQLite, this function will
-    /// always return None. If supporting older versions of SQLite is required,
-    /// [get_ptr](ValueRef::get_ptr) can be used instead.
+    /// always return None. If supporting older versions of SQLite is required, [UnsafePtr]
+    /// can be used instead.
     ///
     /// Requires SQLite 3.20.0.
     ///

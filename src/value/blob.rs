@@ -40,16 +40,6 @@ impl Blob {
         self.data = unsafe { NonNull::new_unchecked(realloc(self.data.as_ptr(), layout, new_len)) };
     }
 
-    pub fn with_ptr<T: ?Sized>(val: *const T) -> Self {
-        let len = size_of::<&T>();
-        let mut ret = Self::alloc(len);
-        unsafe {
-            let ret_bytes = ret.as_mut_slice().as_mut_ptr() as *mut *const T;
-            write_unaligned(ret_bytes, val);
-        }
-        ret
-    }
-
     /// Shorten the BLOB, keeping the first len elements and dropping the rest.
     ///
     /// If len is greater than the BLOB's current length, this has no effect.

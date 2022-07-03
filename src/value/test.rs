@@ -1,6 +1,6 @@
 #![cfg(all(test, feature = "static"))]
 use crate::test_helpers::prelude::*;
-use std::{f64::consts::PI, mem::size_of};
+use std::f64::consts::PI;
 
 #[test]
 fn get_i64() {
@@ -49,59 +49,6 @@ fn get_blob_null() {
         assert_eq!(val.value_type(), ValueType::Null);
         assert_eq!(val.get_blob()?, None);
         assert_eq!(format!("{:?}", val), "ValueRef::Null");
-        Ok(())
-    });
-}
-
-#[test]
-fn get_ptr() {
-    let h = TestHelpers::new();
-    let owned_string = "input string".to_owned();
-    let ptr = Box::into_raw(Box::new(owned_string));
-    h.with_value(Blob::with_ptr(ptr), |val| {
-        assert_eq!(val.value_type(), ValueType::Blob);
-        let borrowed_string = unsafe { Box::from_raw(val.get_mut_ptr::<String>()?) };
-        assert_eq!(*borrowed_string, "input string");
-        Ok(())
-    });
-}
-
-#[test]
-fn get_ptr_wide() {
-    let h = TestHelpers::new();
-    let slice: &[u32] = &[1, 2, 3, 4];
-    let blob = Blob::with_ptr(slice);
-    assert_ne!(
-        blob.len(),
-        size_of::<*const ()>(),
-        "this isn't a wide pointer"
-    );
-    h.with_value(blob, |val| {
-        assert_eq!(val.value_type(), ValueType::Blob);
-        let borrowed_slice = unsafe { &*val.get_ptr::<[u32]>()? };
-        assert_eq!(borrowed_slice, &[1, 2, 3, 4]);
-        Ok(())
-    });
-}
-
-#[test]
-fn get_ptr_null() {
-    let h = TestHelpers::new();
-    let null: Option<i64> = None;
-    h.with_value(null, |val| {
-        assert_eq!(val.value_type(), ValueType::Null);
-        let ptr: *const () = val.get_ptr()?;
-        assert!(ptr.is_null(), "ptr should be null");
-        Ok(())
-    });
-}
-
-#[test]
-fn get_ptr_invalid() {
-    let h = TestHelpers::new();
-    h.with_value([1, 2, 3], |val| {
-        assert_eq!(val.value_type(), ValueType::Blob);
-        val.get_ptr::<()>().expect_err("incorrect length");
         Ok(())
     });
 }

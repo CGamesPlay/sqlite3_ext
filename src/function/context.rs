@@ -262,3 +262,12 @@ impl ToContextResult for Value {
         }
     }
 }
+
+/// Sets an arbitrary pointer to the context result.
+impl<T: 'static + ?Sized> ToContextResult for UnsafePtr<T> {
+    unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
+        let subtype = self.subtype;
+        self.into_blob().assign_to(context);
+        ffi::sqlite3_result_subtype(context, subtype as _);
+    }
+}

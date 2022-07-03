@@ -1,4 +1,4 @@
-use crate::{ffi, types::*, value::*};
+use crate::{ffi, sqlite3_require_version, types::*, value::*};
 use std::{
     mem::{size_of, zeroed},
     ptr::write_unaligned,
@@ -59,6 +59,9 @@ pub struct UnsafePtr<T: ?Sized> {
 
 impl<T: ?Sized> UnsafePtr<T> {
     /// Create a new UnsafePtr with the given subtype.
+    ///
+    /// Subtype verification requires SQLite 3.9.0. On earlier versions of SQLite, the
+    /// subtype field is ignored.
     pub fn new(ptr: *const T, subtype: u8) -> Self {
         assert!(subtype != 0, "subtype must not be 0");
         Self { subtype, ptr }
@@ -71,17 +74,23 @@ impl<T: ?Sized> UnsafePtr<T> {
     ///
     /// This method will fail if the value cannot be interpreted as a pointer. It will
     /// create a null pointer if the value is SQL NULL.
+    ///
+    /// Subtype verification requires SQLite 3.9.0. On earlier versions of SQLite, the
+    /// subtype field is ignored.
     pub fn from_value_ref(val: &mut ValueRef, subtype: u8) -> Result<Self> {
         unsafe {
             let len = ffi::sqlite3_value_bytes(val.as_ptr()) as usize;
+            let subtype_match = sqlite3_require_version!(
+                3_009_000,
+                ffi::sqlite3_value_subtype(val.as_ptr()) as u8 == subtype,
+                subtype == subtype
+            );
             if len == 0 {
                 Ok(UnsafePtr {
                     ptr: zeroed(),
                     subtype,
                 })
-            } else if len != size_of::<&T>() {
-                Err(Error::Sqlite(ffi::SQLITE_MISMATCH))
-            } else if ffi::sqlite3_value_subtype(val.as_ptr()) as u8 != subtype {
+            } else if len != size_of::<&T>() || !subtype_match {
                 Err(Error::Sqlite(ffi::SQLITE_MISMATCH))
             } else {
                 let bits = ffi::sqlite3_value_blob(val.as_ptr()) as *const *const T;
@@ -176,6 +185,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(all(feature = "static_modern"))]
     fn get_ptr_invalid_subtype() {
         let h = TestHelpers::new();
         let owned_string = "input string".to_owned();

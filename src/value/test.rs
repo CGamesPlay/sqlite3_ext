@@ -92,6 +92,7 @@ fn get_str_invalid() {
 }
 
 #[test]
+#[cfg(all(feature = "static_modern"))]
 fn get_ref() {
     let h = TestHelpers::new();
     #[derive(PartialEq, Debug)]

@@ -1,6 +1,17 @@
 use super::super::{ffi, sqlite3_require_version, types::*};
 use std::{ffi::CStr, ptr, slice};
 
+/// Information about a query plan.
+///
+/// This struct contains all of the information about a query plan that SQLite is attempting on
+/// the virtual table. The struct will be passed to
+/// [VTab::best_index](super::VTab::best_index).
+///
+/// This struct is both an input and an output. The virtual table implementation should examine
+/// the [constraints](Self::constraints) and [order_by](Self::order_by) fields, decide on the
+/// best query plan, and then set the results using
+/// [constraint_usage_mut](Self::constraint_usage_mut),
+/// [set_estimated_cost](Self::set_estimated_cost), and the other methods.
 #[repr(transparent)]
 pub struct IndexInfo {
     base: ffi::sqlite3_index_info,
@@ -48,7 +59,7 @@ pub enum ConstraintOp {
 /// implementation to decide if it is safe to consume the [order_by](IndexInfo::order_by)
 /// fields using [IndexInfo::set_order_by_consumed].
 ///
-/// The levels described here are progressively less restrictive. If the virtual table
+/// The levels described here are progressively less demanding. If the virtual table
 /// implementation meets the requirements of [DistinctMode::Ordered], then it is always safe to
 /// consume the order_by fields.
 ///
@@ -90,6 +101,12 @@ impl IndexInfo {
         }
     }
 
+    /// Determine if a query is DISTINCT.
+    pub fn distinct_mode(&self) -> DistinctMode {
+        let ret = unsafe { ffi::sqlite3_vtab_distinct(&self.base as *const _ as _) };
+        DistinctMode::from_sqlite(ret)
+    }
+
     pub fn constraint_usage(&self) -> &[IndexInfoConstraintUsage] {
         unsafe {
             slice::from_raw_parts(
@@ -108,12 +125,6 @@ impl IndexInfo {
         }
     }
 
-    /// Determine if a query is DISTINCT.
-    pub fn distinct_mode(&self) -> DistinctMode {
-        let ret = unsafe { ffi::sqlite3_vtab_distinct(&self.base as *const _ as _) };
-        DistinctMode::from_sqlite(ret)
-    }
-
     /// Retrieve the value previously set by
     /// [set_index_num](Self::set_index_num).
     pub fn index_num(&self) -> i32 {
@@ -121,7 +132,7 @@ impl IndexInfo {
     }
 
     /// Set the index number of this query plan. This is an arbitrary value which will be
-    /// passed to [VTabCursor::filter].
+    /// passed to [VTabCursor::filter](super::VTabCursor::filter).
     pub fn set_index_num(&mut self, val: i32) {
         self.base.idxNum = val;
     }
@@ -138,7 +149,7 @@ impl IndexInfo {
     }
 
     /// Set the index string of this query plan. This is an arbitrary value which will be
-    /// passed to [VTabCursor::filter].
+    /// passed to [VTabCursor::filter](super::VTabCursor::filter).
     ///
     /// This function can fail if SQLite is not able to allocate memory for the string.
     pub fn set_index_str(&mut self, val: Option<&str>) -> Result<()> {
@@ -173,6 +184,11 @@ impl IndexInfo {
         self.base.orderByConsumed != 0
     }
 
+    /// Indicate that the virtual table fully understands the requirements of the
+    /// [order_by](Self::order_by) and [distinct_mode](Self::distinct_mode) fields. If this
+    /// is the case, then SQLite can omit reordering the results of the query, which may
+    /// improve performance. It is never necessary to use the order_by information, but
+    /// virtual tables may opt to use it as a performance optimization.
     pub fn set_order_by_consumed(&mut self, val: bool) {
         self.base.orderByConsumed = val as _;
     }

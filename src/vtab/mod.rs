@@ -72,12 +72,20 @@ pub trait VTab<'vtab> {
 
     /// Corrresponds to xBestIndex.
     ///
-    /// If best_index returns
-    /// [`Err(Error::constraint_violation())`](Error::constraint_violation), then
-    /// xBestIndex will return `SQLITE_CONSTRAINT`. Any other error will cause xBestIndex
-    /// to fail.
+    /// This method is called when SQLite is planning to query a virtual table. See
+    /// [IndexInfo] for details.
+    ///
+    /// If this method returns
+    /// [`Err(Error::constraint_violation())`](Error::constraint_violation), that does not
+    /// indicate an error. Rather, it indicates that the particular combination of input
+    /// parameters specified is insufficient for the virtual table to do its job. This is
+    /// logically the same as setting the [estimated_cost](IndexInfo::set_estimated_cost)
+    /// to infinity. If every call to best_index for a particular query plan returns this
+    /// error, that means there is no way for the virtual table to be safely used, and the
+    /// SQLite call will fail with a "no query solution" error.
     fn best_index(&self, index_info: &mut IndexInfo) -> Result<()>;
 
+    /// Create an uninitialized query.
     fn open(&'vtab mut self) -> Result<Self::Cursor>;
 }
 
@@ -185,6 +193,10 @@ pub trait VTabCursor {
     /// the cursor, before any other methods of this trait. After calling this method, the
     /// cursor should point to the first row of results (or [eof](VTabCursor::eof) should
     /// return true to indicate there are no results).
+    ///
+    /// The index_num parameter is an arbitrary value which was passed to
+    /// [IndexInfo::set_index_num]. The index_str parameter is an arbitrary value which was
+    /// passed to [IndexInfo::set_index_str].
     fn filter(
         &mut self,
         index_num: i32,

@@ -215,7 +215,7 @@ impl<O: Write> Drop for VTabLog<O> {
 impl<O: Write> VTabCursor for VTabLogCursor<'_, O> {
     type ColumnType = String;
 
-    fn filter(&mut self, _: usize, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
+    fn filter(&mut self, _: i32, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
         writeln!(
             self.vtab,
             "filter(tab={}, cursor={}, args={:?})",

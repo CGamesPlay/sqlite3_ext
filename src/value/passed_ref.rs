@@ -19,7 +19,7 @@ pub(crate) const POINTER_TAG: *const i8 = b"sqlite3_ext:PassedRef\0".as_ptr() as
 /// ```no_run
 /// use sqlite3_ext::{PassedRef, function::Context, Result, ValueRef};
 ///
-/// fn produce_ref(ctx: &Context, args: &mut [&mut ValueRef]) -> PassedRef {
+/// fn produce_ref(ctx: &Context, args: &mut [&mut ValueRef]) -> PassedRef<String> {
 ///     let val = "owned string".to_owned();
 ///     PassedRef::new(val)
 /// }

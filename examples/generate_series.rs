@@ -45,8 +45,8 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
     ///    (8)  output in descending order
     ///    (16) output in ascending order
     fn best_index(&self, index_info: &mut IndexInfo) -> Result<()> {
-        let mut query_plan: usize = 0;
-        let mut unusable_mask: usize = 0;
+        let mut query_plan: i32 = 0;
+        let mut unusable_mask: i32 = 0;
         let mut has_start = false;
         let mut arg_index: [isize; 3] = [-1, -1, -1];
         for (i, constraint) in index_info.constraints().iter().enumerate() {
@@ -129,7 +129,7 @@ impl VTabCursor for Cursor {
 
     fn filter(
         &mut self,
-        query_plan: usize,
+        query_plan: i32,
         _: Option<&str>,
         args: &mut [&mut ValueRef],
     ) -> Result<()> {

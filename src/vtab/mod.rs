@@ -187,7 +187,7 @@ pub trait VTabCursor {
     /// return true to indicate there are no results).
     fn filter(
         &mut self,
-        index_num: usize,
+        index_num: i32,
         index_str: Option<&str>,
         args: &mut [&mut ValueRef],
     ) -> Result<()>;

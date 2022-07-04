@@ -42,6 +42,35 @@ pub enum ConstraintOp {
     Function(u8), /* 3.25.0 and later */
 }
 
+/// Describes the requirements of the virtual table query.
+///
+/// This value is retured by [IndexInfo::distinct_mode]. It allows the virtual table
+/// implementation to decide if it is safe to consume the [order_by](IndexInfo::order_by)
+/// fields using [IndexInfo::set_order_by_consumed].
+///
+/// The levels described here are progressively less restrictive. If the virtual table
+/// implementation meets the requirements of [DistinctMode::Ordered], then it is always safe to
+/// consume the order_by fields.
+///
+/// For the purposes of comparing virtual table output values to see if the values are same
+/// value for sorting purposes, two NULL values are considered to be the same. In other words,
+/// the comparison operator is "IS" (or "IS NOT DISTINCT FROM") and not "==".
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum DistinctMode {
+    /// The virtual table must return all rows in the correct order according to the
+    /// [order_by](IndexInfo::order_by) fields.
+    Ordered,
+    /// The virtual table may return rows in any order, but all rows that are in the same
+    /// group must be adjacent to one another. A group is defined as all rows for which all
+    /// of the columns in [order_by](IndexInfo::order_by) are equal. This is the mode used
+    /// when planning a GROUP BY query.
+    Grouped,
+    /// The same as [DistinctMode::Grouped], however the virtual table is allowed (but not
+    /// required) to skip all but a single row within each group. This is the mode used
+    /// when planning a DISTINCT query.
+    Distinct,
+}
+
 impl IndexInfo {
     pub fn constraints(&self) -> &[IndexInfoConstraint] {
         unsafe {
@@ -79,14 +108,26 @@ impl IndexInfo {
         }
     }
 
-    pub fn index_num(&self) -> usize {
-        self.base.idxNum as _
+    /// Determine if a query is DISTINCT.
+    pub fn distinct_mode(&self) -> DistinctMode {
+        let ret = unsafe { ffi::sqlite3_vtab_distinct(&self.base as *const _ as _) };
+        DistinctMode::from_sqlite(ret)
     }
 
-    pub fn set_index_num(&mut self, val: usize) {
-        self.base.idxNum = val as _;
+    /// Retrieve the value previously set by
+    /// [set_index_num](Self::set_index_num).
+    pub fn index_num(&self) -> i32 {
+        self.base.idxNum
     }
 
+    /// Set the index number of this query plan. This is an arbitrary value which will be
+    /// passed to [VTabCursor::filter].
+    pub fn set_index_num(&mut self, val: i32) {
+        self.base.idxNum = val;
+    }
+
+    /// Retrieve the value previously set by
+    /// [set_index_str](Self::set_index_str).
     pub fn index_str(&self) -> Option<&str> {
         if self.base.idxStr.is_null() {
             None
@@ -96,8 +137,10 @@ impl IndexInfo {
         }
     }
 
-    /// Set the index string to the provided value. This function can fail if SQLite is not
-    /// able to allocate memory for the string.
+    /// Set the index string of this query plan. This is an arbitrary value which will be
+    /// passed to [VTabCursor::filter].
+    ///
+    /// This function can fail if SQLite is not able to allocate memory for the string.
     pub fn set_index_str(&mut self, val: Option<&str>) -> Result<()> {
         if self.base.needToFreeIdxStr != 0 {
             unsafe { ffi::sqlite3_free(self.base.idxStr as _) };
@@ -124,6 +167,8 @@ impl IndexInfo {
         self.base.needToFreeIdxStr = 0;
     }
 
+    /// Retrieve the value previously set by
+    /// [set_order_by_consumed](Self::set_order_by_consumed).
     pub fn order_by_consumed(&self) -> bool {
         self.base.orderByConsumed != 0
     }
@@ -132,6 +177,8 @@ impl IndexInfo {
         self.base.orderByConsumed = val as _;
     }
 
+    /// Retrieve the value previously set by
+    /// [set_estimated_cost](Self::set_estimated_cost).
     pub fn estimated_cost(&self) -> f64 {
         self.base.estimatedCost
     }
@@ -140,6 +187,9 @@ impl IndexInfo {
         self.base.estimatedCost = val;
     }
 
+    /// Retrieve the value previously set by
+    /// [set_estimated_rows](Self::set_estimated_rows).
+    ///
     /// Requires SQLite 3.8.2.
     pub fn estimated_rows(&self) -> Result<i64> {
         sqlite3_require_version!(3_008_002, Ok(self.base.estimatedRows))
@@ -154,6 +204,9 @@ impl IndexInfo {
         })
     }
 
+    /// Retrieve the value previously set by
+    /// [set_scan_flags](Self::set_scan_flags).
+    ///
     /// Requires SQLite 3.9.0.
     pub fn scan_flags(&self) -> Result<usize> {
         sqlite3_require_version!(3_009_000, Ok(self.base.idxFlags as _))
@@ -304,6 +357,17 @@ impl ConstraintOp {
             74 => ConstraintOp::Offset,
             150..=255 => ConstraintOp::Function(val),
             _ => panic!("invalid constraint op"),
+        }
+    }
+}
+
+impl DistinctMode {
+    fn from_sqlite(val: i32) -> Self {
+        match val {
+            0 => Self::Ordered,
+            1 => Self::Grouped,
+            2 => Self::Distinct,
+            _ => panic!("invalid distinct mode"),
         }
     }
 }

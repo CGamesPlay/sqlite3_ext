@@ -34,7 +34,8 @@ impl<'vtab> VTab<'vtab> for TestVTab<'vtab> {
         Self::connect_create()
     }
 
-    fn best_index(&self, _: &mut IndexInfo) -> Result<()> {
+    fn best_index(&self, index_info: &mut IndexInfo) -> Result<()> {
+        assert_eq!(index_info.distinct_mode(), DistinctMode::Ordered);
         Ok(())
     }
 
@@ -68,7 +69,7 @@ impl VTabCursor for TestCursor {
 
     fn filter(
         &mut self,
-        _index_num: usize,
+        _index_num: i32,
         _index_str: Option<&str>,
         _args: &mut [&mut ValueRef],
     ) -> Result<()> {

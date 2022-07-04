@@ -22,18 +22,34 @@ pub fn sqlite3_libversion() -> &'static str {
     ret.to_str().expect("sqlite3_libversion")
 }
 
+pub fn sqlite3_sourceid() -> &'static str {
+    let ret = unsafe { CStr::from_ptr(ffi::sqlite3_sourceid()) };
+    ret.to_str().expect("sqlite3_sourceid")
+}
+
 #[repr(transparent)]
 pub struct Connection {
     db: ffi::sqlite3,
 }
 
 impl Connection {
+    /// Convert an SQLite handle into a reference to Connection.
+    ///
+    /// # Safety
+    ///
+    /// The behavior of this method is undefined if the passed pointer is not valid.
     pub unsafe fn from_ptr<'a>(db: *mut ffi::sqlite3) -> &'a mut Connection {
         &mut *(db as *mut Connection)
     }
 
-    fn as_ptr(&self) -> *mut ffi::sqlite3 {
-        &self.db as *const ffi::sqlite3 as _
+    /// Get the underlying SQLite handle.
+    pub fn as_ptr(&self) -> *const ffi::sqlite3 {
+        &self.db
+    }
+
+    /// Get the underlying SQLite handle, mutably.
+    pub fn as_mut_ptr(&mut self) -> *mut ffi::sqlite3 {
+        &self.db as *const _ as _
     }
 }
 

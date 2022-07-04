@@ -287,7 +287,7 @@ impl Connection {
         let handle = Box::new(Handle::<'vtab, T> { vtab, aux });
         let rc = unsafe {
             ffi::sqlite3_create_module_v2(
-                self.as_ptr(),
+                self.as_ptr() as _,
                 name.as_ptr() as _,
                 &handle.vtab,
                 Box::into_raw(handle) as _,

@@ -1,11 +1,11 @@
 //! Wrappers for creating virtual tables.
 
 use super::{
-    super::{ffi, sqlite3_libversion_number, types::*, Connection},
+    super::{ffi, types::*, Connection, SQLITE_VERSION},
     *,
 };
 use sealed::sealed;
-use std::{cmp::max, ffi::CString, marker::PhantomData};
+use std::{ffi::CString, marker::PhantomData};
 
 union ModuleBytes {
     bytes: [u8; std::mem::size_of::<ffi::sqlite3_module>()],
@@ -24,8 +24,9 @@ const EMPTY_MODULE: ffi::sqlite3_module = unsafe {
     .module
 };
 
+#[cfg(modern_sqlite)]
 fn set_version(m: &mut ffi::sqlite3_module, val: i32) {
-    m.iVersion = max(m.iVersion, val);
+    m.iVersion = std::cmp::max(m.iVersion, val);
 }
 
 /// Handle to the module and aux data, so that it can be properly dropped when the module is
@@ -72,14 +73,14 @@ where
         m.xBegin = Some(stubs::vtab_begin::<T>);
         m.xSync = Some(stubs::vtab_sync::<T>);
         m.xCommit = Some(stubs::vtab_commit::<T>);
-        let _: Result<()> = sqlite3_require_version!(3_007_007, {
+        #[cfg(modern_sqlite)]
+        if SQLITE_VERSION.is(3_007_007) {
             set_version(m, 2);
             m.xRollback = Some(stubs::vtab_rollback::<T>);
             m.xSavepoint = Some(stubs::vtab_savepoint::<T>);
             m.xRelease = Some(stubs::vtab_release::<T>);
             m.xRollbackTo = Some(stubs::vtab_rollback_to::<T>);
-            Ok(())
-        });
+        }
         self
     }
 
@@ -187,6 +188,7 @@ module_base!(
 impl<'vtab, T: CreateVTab<'vtab>> StandardModule<'vtab, T> {
     #[doc(hidden)]
     pub fn new() -> Self {
+        #[cfg_attr(not(modern_sqlite), allow(unused_mut))]
         let mut ret = StandardModule {
             base: ffi::sqlite3_module {
                 xCreate: Some(stubs::vtab_create::<T>),
@@ -205,12 +207,10 @@ impl<'vtab, T: CreateVTab<'vtab>> StandardModule<'vtab, T> {
             },
             phantom: PhantomData,
         };
-        if T::SHADOW_NAMES.len() > 0 {
-            let _: Result<()> = sqlite3_require_version!(3_026_000, {
-                set_version(&mut ret.base, 3);
-                ret.base.xShadowName = Some(stubs::vtab_shadow_name::<T>);
-                Ok(())
-            });
+        #[cfg(modern_sqlite)]
+        if T::SHADOW_NAMES.len() > 0 && SQLITE_VERSION.is(3_026_000) {
+            set_version(&mut ret.base, 3);
+            ret.base.xShadowName = Some(stubs::vtab_shadow_name::<T>);
         }
         ret
     }
@@ -243,27 +243,23 @@ impl<'vtab, T: VTab<'vtab>> EponymousModule<'vtab, T> {
 impl<'vtab, T: VTab<'vtab>> EponymousOnlyModule<'vtab, T> {
     #[doc(hidden)]
     pub fn new() -> Result<Self> {
-        const MIN_VERSION: i32 = 3_009_000;
-        if sqlite3_libversion_number() >= MIN_VERSION {
-            Ok(EponymousOnlyModule {
-                base: ffi::sqlite3_module {
-                    xConnect: Some(stubs::vtab_connect::<T>),
-                    xBestIndex: Some(stubs::vtab_best_index::<T>),
-                    xDisconnect: Some(stubs::vtab_disconnect::<T>),
-                    xOpen: Some(stubs::vtab_open::<T>),
-                    xClose: Some(stubs::vtab_close::<T>),
-                    xFilter: Some(stubs::vtab_filter::<T>),
-                    xNext: Some(stubs::vtab_next::<T>),
-                    xEof: Some(stubs::vtab_eof::<T>),
-                    xColumn: Some(stubs::vtab_column::<T>),
-                    xRowid: Some(stubs::vtab_rowid::<T>),
-                    ..EMPTY_MODULE
-                },
-                phantom: PhantomData,
-            })
-        } else {
-            Err(Error::VersionNotSatisfied(MIN_VERSION))
-        }
+        SQLITE_VERSION.require(3_009_000)?;
+        Ok(EponymousOnlyModule {
+            base: ffi::sqlite3_module {
+                xConnect: Some(stubs::vtab_connect::<T>),
+                xBestIndex: Some(stubs::vtab_best_index::<T>),
+                xDisconnect: Some(stubs::vtab_disconnect::<T>),
+                xOpen: Some(stubs::vtab_open::<T>),
+                xClose: Some(stubs::vtab_close::<T>),
+                xFilter: Some(stubs::vtab_filter::<T>),
+                xNext: Some(stubs::vtab_next::<T>),
+                xEof: Some(stubs::vtab_eof::<T>),
+                xColumn: Some(stubs::vtab_column::<T>),
+                xRowid: Some(stubs::vtab_rowid::<T>),
+                ..EMPTY_MODULE
+            },
+            phantom: PhantomData,
+        })
     }
 }
 

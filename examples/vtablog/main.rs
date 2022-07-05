@@ -152,6 +152,7 @@ impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
 }
 
 impl<'vtab, O: Write + 'static> CreateVTab<'vtab> for VTabLog<O> {
+    #[cfg(modern_sqlite)]
     const SHADOW_NAMES: &'static [&'static str] = &["shadow"];
 
     fn create(_: &mut VTabConnection, db: &Self::Aux, args: &[&str]) -> Result<(String, Self)> {
@@ -308,6 +309,7 @@ impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
         Ok(())
     }
 
+    #[cfg(modern_sqlite)]
     fn savepoint(&mut self, n: i32) -> Result<()> {
         writeln!(
             self.vtab,
@@ -317,6 +319,7 @@ impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
         Ok(())
     }
 
+    #[cfg(modern_sqlite)]
     fn release(&mut self, n: i32) -> Result<()> {
         writeln!(
             self.vtab,
@@ -326,6 +329,7 @@ impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
         Ok(())
     }
 
+    #[cfg(modern_sqlite)]
     fn rollback_to(&mut self, n: i32) -> Result<()> {
         writeln!(
             self.vtab,

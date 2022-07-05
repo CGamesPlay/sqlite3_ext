@@ -17,27 +17,22 @@ fn setup() -> rusqlite::Result<(rusqlite::Connection, Rc<RefCell<Vec<u8>>>)> {
     Ok((conn, out))
 }
 
-fn patch_best_index(mut input: String) -> String {
-    lazy_static! {
-        static ref ESTIMATED_ROWS: Regex = Regex::new("estimated_rows: Ok\\([^)]+\\)").unwrap();
-        static ref SCAN_FLAGS: Regex = Regex::new("scan_flags: Ok\\([^)]+\\)").unwrap();
-        static ref COLUMNS_USED: Regex = Regex::new("columns_used: Ok\\([^)]+\\)").unwrap();
-    }
-    input = sqlite3_require_version!(3_008_002, input, {
-        ESTIMATED_ROWS
-            .replace_all(&input, "estimated_rows: Err(VersionNotSatisfied(3008002))")
-            .to_string()
-    });
-    input = sqlite3_require_version!(3_009_000, input, {
-        SCAN_FLAGS
-            .replace_all(&input, "scan_flags: Err(VersionNotSatisfied(3009000))")
-            .to_string()
-    });
-    input = sqlite3_require_version!(3_010_000, input, {
-        COLUMNS_USED
-            .replace(&input, "columns_used: Err(VersionNotSatisfied(3010000))")
-            .to_string()
-    });
+lazy_static! {
+    static ref ESTIMATED_ROWS: Regex = Regex::new(", estimated_rows: Ok\\([^)]+\\)").unwrap();
+    static ref SCAN_FLAGS: Regex = Regex::new(", scan_flags: Ok\\([^)]+\\)").unwrap();
+    static ref COLUMNS_USED: Regex = Regex::new(", columns_used: Ok\\([^)]+\\)").unwrap();
+}
+
+#[cfg(modern_sqlite)]
+fn patch_output(input: String) -> String {
+    input
+}
+
+#[cfg(not(modern_sqlite))]
+fn patch_output(mut input: String) -> String {
+    input = ESTIMATED_ROWS.replace_all(&input, "").to_string();
+    input = SCAN_FLAGS.replace_all(&input, "").to_string();
+    input = COLUMNS_USED.replace(&input, "").to_string();
     input
 }
 
@@ -63,7 +58,7 @@ fn read() -> rusqlite::Result<()> {
             .collect::<Vec<Vec<String>>>()
     );
     let out = from_utf8(&out.borrow()).unwrap().to_owned();
-    let expected = patch_best_index(indoc! {r#"
+    let expected = patch_output(indoc! {r#"
         create(tab=100, args=["vtablog", "temp", "log", "schema='CREATE TABLE x(a,b,c)'", "rows=3"])
         begin(tab=100, transaction=101)
         sync(tab=100, transaction=101)
@@ -128,7 +123,7 @@ fn update() -> rusqlite::Result<()> {
     conn.execute("UPDATE log SET a = b WHERE rowid = 1", [])?;
     drop(conn);
     let out = from_utf8(&out.borrow()).unwrap().to_owned();
-    let expected = patch_best_index(indoc! {r#"
+    let expected = patch_output(indoc! {r#"
         create(tab=100, args=["vtablog", "temp", "log", "schema='CREATE TABLE x(a,b,c)'", "rows=3"])
         begin(tab=100, transaction=101)
         sync(tab=100, transaction=101)
@@ -173,7 +168,7 @@ fn delete() -> rusqlite::Result<()> {
     conn.execute("DELETE FROM log WHERE a = 'a1'", [])?;
     drop(conn);
     let out = from_utf8(&out.borrow()).unwrap().to_owned();
-    let expected = patch_best_index(indoc! {r#"
+    let expected = patch_output(indoc! {r#"
         create(tab=100, args=["vtablog", "temp", "log", "schema='CREATE TABLE x(a,b,c)'", "rows=3"])
         begin(tab=100, transaction=101)
         sync(tab=100, transaction=101)
@@ -233,9 +228,9 @@ fn rename() -> rusqlite::Result<()> {
 
 #[test]
 fn shadow_name() -> rusqlite::Result<()> {
-    sqlite3_require_version!(3_026_000, {}, {
+    if !cfg!(modern_sqlite) {
         return Ok(());
-    });
+    }
     let (conn, out) = setup()?;
     conn.set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
     match conn.execute("CREATE TABLE log_shadow (a, b, c)", []) {

@@ -131,8 +131,8 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_keyword_count |  | | |
 | sqlite3_keyword_name |  | | |
 | sqlite3_last_insert_rowid |  | | |
-| sqlite3_libversion |  | :white_check_mark: | Crate-level function |
-| sqlite3_libversion_number |  | :white_check_mark: | Crate-level function |
+| sqlite3_libversion |  | :white_check_mark: | SQLITE_VERSION.as_str |
+| sqlite3_libversion_number |  | :white_check_mark: | SQLITE_VERSION.get |
 | sqlite3_limit |  | | |
 | sqlite3_load_extension |  | | |
 | sqlite3_log |  | | |
@@ -210,7 +210,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_snapshot_recover |  | | |
 | sqlite3_snprintf |  | | |
 | sqlite3_soft_heap_limit64 |  | | |
-| sqlite3_sourceid |  | :white_check_mark: | Crate-level function |
+| sqlite3_sourceid |  | :white_check_mark: | SQLITE_VERSION.sourceid |
 | sqlite3_sql |  | | |
 | sqlite3_status |  | | |
 | sqlite3_status64 |  | | |
@@ -277,7 +277,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_vsnprintf |  | :grey_exclamation: | Unnecessary |
 | sqlite3_vtab_collation | sqlite3_index_info | | |
 | sqlite3_vtab_config | sqlite3 | :white_check_mark: | VTabConnection |
-| sqlite3_vtab_distinct | sqlite3_index_info | | |
+| sqlite3_vtab_distinct | sqlite3_index_info | :white_check_mark: | IndexInfo::distinct_mode |
 | sqlite3_vtab_in | sqlite3_index_info | | |
 | sqlite3_vtab_in_first | sqlite3_value | | |
 | sqlite3_vtab_in_next | sqlite3_value | | |

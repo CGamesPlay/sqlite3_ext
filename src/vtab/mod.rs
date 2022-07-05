@@ -21,10 +21,7 @@
 //!   operate on the table.
 //! - [RenameVTab] indicates that the table supports ALTER TABLE RENAME TO.
 
-use super::{
-    ffi, function::ToContextResult, sqlite3_require_version, types::*, value::*, Connection,
-    RiskLevel,
-};
+use super::{ffi, function::ToContextResult, types::*, value::*, Connection};
 pub use function::*;
 pub use index_info::*;
 pub use module::*;
@@ -101,6 +98,7 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
     /// Shadow tables are read-only if the database has SQLITE_DBCONFIG_DEFENSIVE set, and
     /// SQLite is version 3.26.0 or greater. For more information, see [the SQLite
     /// documentation](https://www.sqlite.org/vtab.html#the_xshadowname_method).
+    #[cfg(modern_sqlite)]
     const SHADOW_NAMES: &'static [&'static str] = &[];
 
     /// Corresponds to xCreate.
@@ -273,6 +271,7 @@ pub trait VTabTransaction {
     /// no guarantee that n starts at zero or increases by 1 in between calls.
     ///
     /// This method will only be called on SQLite 3.7.7 or later.
+    #[cfg(modern_sqlite)]
     fn savepoint(&mut self, n: i32) -> Result<()>;
 
     /// Invalidate previous save points.
@@ -285,6 +284,7 @@ pub trait VTabTransaction {
     /// [savepoint](VTabTransaction::savepoint).
     ///
     /// This method will only be called on SQLite 3.7.7 or later.
+    #[cfg(modern_sqlite)]
     fn release(&mut self, n: i32) -> Result<()>;
 
     /// Restore a save point.
@@ -295,6 +295,7 @@ pub trait VTabTransaction {
     /// exactly.
     ///
     /// This method will only be called on SQLite 3.7.7 or later.
+    #[cfg(modern_sqlite)]
     fn rollback_to(&mut self, n: i32) -> Result<()>;
 }
 
@@ -317,31 +318,35 @@ impl VTabConnection {
     /// method of the virtual table implementation. See [the SQLite documentation](https://www.sqlite.org/c3ref/c_vtab_constraint_support.html#sqlitevtabconstraintsupport) for more details.
     ///
     /// Requires SQLite 3.7.7.
+    #[cfg(modern_sqlite)]
     pub fn enable_constraints(&mut self) -> Result<()> {
-        sqlite3_require_version!(3_007_007, unsafe {
+        super::SQLITE_VERSION.require(3_007_007)?;
+        unsafe {
             Error::from_sqlite(ffi::sqlite3_vtab_config(
                 &mut self.db,
                 ffi::SQLITE_VTAB_CONSTRAINT_SUPPORT,
                 1,
             ))
-        })
+        }
     }
 
     /// Set the risk level of this virtual table.
     ///
-    /// See the [RiskLevel] enum for details about what the individual options mean.
+    /// See the [RiskLevel](super::RiskLevel) enum for details about what the individual
+    /// options mean.
     ///
     /// Requires SQLite 3.31.0.
-    pub fn set_risk(&mut self, level: RiskLevel) -> Result<()> {
-        let _ = level;
-        sqlite3_require_version!(3_031_000, unsafe {
+    #[cfg(modern_sqlite)]
+    pub fn set_risk(&mut self, level: super::RiskLevel) -> Result<()> {
+        super::SQLITE_VERSION.require(3_031_000)?;
+        unsafe {
             Error::from_sqlite(ffi::sqlite3_vtab_config(
                 &mut self.db,
                 match level {
-                    RiskLevel::Innocuous => ffi::SQLITE_VTAB_INNOCUOUS,
-                    RiskLevel::DirectOnly => ffi::SQLITE_VTAB_DIRECTONLY,
+                    super::RiskLevel::Innocuous => ffi::SQLITE_VTAB_INNOCUOUS,
+                    super::RiskLevel::DirectOnly => ffi::SQLITE_VTAB_DIRECTONLY,
                 },
             ))
-        })
+        }
     }
 }

@@ -1,5 +1,5 @@
 use super::FromUserData;
-use crate::{ffi, sqlite3_require_version, types::*, value::*, Connection};
+use crate::{ffi, sqlite3_match_version, types::*, value::*, Connection};
 use std::{
     any::TypeId,
     ffi::CString,
@@ -172,22 +172,20 @@ to_context_result! {
     match &'static str as (ctx, val) => {
         let val = val.as_bytes();
         let len = val.len();
-        sqlite3_require_version!(3_008_007, {
-            ffi::sqlite3_result_text64(ctx, val.as_ptr() as _, len as _, None, ffi::SQLITE_UTF8 as _)
-        }, {
-            ffi::sqlite3_result_text(ctx, val.as_ptr() as _, len as _, None)
-        });
+        sqlite3_match_version! {
+            3_008_007 => ffi::sqlite3_result_text64(ctx, val.as_ptr() as _, len as _, None, ffi::SQLITE_UTF8 as _),
+            _ => ffi::sqlite3_result_text(ctx, val.as_ptr() as _, len as _, None),
+        }
     },
     /// Assign an owned string to the context result.
     match String as (ctx, val) => {
         let val = val.as_bytes();
         let len = val.len();
         let cstring = CString::new(val).unwrap().into_raw();
-        sqlite3_require_version!(3_008_007, {
-            ffi::sqlite3_result_text64(ctx, cstring, len as _, Some(ffi::drop_cstring), ffi::SQLITE_UTF8 as _);
-        }, {
-            ffi::sqlite3_result_text(ctx, cstring, len as _, None)
-        });
+        sqlite3_match_version! {
+            3_008_007 => ffi::sqlite3_result_text64(ctx, cstring, len as _, Some(ffi::drop_cstring), ffi::SQLITE_UTF8 as _),
+            _ => ffi::sqlite3_result_text(ctx, cstring, len as _, None),
+        }
     },
     /// Sets the context error to this error.
     match Error as (ctx, err) => {
@@ -209,11 +207,10 @@ where
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
         let blob = Blob::from(self);
         let len = blob.len();
-        sqlite3_require_version!(
-            3_008_007,
-            ffi::sqlite3_result_blob64(context, blob.into_raw(), len as _, Some(ffi::drop_blob),),
-            ffi::sqlite3_result_blob(context, blob.into_raw(), len as _, Some(ffi::drop_blob))
-        )
+        sqlite3_match_version! {
+            3_008_007 => ffi::sqlite3_result_blob64(context, blob.into_raw(), len as _, Some(ffi::drop_blob),),
+            _ => ffi::sqlite3_result_blob(context, blob.into_raw(), len as _, Some(ffi::drop_blob)),
+        }
     }
 }
 
@@ -253,30 +250,31 @@ impl ToContextResult for Value {
 /// Sets an arbitrary pointer to the context result.
 impl<T: 'static + ?Sized> ToContextResult for UnsafePtr<T> {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
-        sqlite3_require_version!(
-            3_009_000,
-            {
+        sqlite3_match_version! {
+            3_009_000 => {
                 let subtype = self.subtype;
                 self.into_blob().assign_to(context);
                 ffi::sqlite3_result_subtype(context, subtype as _);
             },
-            self.into_blob().assign_to(context)
-        );
+            _ => self.into_blob().assign_to(context),
+        }
     }
 }
 
 /// Sets the context result to NULL with this value as an associated pointer.
+#[cfg(modern_sqlite)]
 impl<T: 'static> ToContextResult for PassedRef<T> {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
-        sqlite3_require_version!(
-            3_020_000,
-            ffi::sqlite3_result_pointer(
+        sqlite3_match_version! {
+            3_020_000 => ffi::sqlite3_result_pointer(
                 context,
                 Box::into_raw(Box::new(self)) as _,
                 POINTER_TAG,
                 Some(ffi::drop_boxed::<PassedRef<T>>),
             ),
-            ()
-        )
+            _ => {
+                let _ = (POINTER_TAG, context);
+            }
+        }
     }
 }

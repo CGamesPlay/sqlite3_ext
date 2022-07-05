@@ -123,16 +123,14 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
         Some(tok) => {
             if let Some(_) = export {
                 // Persistent loadable extensions were added in SQLite 3.14.0. If
-                // the entry point for the extension returns
-                // SQLITE_OK_LOAD_PERSISTENT, then the load fails. We want to
-                // detect this situation and allow the load to complete anyways:
-                // any API which requires persistent extensions would return an
-                // error, but ignored errors imply that the persistent loading
-                // requirement is optional.
-                quote!(::sqlite3_ext::sqlite3_require_version!(
-                    3_014_000,
-                    ::sqlite3_ext::ffi::SQLITE_OK_LOAD_PERMANENTLY,
-                    ::sqlite3_ext::ffi::SQLITE_OK
+                // we were to return SQLITE_OK_LOAD_PERSISTENT, then the load
+                // would fail. We want the load to complete: any API which
+                // requires persistent extensions would return an error, but
+                // ignored errors imply that the persistent loading requirement
+                // is optional.
+                quote!(::sqlite3_ext::sqlite3_match_version!(
+                    3_014_000 => ::sqlite3_ext::ffi::SQLITE_OK_LOAD_PERMANENTLY,
+                    _ => ::sqlite3_ext::ffi::SQLITE_OK,
                 ))
             } else {
                 return Error::new(tok.span, "unexported extension cannot be persistent")

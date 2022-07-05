@@ -11,6 +11,20 @@ use syn;
 const BINDGEN_OUTPUT: &str = "src/ffi/sqlite3ext.rs";
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_STATIC");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_STATIC_MODERN");
+    let modern = match (
+        env::var_os("CARGO_FEATURE_STATIC"),
+        env::var_os("CARGO_FEATURE_STATIC_MODERN"),
+    ) {
+        (None, _) => true,
+        (Some(_), Some(_)) => true,
+        _ => false,
+    };
+    if modern {
+        println!("cargo:rustc-cfg=modern_sqlite");
+    }
+
     generate_ffi();
 }
 

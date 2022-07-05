@@ -2,7 +2,7 @@
 //!
 //! The functionality in this module is primarily exposed through
 //! [Connection::create_scalar_function] and [Connection::create_aggregate_function].
-use super::{ffi, sqlite3_require_version, types::*, value::*, Connection, RiskLevel};
+use super::{ffi, sqlite3_match_version, types::*, value::*, Connection};
 pub use context::*;
 use std::{cmp::Ordering, ffi::CString, ptr::null_mut};
 
@@ -150,27 +150,22 @@ impl FunctionOptions {
         self
     }
 
-    /// Set the level of risk for this function. See the [RiskLevel] enum for details about
-    /// what the individual options mean.
+    /// Set the level of risk for this function. See the [RiskLevel](super::RiskLevel) enum
+    /// for details about what the individual options mean.
     ///
     /// Requires SQLite 3.31.0. On earlier versions of SQLite, this function is a no-op.
-    pub fn set_risk_level(mut self, level: RiskLevel) -> Self {
-        sqlite3_require_version!(
-            3_031_000,
-            {
-                self.flags |= match level {
-                    RiskLevel::Innocuous => ffi::SQLITE_INNOCUOUS,
-                    RiskLevel::DirectOnly => ffi::SQLITE_DIRECTONLY,
-                };
-                self.flags &= match level {
-                    RiskLevel::Innocuous => !ffi::SQLITE_DIRECTONLY,
-                    RiskLevel::DirectOnly => !ffi::SQLITE_INNOCUOUS,
-                };
-            },
-            {
-                let _ = level;
-            }
-        );
+    #[cfg(modern_sqlite)]
+    pub fn set_risk_level(mut self, level: super::RiskLevel) -> Self {
+        if super::SQLITE_VERSION.is(3_031_000) {
+            self.flags |= match level {
+                super::RiskLevel::Innocuous => ffi::SQLITE_INNOCUOUS,
+                super::RiskLevel::DirectOnly => ffi::SQLITE_DIRECTONLY,
+            };
+            self.flags &= match level {
+                super::RiskLevel::Innocuous => !ffi::SQLITE_DIRECTONLY,
+                super::RiskLevel::DirectOnly => !ffi::SQLITE_INNOCUOUS,
+            };
+        }
         self
     }
 }
@@ -216,34 +211,29 @@ impl Connection {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
         let func = Box::new(func);
         unsafe {
-            sqlite3_require_version!(
-                3_007_003,
-                {
-                    Error::from_sqlite(ffi::sqlite3_create_function_v2(
-                        self.as_ptr() as _,
-                        name.as_ptr() as _,
-                        opts.n_args,
-                        opts.flags,
-                        Box::into_raw(func) as _,
-                        Some(stubs::call_scalar::<R, F>),
-                        None,
-                        None,
-                        Some(ffi::drop_boxed::<F>),
-                    ))
-                },
-                {
-                    Error::from_sqlite(ffi::sqlite3_create_function(
-                        self.as_ptr() as _,
-                        name.as_ptr() as _,
-                        opts.n_args,
-                        opts.flags,
-                        Box::into_raw(func) as _,
-                        Some(stubs::call_scalar::<R, F>),
-                        None,
-                        None,
-                    ))
-                }
-            )
+            Error::from_sqlite(sqlite3_match_version! {
+                3_007_003 => ffi::sqlite3_create_function_v2(
+                    self.as_ptr() as _,
+                    name.as_ptr() as _,
+                    opts.n_args,
+                    opts.flags,
+                    Box::into_raw(func) as _,
+                    Some(stubs::call_scalar::<R, F>),
+                    None,
+                    None,
+                    Some(ffi::drop_boxed::<F>),
+                ),
+                _ => ffi::sqlite3_create_function(
+                    self.as_ptr() as _,
+                    name.as_ptr() as _,
+                    opts.n_args,
+                    opts.flags,
+                    Box::into_raw(func) as _,
+                    Some(stubs::call_scalar::<R, F>),
+                    None,
+                    None,
+                ),
+            })
         }
     }
 
@@ -268,34 +258,29 @@ impl Connection {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
         let user_data = Box::new(user_data);
         unsafe {
-            sqlite3_require_version!(
-                3_007_003,
-                {
-                    Error::from_sqlite(ffi::sqlite3_create_function_v2(
-                        self.as_ptr() as _,
-                        name.as_ptr() as _,
-                        opts.n_args,
-                        opts.flags,
-                        Box::into_raw(user_data) as _,
-                        None,
-                        Some(stubs::aggregate_step::<U, F>),
-                        Some(stubs::aggregate_final::<U, F>),
-                        Some(ffi::drop_boxed::<U>),
-                    ))
-                },
-                {
-                    Error::from_sqlite(ffi::sqlite3_create_function(
-                        self.as_ptr() as _,
-                        name.as_ptr() as _,
-                        opts.n_args,
-                        opts.flags,
-                        Box::into_raw(user_data) as _,
-                        None,
-                        Some(stubs::aggregate_step::<U, F>),
-                        Some(stubs::aggregate_final::<U, F>),
-                    ))
-                }
-            )
+            Error::from_sqlite(sqlite3_match_version! {
+                3_007_003 => ffi::sqlite3_create_function_v2(
+                    self.as_ptr() as _,
+                    name.as_ptr() as _,
+                    opts.n_args,
+                    opts.flags,
+                    Box::into_raw(user_data) as _,
+                    None,
+                    Some(stubs::aggregate_step::<U, F>),
+                    Some(stubs::aggregate_final::<U, F>),
+                    Some(ffi::drop_boxed::<U>),
+                ),
+                _ => ffi::sqlite3_create_function(
+                    self.as_ptr() as _,
+                    name.as_ptr() as _,
+                    opts.n_args,
+                    opts.flags,
+                    Box::into_raw(user_data) as _,
+                    None,
+                    Some(stubs::aggregate_step::<U, F>),
+                    Some(stubs::aggregate_final::<U, F>),
+                ),
+            })
         }
     }
 
@@ -312,9 +297,8 @@ impl Connection {
         opts: &FunctionOptions,
         user_data: U,
     ) -> Result<()> {
-        sqlite3_require_version!(
-            3_025_000,
-            {
+        sqlite3_match_version! {
+            3_025_000 => {
                 let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
                 let user_data = Box::new(user_data);
                 unsafe {
@@ -332,8 +316,8 @@ impl Connection {
                     ))
                 }
             },
-            self.create_legacy_aggregate_function::<U, F>(name, opts, user_data)
-        )
+            _ => self.create_legacy_aggregate_function::<U, F>(name, opts, user_data),
+        }
     }
 
     /// Remove an application-defined scalar or aggregate function. The name and n_args

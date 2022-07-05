@@ -1,4 +1,4 @@
-use crate::{ffi, sqlite3_require_version, stack_ref, types::*};
+use crate::{ffi, sqlite3_match_version, stack_ref, types::*};
 use std::{ffi::CStr, ptr};
 
 stack_ref!(static CURRENT_INDEX_INFO: &*const ffi::sqlite3_index_info);
@@ -33,9 +33,17 @@ impl IndexInfo {
     }
 
     /// Determine if a query is DISTINCT.
+    ///
+    /// Requires SQLite 3.38.0. On earlier versions, this function will always return
+    /// [DistinctMode::Ordered].
     pub fn distinct_mode(&self) -> DistinctMode {
-        let ret = unsafe { ffi::sqlite3_vtab_distinct(&self.base as *const _ as _) };
-        DistinctMode::from_sqlite(ret)
+        sqlite3_match_version! {
+            3_038_000 => {
+                let ret = unsafe { ffi::sqlite3_vtab_distinct(&self.base as *const _ as _) };
+                DistinctMode::from_sqlite(ret)
+            },
+            _ => DistinctMode::Ordered,
+        }
     }
 
     /// Retrieve the value previously set by
@@ -120,39 +128,43 @@ impl IndexInfo {
     /// [set_estimated_rows](Self::set_estimated_rows).
     ///
     /// Requires SQLite 3.8.2.
+    #[cfg(modern_sqlite)]
     pub fn estimated_rows(&self) -> Result<i64> {
-        sqlite3_require_version!(3_008_002, Ok(self.base.estimatedRows))
+        crate::SQLITE_VERSION.require(3_008_002)?;
+        Ok(self.base.estimatedRows)
     }
 
     /// Requires SQLite 3.8.2.
+    #[cfg(modern_sqlite)]
     pub fn set_estimated_rows(&mut self, val: i64) -> Result<()> {
-        let _ = val;
-        sqlite3_require_version!(3_008_002, {
-            self.base.estimatedRows = val;
-            Ok(())
-        })
+        crate::SQLITE_VERSION.require(3_008_002)?;
+        self.base.estimatedRows = val;
+        Ok(())
     }
 
     /// Retrieve the value previously set by
     /// [set_scan_flags](Self::set_scan_flags).
     ///
     /// Requires SQLite 3.9.0.
+    #[cfg(modern_sqlite)]
     pub fn scan_flags(&self) -> Result<usize> {
-        sqlite3_require_version!(3_009_000, Ok(self.base.idxFlags as _))
+        crate::SQLITE_VERSION.require(3_009_000)?;
+        Ok(self.base.idxFlags as _)
     }
 
     /// Requires SQLite 3.9.0.
+    #[cfg(modern_sqlite)]
     pub fn set_scan_flags(&mut self, val: usize) -> Result<()> {
-        let _ = val;
-        sqlite3_require_version!(3_009_000, {
-            self.base.idxFlags = val as _;
-            Ok(())
-        })
+        crate::SQLITE_VERSION.require(3_009_000)?;
+        self.base.idxFlags = val as _;
+        Ok(())
     }
 
     /// Requires SQLite 3.10.0.
+    #[cfg(modern_sqlite)]
     pub fn columns_used(&self) -> Result<u64> {
-        sqlite3_require_version!(3_010_000, Ok(self.base.colUsed))
+        crate::SQLITE_VERSION.require(3_010_000)?;
+        Ok(self.base.colUsed)
     }
 }
 
@@ -384,6 +396,7 @@ pub enum DistinctMode {
 }
 
 impl DistinctMode {
+    #[cfg(modern_sqlite)]
     fn from_sqlite(val: i32) -> Self {
         match val {
             0 => Self::Ordered,
@@ -396,20 +409,21 @@ impl DistinctMode {
 
 impl std::fmt::Debug for IndexInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        f.debug_struct("IndexInfo")
-            .field(
-                "constraints",
-                &self.constraints().collect::<Vec<_>>().as_slice(),
-            )
-            .field("order_by", &self.order_by().collect::<Vec<_>>().as_slice())
-            .field("index_num", &self.index_num())
-            .field("index_str", &self.index_str())
-            .field("order_by_consumed", &self.order_by_consumed())
-            .field("estimated_cost", &self.estimated_cost())
-            .field("estimated_rows", &self.estimated_rows())
+        let mut ds = f.debug_struct("IndexInfo");
+        ds.field(
+            "constraints",
+            &self.constraints().collect::<Vec<_>>().as_slice(),
+        )
+        .field("order_by", &self.order_by().collect::<Vec<_>>().as_slice())
+        .field("index_num", &self.index_num())
+        .field("index_str", &self.index_str())
+        .field("order_by_consumed", &self.order_by_consumed())
+        .field("estimated_cost", &self.estimated_cost());
+        #[cfg(modern_sqlite)]
+        ds.field("estimated_rows", &self.estimated_rows())
             .field("scan_flags", &self.scan_flags())
-            .field("columns_used", &self.columns_used())
-            .finish()
+            .field("columns_used", &self.columns_used());
+        ds.finish()
     }
 }
 

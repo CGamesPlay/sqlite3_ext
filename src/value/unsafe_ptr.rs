@@ -1,4 +1,4 @@
-use crate::{ffi, sqlite3_require_version, types::*, value::*};
+use crate::{ffi, sqlite3_match_version, types::*, value::*};
 use std::{
     mem::{size_of, zeroed},
     ptr::write_unaligned,
@@ -53,6 +53,7 @@ use std::{
 /// ```
 #[derive(Debug)]
 pub struct UnsafePtr<T: ?Sized> {
+    #[cfg_attr(not(modern_sqlite), allow(unused))]
     pub(crate) subtype: u8,
     ptr: *const T,
 }
@@ -80,11 +81,10 @@ impl<T: ?Sized> UnsafePtr<T> {
     pub fn from_value_ref(val: &mut ValueRef, subtype: u8) -> Result<Self> {
         unsafe {
             let len = ffi::sqlite3_value_bytes(val.as_ptr()) as usize;
-            let subtype_match = sqlite3_require_version!(
-                3_009_000,
-                ffi::sqlite3_value_subtype(val.as_ptr()) as u8 == subtype,
-                subtype == subtype
-            );
+            let subtype_match = sqlite3_match_version! {
+                3_009_000 => ffi::sqlite3_value_subtype(val.as_ptr()) as u8 == subtype,
+                _ => subtype == subtype, // suppress unused warning on subtype
+            };
             if len == 0 {
                 Ok(UnsafePtr {
                     ptr: zeroed(),
@@ -185,8 +185,10 @@ mod test {
     }
 
     #[test]
-    #[cfg(all(feature = "static_modern"))]
     fn get_ptr_invalid_subtype() {
+        if !cfg!(modern_sqlite) {
+            return;
+        }
         let h = TestHelpers::new();
         let owned_string = "input string".to_owned();
         let ptr = Box::into_raw(Box::new(owned_string));

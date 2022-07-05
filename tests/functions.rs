@@ -50,9 +50,10 @@ impl AggregateFunction<&'static str> for Agg {
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
     let opts = FunctionOptions::default()
-        .set_risk_level(RiskLevel::Innocuous)
         .set_deterministic(true)
         .set_n_args(0);
+    #[cfg(modern_sqlite)]
+    let opts = opts.set_risk_level(RiskLevel::Innocuous);
     let user_data = "foo";
     db.create_scalar_function("user_data", &opts, move |_, _| user_data)?;
 

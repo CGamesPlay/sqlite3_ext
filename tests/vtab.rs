@@ -93,7 +93,6 @@ impl VTabCursor for TestCursor {
 }
 
 #[test]
-#[cfg(any(not(feature = "static"), feature = "static_modern"))]
 fn eponymous_only_vtab() -> rusqlite::Result<()> {
     let conn = rusqlite::Connection::open_in_memory()?;
     Connection::from_rusqlite(&conn).create_module(

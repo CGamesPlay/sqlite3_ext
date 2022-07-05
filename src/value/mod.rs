@@ -1,5 +1,6 @@
-use super::{ffi, sqlite3_require_version, types::*};
+use super::{ffi, types::*};
 pub use blob::*;
+#[cfg(modern_sqlite)]
 pub use passed_ref::*;
 use std::{ptr, slice, str};
 pub use unsafe_ptr::*;
@@ -141,15 +142,13 @@ impl ValueRef {
         str::from_utf8(self.get_blob_unchecked()).map_err(Error::Utf8Error)
     }
 
-    /// # Safety
-    ///
-    /// Caller is responsible for enforcing Rust pointer aliasing rules.
+    // Caller is responsible for enforcing Rust pointer aliasing rules.
+    #[cfg(modern_sqlite)]
     unsafe fn get_ref_internal<T: 'static>(&self) -> Option<&mut PassedRef<T>> {
-        sqlite3_require_version!(
-            3_020_000,
-            (ffi::sqlite3_value_pointer(self.as_ptr(), POINTER_TAG) as *mut PassedRef<T>).as_mut(),
-            None
-        )
+        super::sqlite3_match_version! {
+            3_020_000 => (ffi::sqlite3_value_pointer(self.as_ptr(), POINTER_TAG) as *mut PassedRef<T>).as_mut(),
+            _ => None,
+        }
     }
 
     /// Get the [PassedRef] stored in this value.
@@ -161,6 +160,7 @@ impl ValueRef {
     /// The mutable version is [get_mut_ref](Self::get_mut_ref).
     ///
     /// Requires SQLite 3.20.0.
+    #[cfg(modern_sqlite)]
     pub fn get_ref<T: 'static>(&self) -> Option<&T> {
         unsafe { self.get_ref_internal::<T>() }
             .map(|x| PassedRef::get(x))
@@ -170,6 +170,7 @@ impl ValueRef {
     /// Mutable version of [get_ref](ValueRef::get_ref).
     ///
     /// Requires SQLite 3.20.0.
+    #[cfg(modern_sqlite)]
     pub fn get_mut_ref<T: 'static>(&mut self) -> Option<&mut T> {
         unsafe { self.get_ref_internal::<T>() }
             .map(PassedRef::get_mut)
@@ -196,6 +197,7 @@ impl std::fmt::Debug for ValueRef {
                 .debug_tuple("ValueRef::Blob")
                 .field(unsafe { &self.get_blob_unchecked() })
                 .finish(),
+            #[cfg(modern_sqlite)]
             ValueType::Null => {
                 if let Some(r) = unsafe { self.get_ref_internal::<()>() } {
                     f.debug_tuple("ValueRef::Null").field(&r).finish()
@@ -203,6 +205,8 @@ impl std::fmt::Debug for ValueRef {
                     f.debug_tuple("ValueRef::Null").finish()
                 }
             }
+            #[cfg(not(modern_sqlite))]
+            ValueType::Null => f.debug_tuple("ValueRef::Null").finish(),
         }
     }
 }

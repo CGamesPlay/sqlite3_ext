@@ -92,7 +92,7 @@ fn get_str_invalid() {
 }
 
 #[test]
-#[cfg(all(feature = "static_modern"))]
+#[cfg(modern_sqlite)]
 fn get_ref() {
     let h = TestHelpers::new();
     #[derive(PartialEq, Debug)]
@@ -121,6 +121,7 @@ fn get_ref() {
 }
 
 #[test]
+#[cfg(modern_sqlite)]
 fn get_ref_invalid() {
     let h = TestHelpers::new();
     h.with_value(PassedRef::new(0i32), |val| {

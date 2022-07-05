@@ -50,6 +50,7 @@ pub unsafe extern "C" fn aggregate_final<U, F: LegacyAggregateFunction<U>>(
     };
 }
 
+#[cfg(modern_sqlite)]
 pub unsafe extern "C" fn aggregate_value<U, F: AggregateFunction<U>>(
     context: *mut ffi::sqlite3_context,
 ) {
@@ -60,6 +61,7 @@ pub unsafe extern "C" fn aggregate_value<U, F: AggregateFunction<U>>(
     ic.set_result(ret);
 }
 
+#[cfg(modern_sqlite)]
 pub unsafe extern "C" fn aggregate_inverse<U, F: AggregateFunction<U>>(
     context: *mut ffi::sqlite3_context,
     argc: i32,

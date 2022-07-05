@@ -311,6 +311,7 @@ pub unsafe extern "C" fn vtab_commit<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
     ffi::handle_result(txn.commit(), &mut vtab.base.zErrMsg)
 }
 
+#[cfg(modern_sqlite)]
 pub unsafe extern "C" fn vtab_rollback<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
 ) -> c_int {
@@ -331,6 +332,7 @@ pub unsafe extern "C" fn vtab_rename<'vtab, T: RenameVTab<'vtab> + 'vtab>(
     ffi::handle_result(vtab.vtab.rename(name), &mut vtab.base.zErrMsg)
 }
 
+#[cfg(modern_sqlite)]
 pub unsafe extern "C" fn vtab_savepoint<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
     n: c_int,
@@ -340,6 +342,7 @@ pub unsafe extern "C" fn vtab_savepoint<'vtab, T: TransactionVTab<'vtab> + 'vtab
     ffi::handle_result(txn.savepoint(n), &mut vtab.base.zErrMsg)
 }
 
+#[cfg(modern_sqlite)]
 pub unsafe extern "C" fn vtab_release<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
     n: c_int,
@@ -349,6 +352,7 @@ pub unsafe extern "C" fn vtab_release<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
     ffi::handle_result(txn.release(n), &mut vtab.base.zErrMsg)
 }
 
+#[cfg(modern_sqlite)]
 pub unsafe extern "C" fn vtab_rollback_to<'vtab, T: TransactionVTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
     n: c_int,
@@ -358,6 +362,7 @@ pub unsafe extern "C" fn vtab_rollback_to<'vtab, T: TransactionVTab<'vtab> + 'vt
     ffi::handle_result(txn.rollback_to(n), &mut vtab.base.zErrMsg)
 }
 
+#[cfg(modern_sqlite)]
 pub unsafe extern "C" fn vtab_shadow_name<'vtab, T: CreateVTab<'vtab> + 'vtab>(
     name: *const i8,
 ) -> c_int {

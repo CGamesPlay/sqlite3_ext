@@ -122,8 +122,7 @@ fn eponymous_vtab() -> rusqlite::Result<()> {
     Ok(())
 }
 
-#[test]
-fn standard_vtab() -> rusqlite::Result<()> {
+fn setup() -> rusqlite::Result<rusqlite::Connection> {
     let conn = rusqlite::Connection::open_in_memory()?;
     Connection::from_rusqlite(&conn).create_module(
         "standard_vtab",
@@ -131,6 +130,12 @@ fn standard_vtab() -> rusqlite::Result<()> {
         (),
     )?;
     conn.execute("CREATE VIRTUAL TABLE tbl USING standard_vtab()", [])?;
+    Ok(conn)
+}
+
+#[test]
+fn standard_vtab() -> rusqlite::Result<()> {
+    let conn = setup()?;
     let err = conn
         .query_row("SELECT COUNT(*) FROM standard_vtab", [], |_| Ok(()))
         .unwrap_err();

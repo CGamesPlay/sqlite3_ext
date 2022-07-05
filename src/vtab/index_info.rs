@@ -11,8 +11,7 @@ stack_ref!(static CURRENT_INDEX_INFO: &*const ffi::sqlite3_index_info);
 ///
 /// This struct is both an input and an output. The virtual table implementation should examine
 /// the [constraints](Self::constraints) and [order_by](Self::order_by) fields, decide on the
-/// best query plan, and then set the results using
-/// [constraint_usage_mut](Self::constraint_usage_mut),
+/// best query plan, and then set the results using [IndexInfoConstraint::set_argv_index],
 /// [set_estimated_cost](Self::set_estimated_cost), and the other methods.
 #[repr(transparent)]
 pub struct IndexInfo {
@@ -189,11 +188,14 @@ impl IndexInfoConstraint<'_> {
         }
     }
 
-    /// 0-based index of columns. The rowid column is index -1.
+    /// Return the column being constrained. The value is a 0-based index of columns as declared by
+    /// [connect](super::VTab::connect) / [create](super::CreateVTab::create). The rowid column is
+    /// index -1.
     pub fn column(&self) -> i32 {
         self.constraint().iColumn as _
     }
 
+    /// Return the type of constraint.
     pub fn op(&self) -> ConstraintOp {
         ConstraintOp::from_sqlite(self.constraint().op)
     }
@@ -206,7 +208,39 @@ impl IndexInfoConstraint<'_> {
         self.constraint().usable != 0
     }
 
-    /// Retrieve the value prevoiusly set using [set_argv_index](Self::set_argv_index).
+    /// Returns the right-hand side of the constraint.
+    ///
+    /// This routine attempts to retrieve the value of the right-hand operand of the constraint if
+    /// that operand is known. If the operand is not known, then `Err(Error::NotFound)` is
+    /// returned.  This method can return another error type if something goes wrong.
+    ///
+    /// This method is usually only successful if the right-hand operand of a constraint is a
+    /// literal value in the original SQL statement. If the right-hand operand is an expression or
+    /// a reference to some other column or a host parameter, then this method will probably return
+    /// `Err(Error::NotFound)`.
+    ///
+    /// Some constraints, such as [ConstraintOp::IsNull], have no right-hand operand. For such
+    /// constraints, this method always returns `Err(Error::NotFound)`.
+    ///
+    /// Requires SQLite 3.38.0. On earlier versions of SQLite, `Err(Error::NotFound)` is always
+    /// returned.
+    #[cfg(modern_sqlite)]
+    pub fn rhs(&self) -> Result<&crate::value::ValueRef> {
+        sqlite3_match_version! {
+            3_038_000 => unsafe {
+                let mut ret: *mut ffi::sqlite3_value = ptr::null_mut();
+                Error::from_sqlite(ffi::sqlite3_vtab_rhs_value(
+                    &self.index_info.base as *const _ as _,
+                    self.position as _,
+                    &mut ret,
+                ))?;
+                Ok(&*(ret as *const crate::value::ValueRef))
+            },
+            _ => Err(Error::NotFound),
+        }
+    }
+
+    /// Retrieve the value previously set using [set_argv_index](Self::set_argv_index).
     pub fn argv_index(&self) -> Option<u32> {
         match self.usage().argvIndex {
             0 => None,
@@ -216,14 +250,10 @@ impl IndexInfoConstraint<'_> {
 
     /// Set the desired index for [filter](super::VTabCursor::filter)'s argv.
     ///
-    /// Exactly one entry in the IndexInfo should be set to 1, another to 2, another to 3,
+    /// Exactly one entry in the IndexInfo should be set to 0, another to 1, another to 2,
     /// and so forth up to as many or as few as the best_index method wants. The EXPR of
     /// the corresponding constraints will then be passed in as the argv[] parameters to
     /// filter.
-    ///
-    /// Notice that the idx values specified here are 1-based, but array passed to filter
-    /// will use 0-based indexing. The value 0 is used to indicate that the constraint is
-    /// not needed by the filter function.
     pub fn set_argv_index(&mut self, idx: Option<u32>) {
         self.usage().argvIndex = match idx {
             None => 0,
@@ -429,11 +459,13 @@ impl std::fmt::Debug for IndexInfo {
 
 impl std::fmt::Debug for IndexInfoConstraint<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        f.debug_struct("IndexInfoConstraint")
-            .field("column", &self.column())
+        let mut ds = f.debug_struct("IndexInfoConstraint");
+        ds.field("column", &self.column())
             .field("op", &self.op())
-            .field("usable", &self.usable())
-            .field("argv_index", &self.argv_index())
+            .field("usable", &self.usable());
+        #[cfg(modern_sqlite)]
+        ds.field("rhs", &self.rhs());
+        ds.field("argv_index", &self.argv_index())
             .field("omit", &self.omit())
             .finish()
     }

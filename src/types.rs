@@ -6,12 +6,14 @@ pub enum Error {
     Utf8Error(std::str::Utf8Error),
     VersionNotSatisfied(std::os::raw::c_int),
     Module(String),
+    NotFound,
 }
 
 impl Error {
     pub fn from_sqlite(rc: i32) -> Result<()> {
         match rc {
             ffi::SQLITE_OK | ffi::SQLITE_ROW | ffi::SQLITE_DONE => Ok(()),
+            ffi::SQLITE_NOTFOUND => Err(Error::NotFound),
             _ => Err(Error::Sqlite(rc)),
         }
     }
@@ -38,6 +40,7 @@ impl std::fmt::Display for Error {
                 (v / 1000) % 1000,
                 v % 1000
             ),
+            Error::NotFound => write!(f, "not found"),
         }
     }
 }

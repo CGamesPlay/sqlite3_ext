@@ -21,6 +21,7 @@ lazy_static! {
     static ref ESTIMATED_ROWS: Regex = Regex::new(", estimated_rows: Ok\\([^)]+\\)").unwrap();
     static ref SCAN_FLAGS: Regex = Regex::new(", scan_flags: Ok\\([^)]+\\)").unwrap();
     static ref COLUMNS_USED: Regex = Regex::new(", columns_used: Ok\\([^)]+\\)").unwrap();
+    static ref RHS: Regex = Regex::new(", rhs: [^,]+").unwrap();
 }
 
 #[cfg(modern_sqlite)]
@@ -33,6 +34,7 @@ fn patch_output(mut input: String) -> String {
     input = ESTIMATED_ROWS.replace_all(&input, "").to_string();
     input = SCAN_FLAGS.replace_all(&input, "").to_string();
     input = COLUMNS_USED.replace(&input, "").to_string();
+    input = RHS.replace(&input, "").to_string();
     input
 }
 
@@ -129,7 +131,7 @@ fn update() -> rusqlite::Result<()> {
         sync(tab=100, transaction=101)
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
-        best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(18446744073709551615) })
+        best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, rhs: Ok(ValueRef::Integer(1)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(18446744073709551615) })
         begin(tab=100, transaction=102)
         open(tab=100, cursor=101)
         filter(tab=100, cursor=101, args=[])
@@ -174,7 +176,7 @@ fn delete() -> rusqlite::Result<()> {
         sync(tab=100, transaction=101)
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
-        best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(1) })
+        best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, rhs: Ok(ValueRef::Text(Ok("a1"))), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(1) })
         begin(tab=100, transaction=102)
         open(tab=100, cursor=101)
         filter(tab=100, cursor=101, args=[])

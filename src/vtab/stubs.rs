@@ -112,7 +112,7 @@ pub unsafe extern "C" fn vtab_best_index<'vtab, T: VTab<'vtab> + 'vtab>(
 ) -> c_int {
     let vtab = &mut *(vtab as *mut VTabHandle<T>);
     let info = &mut *(info as *mut IndexInfo);
-    let ret = vtab.vtab.best_index(info);
+    let ret = info.with_current(|info| vtab.vtab.best_index(info));
     ffi::handle_result(ret, &mut vtab.base.zErrMsg)
 }
 

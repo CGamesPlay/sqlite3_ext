@@ -48,8 +48,8 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
         let mut query_plan: i32 = 0;
         let mut unusable_mask: i32 = 0;
         let mut has_start = false;
-        let mut arg_index: [isize; 3] = [-1, -1, -1];
-        for (i, constraint) in index_info.constraints().iter().enumerate() {
+        let mut arg_index: [Option<usize>; 3] = [None, None, None];
+        for (i, constraint) in index_info.constraints().enumerate() {
             if constraint.column() < COLUMN_START {
                 continue;
             }
@@ -63,17 +63,16 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
                 continue;
             } else if constraint.op() == ConstraintOp::Eq {
                 query_plan |= 1 << bit;
-                arg_index[bit] = i as _;
+                arg_index[bit] = Some(i);
             }
         }
+        let mut constraints: Vec<_> = index_info.constraints().collect();
         let mut next_idx = 0;
         for i in 0..3 {
-            let j = arg_index[i];
-            if j >= 0 {
+            if let Some(j) = arg_index[i] {
+                constraints[j].set_argv_index(Some(next_idx));
+                constraints[j].set_omit(true);
                 next_idx += 1;
-                let cu = &mut index_info.constraint_usage_mut()[j as usize];
-                cu.set_argv_index(next_idx);
-                cu.set_omit(true);
             }
         }
         if !has_start {
@@ -92,7 +91,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
             // preferred case
             index_info.set_estimated_cost((2 - ((query_plan & 4) != 0) as isize) as f64);
             let _ = index_info.set_estimated_rows(1000);
-            if let Some(order) = index_info.order_by().first() {
+            if let Some(order) = index_info.order_by().next() {
                 if order.column() == 0 {
                     if order.desc() {
                         query_plan |= 8;

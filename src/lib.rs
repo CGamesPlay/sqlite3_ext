@@ -7,6 +7,7 @@ pub use value::*;
 mod extension;
 pub mod ffi;
 pub mod function;
+pub mod stack_ref;
 pub mod static_ext;
 mod test_helpers;
 pub mod types;

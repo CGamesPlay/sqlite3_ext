@@ -110,9 +110,11 @@ fn get_ref() {
                 s: "input string".to_owned()
             })
         );
+        let mut dbg = format!("{:?}", val);
+        dbg.replace_range(48..(dbg.len() - 9), "XXX");
         assert_eq!(
-            format!("{:?}", val),
-            "ValueRef::Null(PassedRef { type_id: TypeId { t: 5212614948118677891 }, .. })"
+            dbg,
+            "ValueRef::Null(PassedRef { type_id: TypeId { t: XXX }, .. })"
         );
         Ok(())
     });

@@ -189,13 +189,16 @@ to_context_result! {
     },
     /// Sets the context error to this error.
     match Error as (ctx, err) => {
-        if let Error::Sqlite(code) = err {
-            ffi::sqlite3_result_error_code(ctx, code);
-        } else {
-            let msg = format!("{}", err);
-            let msg = msg.as_bytes();
-            let len = msg.len();
-            ffi::sqlite3_result_error(ctx, msg.as_ptr() as _, len as _);
+        match err {
+            Error::Sqlite(code) => ffi::sqlite3_result_error_code(ctx, code),
+            #[cfg(modern_sqlite)]
+            Error::NoChange => (),
+            _ => {
+                let msg = format!("{}", err);
+                let msg = msg.as_bytes();
+                let len = msg.len();
+                ffi::sqlite3_result_error(ctx, msg.as_ptr() as _, len as _);
+            }
         }
     }
 }

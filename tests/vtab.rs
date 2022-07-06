@@ -85,7 +85,7 @@ impl VTabCursor for TestCursor {
         self.eof
     }
 
-    fn column(&self, _: usize) {}
+    fn column(&self, _: usize, _: &ColumnContext) {}
 
     fn rowid(&self) -> Result<i64> {
         Ok(0)

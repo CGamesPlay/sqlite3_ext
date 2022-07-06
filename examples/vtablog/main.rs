@@ -174,9 +174,21 @@ impl<'vtab, O: Write + 'static> UpdateVTab<'vtab> for VTabLog<O> {
     fn update(&mut self, rowid: &mut ValueRef, args: &mut [&mut ValueRef]) -> Result<()> {
         writeln!(
             self,
-            "update(tab={}, rowid={:?}, args={:?}",
+            "update(tab={}, rowid={:?}, args={:?})",
             self.id, rowid, args
         )?;
+        #[cfg(modern_sqlite)]
+        {
+            let unchanged: Vec<_> = args
+                .iter()
+                .enumerate()
+                .filter(|(_, a)| a.nochange())
+                .map(|(i, _)| i)
+                .collect();
+            if unchanged.len() > 0 {
+                writeln!(self, "  unchanged: {:?}", unchanged)?;
+            }
+        }
         Ok(())
     }
 
@@ -214,7 +226,7 @@ impl<O: Write> Drop for VTabLog<O> {
 }
 
 impl<O: Write> VTabCursor for VTabLogCursor<'_, O> {
-    type ColumnType = String;
+    type ColumnType = Result<String>;
 
     fn filter(&mut self, _: i32, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
         writeln!(
@@ -250,18 +262,22 @@ impl<O: Write> VTabCursor for VTabLogCursor<'_, O> {
         ret
     }
 
-    fn column(&self, idx: usize) -> String {
+    fn column(&self, idx: usize, context: &ColumnContext) -> Self::ColumnType {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
-        let ret = ALPHABET
-            .get(idx)
-            .map(|l| format!("{}{}", *l as char, self.rowid))
-            .unwrap_or_else(|| format!("{{{}}}{}", idx, self.rowid));
+        let _ = context;
+        let ret = match () {
+            #[cfg(modern_sqlite)]
+            _ if context.nochange() => Err(Error::NoChange),
+            _ => Ok(ALPHABET
+                .get(idx)
+                .map(|l| format!("{}{}", *l as char, self.rowid))
+                .unwrap_or_else(|| format!("{{{}}}{}", idx, self.rowid))),
+        };
         writeln!(
             self.vtab,
             "column(tab={}, cursor={}, idx={}) -> {:?}",
             self.vtab.id, self.id, idx, ret
-        )
-        .unwrap();
+        )?;
         ret
     }
 

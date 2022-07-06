@@ -17,25 +17,20 @@ fn setup() -> rusqlite::Result<(rusqlite::Connection, Rc<RefCell<Vec<u8>>>)> {
     Ok((conn, out))
 }
 
-lazy_static! {
-    static ref ESTIMATED_ROWS: Regex = Regex::new(", estimated_rows: Ok\\([^)]+\\)").unwrap();
-    static ref SCAN_FLAGS: Regex = Regex::new(", scan_flags: Ok\\([^)]+\\)").unwrap();
-    static ref COLUMNS_USED: Regex = Regex::new(", columns_used: Ok\\([^)]+\\)").unwrap();
-    static ref RHS: Regex = Regex::new(", rhs: [^,]+").unwrap();
-}
-
 #[cfg(modern_sqlite)]
-fn patch_output(input: String) -> String {
-    input
+lazy_static! {
+    static ref IGNORED_LINES: Regex = Regex::new("(?m)^<M.*?\n").unwrap();
+    static ref INCLUDED_LINES: Regex = Regex::new("(?m)^=M (.*?\n)").unwrap();
+}
+#[cfg(not(modern_sqlite))]
+lazy_static! {
+    static ref IGNORED_LINES: Regex = Regex::new("(?m)^=M.*?\n").unwrap();
+    static ref INCLUDED_LINES: Regex = Regex::new("(?m)^<M (.*?\n)").unwrap();
 }
 
-#[cfg(not(modern_sqlite))]
-fn patch_output(mut input: String) -> String {
-    input = ESTIMATED_ROWS.replace_all(&input, "").to_string();
-    input = SCAN_FLAGS.replace_all(&input, "").to_string();
-    input = COLUMNS_USED.replace(&input, "").to_string();
-    input = RHS.replace(&input, "").to_string();
-    input
+fn patch_output(input: String) -> String {
+    let input = IGNORED_LINES.replace_all(&input, "");
+    INCLUDED_LINES.replace_all(&input, "$1").to_string()
 }
 
 #[test]
@@ -66,25 +61,26 @@ fn read() -> rusqlite::Result<()> {
         sync(tab=100, transaction=101)
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
-        best_index(tab=100, index_info=IndexInfo { constraints: [], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(7) })
+        <M best_index(tab=100, index_info=IndexInfo { constraints: [], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98 })
+        =M best_index(tab=100, index_info=IndexInfo { constraints: [], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(7) })
         open(tab=100, cursor=101)
         filter(tab=100, cursor=101, args=[])
         eof(tab=100, cursor=101) -> false
-        column(tab=100, cursor=101, idx=0) -> "a0"
-        column(tab=100, cursor=101, idx=1) -> "b0"
-        column(tab=100, cursor=101, idx=2) -> "c0"
+        column(tab=100, cursor=101, idx=0) -> Ok("a0")
+        column(tab=100, cursor=101, idx=1) -> Ok("b0")
+        column(tab=100, cursor=101, idx=2) -> Ok("c0")
         next(tab=100, cursor=101)
           rowid 0 -> 1
         eof(tab=100, cursor=101) -> false
-        column(tab=100, cursor=101, idx=0) -> "a1"
-        column(tab=100, cursor=101, idx=1) -> "b1"
-        column(tab=100, cursor=101, idx=2) -> "c1"
+        column(tab=100, cursor=101, idx=0) -> Ok("a1")
+        column(tab=100, cursor=101, idx=1) -> Ok("b1")
+        column(tab=100, cursor=101, idx=2) -> Ok("c1")
         next(tab=100, cursor=101)
           rowid 1 -> 2
         eof(tab=100, cursor=101) -> false
-        column(tab=100, cursor=101, idx=0) -> "a2"
-        column(tab=100, cursor=101, idx=1) -> "b2"
-        column(tab=100, cursor=101, idx=2) -> "c2"
+        column(tab=100, cursor=101, idx=0) -> Ok("a2")
+        column(tab=100, cursor=101, idx=1) -> Ok("b2")
+        column(tab=100, cursor=101, idx=2) -> Ok("c2")
         next(tab=100, cursor=101)
           rowid 2 -> 3
         eof(tab=100, cursor=101) -> true
@@ -131,7 +127,8 @@ fn update() -> rusqlite::Result<()> {
         sync(tab=100, transaction=101)
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
-        best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, rhs: Ok(ValueRef::Integer(1)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(18446744073709551615) })
+        <M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98 })
+        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, rhs: Ok(ValueRef::Integer(1)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(18446744073709551615) })
         begin(tab=100, transaction=102)
         open(tab=100, cursor=101)
         filter(tab=100, cursor=101, args=[])
@@ -141,9 +138,11 @@ fn update() -> rusqlite::Result<()> {
           rowid 0 -> 1
         eof(tab=100, cursor=101) -> false
         rowid(tab=100, cursor=101) -> 1
-        column(tab=100, cursor=101, idx=1) -> "b1"
-        column(tab=100, cursor=101, idx=1) -> "b1"
-        column(tab=100, cursor=101, idx=2) -> "c1"
+        column(tab=100, cursor=101, idx=1) -> Ok("b1")
+        <M column(tab=100, cursor=101, idx=1) -> Ok("b1")
+        <M column(tab=100, cursor=101, idx=2) -> Ok("c1")
+        =M column(tab=100, cursor=101, idx=1) -> Err(NoChange)
+        =M column(tab=100, cursor=101, idx=2) -> Err(NoChange)
         rowid(tab=100, cursor=101) -> 1
         rowid(tab=100, cursor=101) -> 1
         next(tab=100, cursor=101)
@@ -153,7 +152,9 @@ fn update() -> rusqlite::Result<()> {
         next(tab=100, cursor=101)
           rowid 2 -> 3
         eof(tab=100, cursor=101) -> true
-        update(tab=100, rowid=ValueRef::Integer(1), args=[ValueRef::Integer(1), ValueRef::Text(Ok("b1")), ValueRef::Text(Ok("b1")), ValueRef::Text(Ok("c1"))]
+        <M update(tab=100, rowid=ValueRef::Integer(1), args=[ValueRef::Integer(1), ValueRef::Text(Ok("b1")), ValueRef::Text(Ok("b1")), ValueRef::Text(Ok("c1"))])
+        =M update(tab=100, rowid=ValueRef::Integer(1), args=[ValueRef::Integer(1), ValueRef::Text(Ok("b1")), ValueRef::Null, ValueRef::Null])
+        =M   unchanged: [2, 3]
         drop(tab=100, cursor=101)
         sync(tab=100, transaction=102)
         commit(tab=100, transaction=102)
@@ -176,21 +177,22 @@ fn delete() -> rusqlite::Result<()> {
         sync(tab=100, transaction=101)
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
-        best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, rhs: Ok(ValueRef::Text(Ok("a1"))), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(1) })
+        <M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98 })
+        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, rhs: Ok(ValueRef::Text(Ok("a1"))), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(1) })
         begin(tab=100, transaction=102)
         open(tab=100, cursor=101)
         filter(tab=100, cursor=101, args=[])
         eof(tab=100, cursor=101) -> false
-        column(tab=100, cursor=101, idx=0) -> "a0"
+        column(tab=100, cursor=101, idx=0) -> Ok("a0")
         next(tab=100, cursor=101)
           rowid 0 -> 1
         eof(tab=100, cursor=101) -> false
-        column(tab=100, cursor=101, idx=0) -> "a1"
+        column(tab=100, cursor=101, idx=0) -> Ok("a1")
         rowid(tab=100, cursor=101) -> 1
         next(tab=100, cursor=101)
           rowid 1 -> 2
         eof(tab=100, cursor=101) -> false
-        column(tab=100, cursor=101, idx=0) -> "a2"
+        column(tab=100, cursor=101, idx=0) -> Ok("a2")
         next(tab=100, cursor=101)
           rowid 2 -> 3
         eof(tab=100, cursor=101) -> true

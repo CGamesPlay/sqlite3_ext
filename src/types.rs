@@ -7,6 +7,10 @@ pub enum Error {
     VersionNotSatisfied(std::os::raw::c_int),
     Module(String),
     NotFound,
+    /// The result was not necessary to produce because it is an unchanged column in an
+    /// UPDATE operation. See [ValueRef::nochange](crate::ValueRef::nochange) for details.
+    #[cfg(modern_sqlite)]
+    NoChange,
 }
 
 impl Error {
@@ -41,6 +45,8 @@ impl std::fmt::Display for Error {
                 v % 1000
             ),
             Error::NotFound => write!(f, "not found"),
+            #[cfg(modern_sqlite)]
+            Error::NoChange => write!(f, "invalid Error::NoChange"),
         }
     }
 }

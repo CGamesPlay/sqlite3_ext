@@ -135,6 +135,9 @@ pub trait UpdateVTab<'vtab>: VTab<'vtab> {
     /// The rowid argument corresponds to the rowid or PRIMARY KEY of the existing row to
     /// update. For rowid tables, the first value of args will be the new rowid for the
     /// row. For WITHOUT ROWID tables, the first value of args will be NULL.
+    ///
+    /// On versions of SQLite 3.22.0 and above, it's possible to avoid redundant updates by
+    /// utilizing [ValueRef::nochange].
     fn update(&mut self, rowid: &mut ValueRef, args: &mut [&mut ValueRef]) -> Result<()>;
 
     /// Delete a row from the virtual table.
@@ -183,8 +186,7 @@ pub trait RenameVTab<'vtab>: VTab<'vtab> {
 
 /// Implementation of the cursor type for a virtual table.
 pub trait VTabCursor {
-    /// The type of all columns in this virtual table. For tables with columns of varying
-    /// data types, [Value] can be used.
+    /// The type of all columns in this virtual table.
     type ColumnType: ToContextResult;
 
     /// Begin a search of the virtual table. This method is always invoked after creating
@@ -210,7 +212,7 @@ pub trait VTabCursor {
 
     /// Fetch the column numbered idx for the current row. The indexes correspond to the
     /// order the columns were declared by [VTab::connect].
-    fn column(&self, idx: usize) -> Self::ColumnType;
+    fn column(&self, idx: usize, context: &ColumnContext) -> Self::ColumnType;
 
     /// Fetch the rowid for the current row.
     fn rowid(&self) -> Result<i64>;
@@ -347,6 +349,46 @@ impl VTabConnection {
                     super::RiskLevel::DirectOnly => ffi::SQLITE_VTAB_DIRECTONLY,
                 },
             ))
+        }
+    }
+}
+
+/// Describes the run-time environment of the [UpdateVTab::column] method.
+#[repr(transparent)]
+pub struct ColumnContext {
+    base: ffi::sqlite3_context,
+}
+
+impl ColumnContext {
+    pub(crate) fn as_ptr<'a>(&self) -> *mut ffi::sqlite3_context {
+        &self.base as *const ffi::sqlite3_context as _
+    }
+
+    pub(crate) unsafe fn from_ptr<'a>(base: *mut ffi::sqlite3_context) -> &'a mut Self {
+        &mut *(base as *mut Self)
+    }
+
+    /// Return a handle to the current database.
+    pub fn db(&self) -> &Connection {
+        unsafe { Connection::from_ptr(ffi::sqlite3_context_db_handle(self.as_ptr())) }
+    }
+
+    /// Return true if the column being fetched is part of an UPDATE operation during which
+    /// the column value will not change.
+    ///
+    /// See [ValueRef::nochange] for details and usage.
+    ///
+    /// This method is provided as an optimization. It is permissible for this method to
+    /// return false even if the value is unchanged. The virtual table implementation must
+    /// function correctly even if this method were to always return false.
+    ///
+    /// Requires SQLite 3.22.0. On earlier versions of SQLite, this method always returns
+    /// false.
+    #[cfg(modern_sqlite)]
+    pub fn nochange(&self) -> bool {
+        crate::sqlite3_match_version! {
+            3_022_000 => unsafe { ffi::sqlite3_vtab_nochange(self.as_ptr()) } != 0,
+            _ => false,
         }
     }
 }

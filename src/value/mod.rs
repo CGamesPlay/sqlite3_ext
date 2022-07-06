@@ -54,22 +54,6 @@ impl ValueRef {
         &self.base as *const ffi::sqlite3_value as _
     }
 
-    /*
-    /// Create a copy of the referenced value.
-    pub fn to_value(&self) -> Value {
-        match self.value_type() {
-            ValueType::Integer => Value::Integer(self.get_i64()),
-            ValueType::Float => Value::Float(self.get_f64()),
-            ValueType::Text => todo!(),
-            ValueType::Blob => todo!(),
-            ValueType::Null => {
-                // XXX - ref
-                Value::Null,
-            }
-        }
-    }
-    */
-
     pub fn value_type(&self) -> ValueType {
         unsafe {
             match ffi::sqlite3_value_type(self.as_ptr() as _) {
@@ -80,6 +64,27 @@ impl ValueRef {
                 ffi::SQLITE_NULL => ValueType::Null,
                 _ => unreachable!(),
             }
+        }
+    }
+
+    /// Return true if the value is unchanged by an UPDATE operation. Specifically, this method is guaranteed to return true if all of the following are true:
+    ///
+    /// - this ValueRef is a parameter to an [UpdateVTab](crate::vtab::UpdateVTab) method;
+    /// - during the corresponding call to
+    ///   [VTabCursor::column](crate::vtab::VTabCursor::column),
+    ///   [Context::nochange](crate::function::Context::nochange) returned true; and
+    /// - the column method failed with [Error::NoChange](crate::Error::NoChange).
+    ///
+    /// If this method returns true under these circumstances, then the value will appear to be SQL NULL, and the UpdateVTab method
+    /// must not change the underlying value.
+    ///
+    /// Requires SQLite 3.22.0. On earlier versions of SQLite, this function will always
+    /// return false.
+    #[cfg(modern_sqlite)]
+    pub fn nochange(&self) -> bool {
+        crate::sqlite3_match_version! {
+            3_022_000 => unsafe { ffi::sqlite3_value_nochange(self.as_ptr()) } != 0,
+            _ => false,
         }
     }
 

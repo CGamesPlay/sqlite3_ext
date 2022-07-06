@@ -199,7 +199,7 @@ impl VTabCursor for Cursor {
         }
     }
 
-    fn column(&self, idx: usize) -> i64 {
+    fn column(&self, idx: usize, _: &ColumnContext) -> i64 {
         match idx as _ {
             COLUMN_START => self.min_value,
             COLUMN_STOP => self.max_value,

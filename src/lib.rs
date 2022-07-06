@@ -10,23 +10,23 @@ pub mod function;
 pub mod stack_ref;
 pub mod static_ext;
 mod test_helpers;
-pub mod types;
-pub mod value;
+mod types;
+mod value;
 pub mod vtab;
 
-/// The version of SQLite. See [SQLITE_VERSION] for details.
+/// The version of SQLite.
 pub struct SqliteVersion;
 
-/// The version of SQLite.
-///
-/// The numeric format of this value is the semantic version with a simple encoding: `major *
-/// 1000000 + minor * 1000 + patch`. For example, SQLite version 3.8.2 is encoded as
-/// `3_008_002`.
+/// The version of SQLite. See [SqliteVersion] for details.
 pub static SQLITE_VERSION: SqliteVersion = SqliteVersion;
 
 impl SqliteVersion {
-    /// Returns the numeric version of SQLite. Example: `3_008_002`.
-    pub fn get(&self) -> i32 {
+    /// Returns the numeric version of SQLite.
+    ///
+    /// The format of this value is the semantic version with a simple encoding: `major *
+    /// 1000000 + minor * 1000 + patch`. For example, SQLite version 3.8.2 is encoded as
+    /// `3_008_002`.
+    pub fn as_i32(&self) -> i32 {
         unsafe { ffi::sqlite3_libversion_number() }
     }
 
@@ -40,30 +40,11 @@ impl SqliteVersion {
     /// careless edits. A forger can subvert this feature.
     ///
     /// Requires SQLite 3.21.0.
-    #[cfg(modern_sqlite)]
     pub fn sourceid(&self) -> Result<&'static str> {
-        self.require(3_021_000)?;
-        let ret = unsafe { CStr::from_ptr(ffi::sqlite3_sourceid()) };
-        Ok(ret.to_str().expect("sqlite3_sourceid"))
-    }
-
-    /// Returns true if the version of SQLite is at least the provided version.
-    pub fn is(&self, version: i32) -> bool {
-        self.get() >= version
-    }
-
-    /// Returns an error if the version of SQLite is older than the provided version.
-    pub fn require(&self, version: i32) -> Result<()> {
-        // Useful for ensuring that no digits were accidentally left out of the version.
-        debug_assert!(
-            version >= 3_006_008,
-            "the minimum supported version of SQLite is 3.6.8"
-        );
-        if self.get() < version {
-            Err(Error::VersionNotSatisfied(version))
-        } else {
-            Ok(())
-        }
+        sqlite3_require_version!(3_021_000, {
+            let ret = unsafe { CStr::from_ptr(ffi::sqlite3_sourceid()) };
+            Ok(ret.to_str().expect("sqlite3_sourceid"))
+        })
     }
 }
 
@@ -107,7 +88,6 @@ impl Connection {
 ///
 /// See [this discussion](https://www.sqlite.org/src/doc/latest/doc/trusted-schema.md) for more
 /// details about the motivation and implications.
-#[cfg(modern_sqlite)]
 pub enum RiskLevel {
     /// An innocuous function or virtual table is one that can only read content from the
     /// database file in which it resides, and can only alter the database in which it

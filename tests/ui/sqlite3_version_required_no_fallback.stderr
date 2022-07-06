@@ -1,0 +1,9 @@
+error: non-exhaustive patterns: missing a wildcard pattern
+ --> tests/ui/sqlite3_version_required_no_fallback.rs:4:5
+  |
+4 | /     sqlite3_match_version! {
+5 | |         3_008_006 => ()
+6 | |     }
+  | |_____^
+  |
+  = note: this error originates in the macro `$crate::sqlite3_match_version` (in Nightly builds, run with -Z macro-backtrace for more info)

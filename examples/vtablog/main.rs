@@ -152,7 +152,6 @@ impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
 }
 
 impl<'vtab, O: Write + 'static> CreateVTab<'vtab> for VTabLog<O> {
-    #[cfg(modern_sqlite)]
     const SHADOW_NAMES: &'static [&'static str] = &["shadow"];
 
     fn create(_: &mut VTabConnection, db: &Self::Aux, args: &[&str]) -> Result<(String, Self)> {
@@ -177,17 +176,19 @@ impl<'vtab, O: Write + 'static> UpdateVTab<'vtab> for VTabLog<O> {
             "update(tab={}, rowid={:?}, args={:?})",
             self.id, rowid, args
         )?;
-        #[cfg(modern_sqlite)]
-        {
-            let unchanged: Vec<_> = args
-                .iter()
-                .enumerate()
-                .filter(|(_, a)| a.nochange())
-                .map(|(i, _)| i)
-                .collect();
-            if unchanged.len() > 0 {
-                writeln!(self, "  unchanged: {:?}", unchanged)?;
+        sqlite3_match_version! {
+            3_022_000 => {
+                let unchanged: Vec<_> = args
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, a)| a.nochange())
+                    .map(|(i, _)| i)
+                    .collect();
+                if unchanged.len() > 0 {
+                    writeln!(self, "  unchanged: {:?}", unchanged)?;
+                }
             }
+            _ => (),
         }
         Ok(())
     }
@@ -264,9 +265,7 @@ impl<O: Write> VTabCursor for VTabLogCursor<'_, O> {
 
     fn column(&self, idx: usize, context: &ColumnContext) -> Self::ColumnType {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
-        let _ = context;
         let ret = match () {
-            #[cfg(modern_sqlite)]
             _ if context.nochange() => Err(Error::NoChange),
             _ => Ok(ALPHABET
                 .get(idx)
@@ -325,7 +324,6 @@ impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
         Ok(())
     }
 
-    #[cfg(modern_sqlite)]
     fn savepoint(&mut self, n: i32) -> Result<()> {
         writeln!(
             self.vtab,
@@ -335,7 +333,6 @@ impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
         Ok(())
     }
 
-    #[cfg(modern_sqlite)]
     fn release(&mut self, n: i32) -> Result<()> {
         writeln!(
             self.vtab,
@@ -345,7 +342,6 @@ impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
         Ok(())
     }
 
-    #[cfg(modern_sqlite)]
     fn rollback_to(&mut self, n: i32) -> Result<()> {
         writeln!(
             self.vtab,

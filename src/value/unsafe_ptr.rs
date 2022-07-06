@@ -185,10 +185,8 @@ mod test {
     }
 
     #[test]
+    #[cfg(modern_sqlite)]
     fn get_ptr_invalid_subtype() {
-        if !cfg!(modern_sqlite) {
-            return;
-        }
         let h = TestHelpers::new();
         let owned_string = "input string".to_owned();
         let ptr = Box::into_raw(Box::new(owned_string));

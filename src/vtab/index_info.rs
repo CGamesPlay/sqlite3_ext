@@ -1,4 +1,4 @@
-use crate::{ffi, sqlite3_match_version, stack_ref, types::*};
+use crate::{ffi, sqlite3_match_version, sqlite3_require_version, stack_ref, types::*};
 use std::{ffi::CStr, ptr};
 
 stack_ref!(static CURRENT_INDEX_INFO: &*const ffi::sqlite3_index_info);
@@ -127,43 +127,41 @@ impl IndexInfo {
     /// [set_estimated_rows](Self::set_estimated_rows).
     ///
     /// Requires SQLite 3.8.2.
-    #[cfg(modern_sqlite)]
     pub fn estimated_rows(&self) -> Result<i64> {
-        crate::SQLITE_VERSION.require(3_008_002)?;
-        Ok(self.base.estimatedRows)
+        sqlite3_require_version!(3_008_002, Ok(self.base.estimatedRows))
     }
 
-    /// Requires SQLite 3.8.2.
-    #[cfg(modern_sqlite)]
-    pub fn set_estimated_rows(&mut self, val: i64) -> Result<()> {
-        crate::SQLITE_VERSION.require(3_008_002)?;
-        self.base.estimatedRows = val;
-        Ok(())
+    /// Requires SQLite 3.8.2. On earlier versions of SQLite, this function is a harmless
+    /// no-op.
+    pub fn set_estimated_rows(&mut self, val: i64) {
+        let _ = val;
+        sqlite3_match_version! {
+            3_008_220 => self.base.estimatedRows = val,
+            _ => (),
+        }
     }
 
     /// Retrieve the value previously set by
     /// [set_scan_flags](Self::set_scan_flags).
     ///
     /// Requires SQLite 3.9.0.
-    #[cfg(modern_sqlite)]
     pub fn scan_flags(&self) -> Result<usize> {
-        crate::SQLITE_VERSION.require(3_009_000)?;
-        Ok(self.base.idxFlags as _)
+        sqlite3_require_version!(3_009_000, Ok(self.base.idxFlags as _))
     }
 
-    /// Requires SQLite 3.9.0.
-    #[cfg(modern_sqlite)]
-    pub fn set_scan_flags(&mut self, val: usize) -> Result<()> {
-        crate::SQLITE_VERSION.require(3_009_000)?;
-        self.base.idxFlags = val as _;
-        Ok(())
+    /// Requires SQLite 3.9.0. On earlier versions of SQLite, this function is a harmless
+    /// no-op.
+    pub fn set_scan_flags(&mut self, val: usize) -> () {
+        let _ = val;
+        sqlite3_match_version! {
+            3_009_000 => self.base.idxFlags = val as _,
+            _ => (),
+        }
     }
 
     /// Requires SQLite 3.10.0.
-    #[cfg(modern_sqlite)]
     pub fn columns_used(&self) -> Result<u64> {
-        crate::SQLITE_VERSION.require(3_010_000)?;
-        Ok(self.base.colUsed)
+        sqlite3_require_version!(3_010_000, Ok(self.base.colUsed))
     }
 }
 
@@ -224,7 +222,6 @@ impl IndexInfoConstraint<'_> {
     ///
     /// Requires SQLite 3.38.0. On earlier versions of SQLite, `Err(Error::NotFound)` is always
     /// returned.
-    #[cfg(modern_sqlite)]
     pub fn rhs(&self) -> Result<&crate::value::ValueRef> {
         sqlite3_match_version! {
             3_038_000 => unsafe {
@@ -449,10 +446,13 @@ impl std::fmt::Debug for IndexInfo {
         .field("index_str", &self.index_str())
         .field("order_by_consumed", &self.order_by_consumed())
         .field("estimated_cost", &self.estimated_cost());
-        #[cfg(modern_sqlite)]
-        ds.field("estimated_rows", &self.estimated_rows())
-            .field("scan_flags", &self.scan_flags())
-            .field("columns_used", &self.columns_used());
+        self.estimated_rows()
+            .map(|v| ds.field("estimated_rows", &v))
+            .ok();
+        self.scan_flags().map(|v| ds.field("scan_flags", &v)).ok();
+        self.columns_used()
+            .map(|v| ds.field("columns_used", &v))
+            .ok();
         ds.finish()
     }
 }
@@ -463,8 +463,12 @@ impl std::fmt::Debug for IndexInfoConstraint<'_> {
         ds.field("column", &self.column())
             .field("op", &self.op())
             .field("usable", &self.usable());
-        #[cfg(modern_sqlite)]
-        ds.field("rhs", &self.rhs());
+        match &self.rhs() {
+            Err(Error::VersionNotSatisfied(_)) => (),
+            x => {
+                ds.field("rhs", x);
+            }
+        }
         ds.field("argv_index", &self.argv_index())
             .field("omit", &self.omit())
             .finish()

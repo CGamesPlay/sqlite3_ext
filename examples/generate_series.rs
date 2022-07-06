@@ -20,9 +20,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
         _aux: &Self::Aux,
         _args: &[&str],
     ) -> Result<(String, Self)> {
-        #[cfg(modern_sqlite)]
-        db.set_risk(RiskLevel::Innocuous).ok();
-        let _ = db;
+        db.set_risk(RiskLevel::Innocuous);
         Ok((
             "CREATE TABLE x ( value, start HIDDEN, stop HIDDEN, step HIDDEN )".to_owned(),
             GenerateSeries {},
@@ -92,8 +90,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
             // Both start= and stop= boundaries are available.  This is the the
             // preferred case
             index_info.set_estimated_cost((2 - ((query_plan & 4) != 0) as isize) as f64);
-            #[cfg(modern_sqlite)]
-            index_info.set_estimated_rows(1000).ok();
+            index_info.set_estimated_rows(1000);
             if let Some(order) = index_info.order_by().next() {
                 if order.column() == 0 {
                     if order.desc() {
@@ -105,8 +102,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
                 }
             }
         } else {
-            #[cfg(modern_sqlite)]
-            index_info.set_estimated_rows(i64::MAX / 2).ok();
+            index_info.set_estimated_rows(i64::MAX / 2);
         }
         index_info.set_index_num(query_plan);
         Ok(())

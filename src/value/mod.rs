@@ -1,6 +1,5 @@
-use super::{ffi, types::*};
+use super::{ffi, sqlite3_match_version, types::*};
 pub use blob::*;
-#[cfg(modern_sqlite)]
 pub use passed_ref::*;
 use std::{ptr, slice, str};
 pub use unsafe_ptr::*;
@@ -72,7 +71,7 @@ impl ValueRef {
     /// - this ValueRef is a parameter to an [UpdateVTab](crate::vtab::UpdateVTab) method;
     /// - during the corresponding call to
     ///   [VTabCursor::column](crate::vtab::VTabCursor::column),
-    ///   [Context::nochange](crate::function::Context::nochange) returned true; and
+    ///   [ColumnContext::nochange](crate::vtab::ColumnContext::nochange) returned true; and
     /// - the column method failed with [Error::NoChange](crate::Error::NoChange).
     ///
     /// If this method returns true under these circumstances, then the value will appear to be SQL NULL, and the UpdateVTab method
@@ -80,10 +79,9 @@ impl ValueRef {
     ///
     /// Requires SQLite 3.22.0. On earlier versions of SQLite, this function will always
     /// return false.
-    #[cfg(modern_sqlite)]
     pub fn nochange(&self) -> bool {
-        crate::sqlite3_match_version! {
-            3_022_000 => unsafe { ffi::sqlite3_value_nochange(self.as_ptr()) } != 0,
+        sqlite3_match_version! {
+            3_022_000 => (unsafe { ffi::sqlite3_value_nochange(self.as_ptr()) } != 0),
             _ => false,
         }
     }
@@ -148,9 +146,8 @@ impl ValueRef {
     }
 
     // Caller is responsible for enforcing Rust pointer aliasing rules.
-    #[cfg(modern_sqlite)]
     unsafe fn get_ref_internal<T: 'static>(&self) -> Option<&mut PassedRef<T>> {
-        super::sqlite3_match_version! {
+        sqlite3_match_version! {
             3_020_000 => (ffi::sqlite3_value_pointer(self.as_ptr(), POINTER_TAG) as *mut PassedRef<T>).as_mut(),
             _ => None,
         }
@@ -164,8 +161,8 @@ impl ValueRef {
     ///
     /// The mutable version is [get_mut_ref](Self::get_mut_ref).
     ///
-    /// Requires SQLite 3.20.0.
-    #[cfg(modern_sqlite)]
+    /// Requires SQLite 3.20.0. On earlier versions of SQLite, this function will always
+    /// return None.
     pub fn get_ref<T: 'static>(&self) -> Option<&T> {
         unsafe { self.get_ref_internal::<T>() }
             .map(|x| PassedRef::get(x))
@@ -174,8 +171,8 @@ impl ValueRef {
 
     /// Mutable version of [get_ref](ValueRef::get_ref).
     ///
-    /// Requires SQLite 3.20.0.
-    #[cfg(modern_sqlite)]
+    /// Requires SQLite 3.20.0. On earlier versions of SQLite, this function will always
+    /// return None.
     pub fn get_mut_ref<T: 'static>(&mut self) -> Option<&mut T> {
         unsafe { self.get_ref_internal::<T>() }
             .map(PassedRef::get_mut)
@@ -202,7 +199,6 @@ impl std::fmt::Debug for ValueRef {
                 .debug_tuple("ValueRef::Blob")
                 .field(unsafe { &self.get_blob_unchecked() })
                 .finish(),
-            #[cfg(modern_sqlite)]
             ValueType::Null => {
                 if let Some(r) = unsafe { self.get_ref_internal::<()>() } {
                     f.debug_tuple("ValueRef::Null").field(&r).finish()
@@ -210,8 +206,6 @@ impl std::fmt::Debug for ValueRef {
                     f.debug_tuple("ValueRef::Null").finish()
                 }
             }
-            #[cfg(not(modern_sqlite))]
-            ValueType::Null => f.debug_tuple("ValueRef::Null").finish(),
         }
     }
 }

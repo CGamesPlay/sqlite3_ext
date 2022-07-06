@@ -1,4 +1,3 @@
-#![cfg(modern_sqlite)]
 use std::any::{Any, TypeId};
 
 pub(crate) const POINTER_TAG: *const i8 = b"sqlite3_ext:PassedRef\0".as_ptr() as _;

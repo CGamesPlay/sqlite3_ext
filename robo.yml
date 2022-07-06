@@ -18,5 +18,5 @@ test:
   summary: test all supported configurations
   command: |
     set -e
-    cargo test --workspace --all-features
-    cargo test --workspace --features=static
+    RUSTFLAGS="-D warnings" cargo test --workspace --all-features
+    RUSTFLAGS="-D warnings" cargo test --workspace --features=static

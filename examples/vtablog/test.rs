@@ -62,7 +62,7 @@ fn read() -> rusqlite::Result<()> {
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
         <M best_index(tab=100, index_info=IndexInfo { constraints: [], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98 })
-        =M best_index(tab=100, index_info=IndexInfo { constraints: [], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(7) })
+        =M best_index(tab=100, index_info=IndexInfo { constraints: [], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 7 })
         open(tab=100, cursor=101)
         filter(tab=100, cursor=101, args=[])
         eof(tab=100, cursor=101) -> false
@@ -127,8 +127,8 @@ fn update() -> rusqlite::Result<()> {
         sync(tab=100, transaction=101)
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
-        <M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98 })
-        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, rhs: Ok(ValueRef::Integer(1)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(18446744073709551615) })
+        <M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, rhs: Err(NotFound), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98 })
+        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, rhs: Ok(ValueRef::Integer(1)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 18446744073709551615 })
         begin(tab=100, transaction=102)
         open(tab=100, cursor=101)
         filter(tab=100, cursor=101, args=[])
@@ -177,8 +177,8 @@ fn delete() -> rusqlite::Result<()> {
         sync(tab=100, transaction=101)
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
-        <M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98 })
-        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, rhs: Ok(ValueRef::Text(Ok("a1"))), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: Ok(25), scan_flags: Ok(0), columns_used: Ok(1) })
+        <M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, rhs: Err(NotFound), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98 })
+        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, rhs: Ok(ValueRef::Text(Ok("a1"))), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 1 })
         begin(tab=100, transaction=102)
         open(tab=100, cursor=101)
         filter(tab=100, cursor=101, args=[])
@@ -231,10 +231,8 @@ fn rename() -> rusqlite::Result<()> {
 }
 
 #[test]
+#[cfg(modern_sqlite)]
 fn shadow_name() -> rusqlite::Result<()> {
-    if !cfg!(modern_sqlite) {
-        return Ok(());
-    }
     let (conn, out) = setup()?;
     conn.set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
     match conn.execute("CREATE TABLE log_shadow (a, b, c)", []) {

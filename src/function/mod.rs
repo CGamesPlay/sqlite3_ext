@@ -2,7 +2,7 @@
 //!
 //! The functionality in this module is primarily exposed through
 //! [Connection::create_scalar_function] and [Connection::create_aggregate_function].
-use super::{ffi, sqlite3_match_version, types::*, value::*, Connection};
+use super::{ffi, sqlite3_match_version, types::*, value::*, Connection, RiskLevel};
 pub use context::*;
 use std::{cmp::Ordering, ffi::CString, ptr::null_mut};
 
@@ -150,21 +150,27 @@ impl FunctionOptions {
         self
     }
 
-    /// Set the level of risk for this function. See the [RiskLevel](super::RiskLevel) enum
-    /// for details about what the individual options mean.
+    /// Set the level of risk for this function. See the [RiskLevel] enum for details about
+    /// what the individual options mean.
     ///
-    /// Requires SQLite 3.31.0. On earlier versions of SQLite, this function is a no-op.
-    #[cfg(modern_sqlite)]
-    pub fn set_risk_level(mut self, level: super::RiskLevel) -> Self {
-        if super::SQLITE_VERSION.is(3_031_000) {
-            self.flags |= match level {
-                super::RiskLevel::Innocuous => ffi::SQLITE_INNOCUOUS,
-                super::RiskLevel::DirectOnly => ffi::SQLITE_DIRECTONLY,
-            };
-            self.flags &= match level {
-                super::RiskLevel::Innocuous => !ffi::SQLITE_DIRECTONLY,
-                super::RiskLevel::DirectOnly => !ffi::SQLITE_INNOCUOUS,
-            };
+    /// Requires SQLite 3.31.0. On earlier versions of SQLite, this function is a harmless no-op.
+    pub fn set_risk_level(
+        #[cfg_attr(not(modern_sqlite), allow(unused_mut))] mut self,
+        level: RiskLevel,
+    ) -> Self {
+        let _ = level;
+        sqlite3_match_version! {
+            3_031_000 => {
+                self.flags |= match level {
+                    RiskLevel::Innocuous => ffi::SQLITE_INNOCUOUS,
+                    RiskLevel::DirectOnly => ffi::SQLITE_DIRECTONLY,
+                };
+                self.flags &= match level {
+                    RiskLevel::Innocuous => !ffi::SQLITE_DIRECTONLY,
+                    RiskLevel::DirectOnly => !ffi::SQLITE_INNOCUOUS,
+                };
+            }
+            _ => (),
         }
         self
     }

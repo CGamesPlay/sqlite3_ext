@@ -86,10 +86,10 @@ impl Extension {
     /// `sqlite3_cancel_auto_extension`.
     ///
     /// Requires SQLite 3.8.7.
-    #[cfg(modern_sqlite)]
     pub fn cancel_auto(&'static self) -> Result<bool> {
-        SQLITE_VERSION.require(3_008_007)?;
-        unsafe { Ok(ffi::sqlite3_cancel_auto_extension(Some(self.c_entry)) != 0) }
+        sqlite3_require_version!(3_008_007, unsafe {
+            Ok(ffi::sqlite3_cancel_auto_extension(Some(self.c_entry)) != 0)
+        })
     }
 }
 

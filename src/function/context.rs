@@ -191,7 +191,6 @@ to_context_result! {
     match Error as (ctx, err) => {
         match err {
             Error::Sqlite(code) => ffi::sqlite3_result_error_code(ctx, code),
-            #[cfg(modern_sqlite)]
             Error::NoChange => (),
             _ => {
                 let msg = format!("{}", err);
@@ -265,9 +264,9 @@ impl<T: 'static + ?Sized> ToContextResult for UnsafePtr<T> {
 }
 
 /// Sets the context result to NULL with this value as an associated pointer.
-#[cfg(modern_sqlite)]
 impl<T: 'static> ToContextResult for PassedRef<T> {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
+        let _ = (POINTER_TAG, context);
         sqlite3_match_version! {
             3_020_000 => ffi::sqlite3_result_pointer(
                 context,
@@ -275,9 +274,7 @@ impl<T: 'static> ToContextResult for PassedRef<T> {
                 POINTER_TAG,
                 Some(ffi::drop_boxed::<PassedRef<T>>),
             ),
-            _ => {
-                let _ = (POINTER_TAG, context);
-            }
+            _ => (),
         }
     }
 }

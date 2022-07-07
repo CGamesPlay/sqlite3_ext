@@ -209,19 +209,19 @@ impl IndexInfoConstraint<'_> {
     /// Returns the right-hand side of the constraint.
     ///
     /// This routine attempts to retrieve the value of the right-hand operand of the constraint if
-    /// that operand is known. If the operand is not known, then `Err(Error::NotFound)` is
-    /// returned.  This method can return another error type if something goes wrong.
+    /// that operand is known. If the operand is not known, then `Err(Error::not_found())`
+    /// is returned.  This method can return another error type if something goes wrong.
     ///
     /// This method is usually only successful if the right-hand operand of a constraint is a
     /// literal value in the original SQL statement. If the right-hand operand is an expression or
-    /// a reference to some other column or a host parameter, then this method will probably return
-    /// `Err(Error::NotFound)`.
+    /// a reference to some other column or a host parameter, then this method will
+    /// probably return `Err(Error::not_found())`.
     ///
-    /// Some constraints, such as [ConstraintOp::IsNull], have no right-hand operand. For such
-    /// constraints, this method always returns `Err(Error::NotFound)`.
+    /// Some constraints, such as [ConstraintOp::IsNull], have no right-hand operand. For
+    /// such constraints, this method always returns `Err(Error::not_found())`.
     ///
-    /// Requires SQLite 3.38.0. On earlier versions of SQLite, `Err(Error::NotFound)` is always
-    /// returned.
+    /// Requires SQLite 3.38.0. On earlier versions of SQLite, `Err(Error::not_found())` is
+    /// always returned.
     pub fn rhs(&self) -> Result<&crate::value::ValueRef> {
         sqlite3_match_version! {
             3_038_000 => unsafe {
@@ -233,7 +233,7 @@ impl IndexInfoConstraint<'_> {
                 ))?;
                 Ok(&*(ret as *const crate::value::ValueRef))
             },
-            _ => Err(Error::NotFound),
+            _ => Err(Error::not_found()),
         }
     }
 

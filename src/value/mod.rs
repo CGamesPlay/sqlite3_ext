@@ -128,10 +128,7 @@ impl ValueRef {
     /// if the value has invalid UTF-8. The returned value is `None` if the underlying
     /// value is SQL NULL.
     pub fn get_str(&mut self) -> Result<Option<&str>> {
-        self.get_blob()?
-            .map(|b| str::from_utf8(b))
-            .transpose()
-            .map_err(Error::Utf8Error)
+        Ok(self.get_blob()?.map(|b| str::from_utf8(b)).transpose()?)
     }
 
     /// Get the underlying TEXT value.
@@ -142,7 +139,7 @@ impl ValueRef {
     ///
     /// If the type of this value is not TEXT, the behavior of this function is undefined.
     pub unsafe fn get_str_unchecked(&self) -> Result<&str> {
-        str::from_utf8(self.get_blob_unchecked()).map_err(Error::Utf8Error)
+        Ok(str::from_utf8(self.get_blob_unchecked())?)
     }
 
     // Caller is responsible for enforcing Rust pointer aliasing rules.

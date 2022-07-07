@@ -108,7 +108,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_errmsg |  | | |
 | sqlite3_errmsg16 |  | :grey_exclamation: | Use UTF-8 equivalent |
 | sqlite3_error_offset |  | | |
-| sqlite3_errstr |  | | |
+| sqlite3_errstr |  | :white_check_mark: | Error::fmt |
 | sqlite3_exec |  | | |
 | sqlite3_expanded_sql |  | | |
 | sqlite3_extended_errcode |  | | |

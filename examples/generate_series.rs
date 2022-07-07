@@ -84,7 +84,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
             // The start, stop, and step columns are inputs.  Therefore if there
             // are unusable constraints on any of start, stop, or step then this
             // plan is unusable
-            return Err(Error::constraint_violation());
+            return Err(Error::constraint());
         }
         if (query_plan & 3) == 3 {
             // Both start= and stop= boundaries are available.  This is the the

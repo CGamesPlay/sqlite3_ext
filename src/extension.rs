@@ -64,10 +64,7 @@ impl Extension {
     /// future. For more information, consult the SQLite documentation for
     /// `sqlite3_auto_extension`.
     pub fn register_auto(&'static self) -> Result<()> {
-        unsafe {
-            Error::from_sqlite(ffi::sqlite3_auto_extension(Some(self.c_entry)))?;
-        }
-        Ok(())
+        unsafe { Error::from_sqlite(ffi::sqlite3_auto_extension(Some(self.c_entry))) }
     }
 
     /// Remove all registered automatic extensions.

@@ -167,7 +167,7 @@ macro_rules! sqlite3_match_version {
 #[macro_export]
 macro_rules! sqlite3_require_version {
     ($version:literal, $expr:expr) => {
-        sqlite3_match_version! {
+        $crate::sqlite3_match_version! {
             $version => {
                 let ret: Result<_> = $expr;
                 ret
@@ -198,16 +198,7 @@ pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
 }
 
 pub unsafe fn handle_error(err: impl Into<Error>, msg: *mut *mut c_char) -> c_int {
-    let err = err.into();
-    if let Error::Sqlite(code) = err {
-        if code != SQLITE_OK && code != SQLITE_ROW && code != SQLITE_DONE {
-            return code;
-        }
-    }
-    if let Ok(s) = str_to_sqlite3(&format!("{}", err)) {
-        *msg = s;
-    }
-    SQLITE_ERROR
+    err.into().into_sqlite(msg)
 }
 
 pub unsafe fn handle_result(result: Result<(), Error>, msg: *mut *mut c_char) -> c_int {

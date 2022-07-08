@@ -1,28 +1,19 @@
-use sqlite3_ext::{function::*, vtab::*, *};
+//! Test cases for the different table types (eponymous, eponymous-only, standard).
+use sqlite3_ext::{vtab::*, *};
 
-struct TestVTab<'vtab> {
-    functions: VTabFunctionList<'vtab, Self>,
-}
-struct TestCursor {
-    eof: bool,
-}
+struct TestVTab;
+struct TestCursor;
 
-impl<'vtab> TestVTab<'vtab> {
+impl TestVTab {
     fn connect_create() -> Result<(String, Self)> {
-        let functions = VTabFunctionList::default();
-        functions.add_method(1, "my_func", None, Self::custom_method);
         Ok((
             "CREATE TABLE x ( value INTEGER NOT NULL )".to_owned(),
-            TestVTab { functions },
+            TestVTab,
         ))
-    }
-
-    fn custom_method(&self, _: &Context, _: &mut [&mut ValueRef]) -> bool {
-        true
     }
 }
 
-impl<'vtab> VTab<'vtab> for TestVTab<'vtab> {
+impl VTab<'_> for TestVTab {
     type Aux = ();
     type Cursor = TestCursor;
 
@@ -34,17 +25,16 @@ impl<'vtab> VTab<'vtab> for TestVTab<'vtab> {
         Self::connect_create()
     }
 
-    fn best_index(&self, index_info: &mut IndexInfo) -> Result<()> {
-        assert_eq!(index_info.distinct_mode(), DistinctMode::Ordered);
+    fn best_index(&self, _index_info: &mut IndexInfo) -> Result<()> {
         Ok(())
     }
 
     fn open(&mut self) -> Result<Self::Cursor> {
-        Ok(TestCursor { eof: false })
+        Ok(TestCursor)
     }
 }
 
-impl<'vtab> CreateVTab<'vtab> for TestVTab<'vtab> {
+impl CreateVTab<'_> for TestVTab {
     fn create(
         _db: &mut VTabConnection,
         _aux: &Self::Aux,
@@ -55,12 +45,6 @@ impl<'vtab> CreateVTab<'vtab> for TestVTab<'vtab> {
 
     fn destroy(&mut self) -> Result<()> {
         Ok(())
-    }
-}
-
-impl<'vtab> FindFunctionVTab<'vtab> for TestVTab<'vtab> {
-    fn functions(&self) -> &VTabFunctionList<'vtab, Self> {
-        &self.functions
     }
 }
 
@@ -77,24 +61,25 @@ impl VTabCursor for TestCursor {
     }
 
     fn next(&mut self) -> Result<()> {
-        self.eof = true;
-        Ok(())
+        unreachable!()
     }
 
     fn eof(&self) -> bool {
-        self.eof
+        true
     }
 
-    fn column(&self, _: usize, _: &ColumnContext) {}
+    fn column(&self, _: usize, _: &ColumnContext) {
+        unreachable!()
+    }
 
     fn rowid(&self) -> Result<i64> {
-        Ok(0)
+        unreachable!()
     }
 }
 
 #[test]
 #[cfg(modern_sqlite)]
-fn eponymous_only_vtab() -> rusqlite::Result<()> {
+fn eponymous_only() -> rusqlite::Result<()> {
     let conn = rusqlite::Connection::open_in_memory()?;
     Connection::from_rusqlite(&conn).create_module(
         "eponymous_only_vtab",
@@ -110,7 +95,7 @@ fn eponymous_only_vtab() -> rusqlite::Result<()> {
 }
 
 #[test]
-fn eponymous_vtab() -> rusqlite::Result<()> {
+fn eponymous() -> rusqlite::Result<()> {
     let conn = rusqlite::Connection::open_in_memory()?;
     Connection::from_rusqlite(&conn).create_module(
         "eponymous_vtab",
@@ -123,7 +108,8 @@ fn eponymous_vtab() -> rusqlite::Result<()> {
     Ok(())
 }
 
-fn setup() -> rusqlite::Result<rusqlite::Connection> {
+#[test]
+fn standard() -> rusqlite::Result<()> {
     let conn = rusqlite::Connection::open_in_memory()?;
     Connection::from_rusqlite(&conn).create_module(
         "standard_vtab",
@@ -131,34 +117,10 @@ fn setup() -> rusqlite::Result<rusqlite::Connection> {
         (),
     )?;
     conn.execute("CREATE VIRTUAL TABLE tbl USING standard_vtab()", [])?;
-    Ok(conn)
-}
-
-#[test]
-fn standard_vtab() -> rusqlite::Result<()> {
-    let conn = setup()?;
     let err = conn
         .query_row("SELECT COUNT(*) FROM standard_vtab", [], |_| Ok(()))
         .unwrap_err();
     assert_eq!(err.to_string(), "no such table: standard_vtab");
     conn.query_row("SELECT COUNT(*) FROM tbl", [], |_| Ok(()))?;
-    Ok(())
-}
-
-#[test]
-fn find_function() -> rusqlite::Result<()> {
-    let conn = rusqlite::Connection::open_in_memory()?;
-    {
-        let conn = Connection::from_rusqlite(&conn);
-        conn.create_module(
-            "standard_vtab",
-            StandardModule::<TestVTab>::new().with_find_function(),
-            (),
-        )?;
-        conn.create_overloaded_function("my_func", &FunctionOptions::default().set_n_args(1))?;
-    }
-    conn.execute("CREATE VIRTUAL TABLE tbl USING standard_vtab()", [])?;
-    conn.query_row("SELECT value FROM tbl WHERE my_func(value)", [], |_| Ok(()))?;
-    conn.query_row("SELECT value FROM tbl WHERE my_func(value)", [], |_| Ok(()))?;
     Ok(())
 }

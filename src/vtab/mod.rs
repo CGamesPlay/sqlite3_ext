@@ -44,7 +44,7 @@ pub trait VTab<'vtab> {
     /// When registering the module with [Connection::create_module], additional data can
     /// be passed as a parameter. This data will be passed to [connect](VTab::connect) and
     /// [create](CreateVTab::create). It can be used for any purpose.
-    type Aux;
+    type Aux: 'vtab;
 
     /// Cursor implementation for this virtual table.
     type Cursor: VTabCursor;
@@ -82,7 +82,7 @@ pub trait VTab<'vtab> {
     /// best_index for a particular query plan returns this error, that means there is no
     /// way for the virtual table to be safely used, and the SQLite call will fail with a
     /// "no query solution" error.
-    fn best_index(&self, index_info: &mut IndexInfo) -> Result<()>;
+    fn best_index(&'vtab self, index_info: &mut IndexInfo) -> Result<()>;
 
     /// Create an uninitialized query.
     fn open(&'vtab mut self) -> Result<Self::Cursor>;

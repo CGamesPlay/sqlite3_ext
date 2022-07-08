@@ -271,18 +271,14 @@ impl<'vtab, T: VTab<'vtab>> EponymousOnlyModule<'vtab, T> {
 
 impl Connection {
     /// Register the provided virtual table module with this connection.
-    pub fn create_module<'vtab, T: VTab<'vtab> + 'vtab, M: Module<'vtab, T> + 'vtab>(
-        &self,
+    pub fn create_module<'db: 'vtab, 'vtab, T: VTab<'vtab> + 'vtab, M: Module<'vtab, T> + 'vtab>(
+        &'db self,
         name: &str,
         mut vtab: M,
         aux: T::Aux,
     ) -> Result<()>
     where
-        // Aux data has to live as long as the module is registered. We could lower
-        // this from 'static by adding a 'db lifetime parameter to Connection and
-        // threading that around everywhere, but wrapping the type in an Rc is
-        // generally a better solution anyways.
-        T::Aux: 'static,
+        T::Aux: 'db,
     {
         let name = CString::new(name).unwrap();
         let vtab = vtab.module().clone();

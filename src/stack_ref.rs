@@ -64,7 +64,7 @@ impl<T: ?Sized> StackRef<T> {
     /// If this method is used within the destructor for a thread-local variable, then this
     /// function **may** panic. See [std::thread::LocalKey] for more details.
     pub fn with_value<F: FnOnce() -> R, R>(&self, val: &T, f: F) -> R {
-        let addr_of_val = ptr::addr_of!(*val) as *const () as usize;
+        let addr_of_val = ptr::addr_of!(val) as *const () as usize;
         let prev_value = self.storage.with(|cell| cell.replace(addr_of_val));
         // Safety - this is safe because we use resume_unwind if this method panics.
         let ret = catch_unwind(AssertUnwindSafe(f));
@@ -74,9 +74,15 @@ impl<T: ?Sized> StackRef<T> {
             Err(e) => resume_unwind(e),
         }
     }
+
+    /// Returns true if there is a current call to [with_value](Self::with_value).
+    pub fn has_value(&self) -> bool {
+        let addr_of_val = self.storage.with(Cell::get);
+        addr_of_val != 0
+    }
 }
 
-impl<T: 'static> Deref for StackRef<T> {
+impl<T: ?Sized + 'static> Deref for StackRef<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -84,11 +90,9 @@ impl<T: 'static> Deref for StackRef<T> {
         assert!(addr_of_val != 0, "StackRef has no provider");
         // Safety - this is safe because an existing ref to this address is already
         // held above us on the stack.
-        unsafe { ptr::read((&addr_of_val) as *const usize as *const &T) }
+        unsafe { ptr::read(addr_of_val as *const usize as *const &T) }
     }
 }
-
-unsafe impl<T: ?Sized> Sync for StackRef<T> {}
 
 /// Declare one or more [StackRefs](StackRef).
 ///
@@ -142,32 +146,38 @@ macro_rules! stack_ref {
     // handle a single declaration
     ($(#[$attr:meta])* $vis:vis static $name:ident: &$t:ty) => (
         ::paste::paste!{
-            thread_local!(static [<$name _STORAGE>]: ::std::cell::Cell<usize> = ::std::cell::Cell::new(0));
+            ::std::thread_local!(static [<$name _STORAGE>]: ::std::cell::Cell<usize> = ::std::cell::Cell::new(0));
             $(#[$attr])*
-            $vis static $name: $crate::stack_ref::StackRef<$t> = $crate::stack_ref::StackRef::new(&[<$name _STORAGE>]);
+            $vis const $name: $crate::stack_ref::StackRef<$t> = $crate::stack_ref::StackRef::new(&[<$name _STORAGE>]);
         }
     );
 }
 
 #[cfg(test)]
 mod test {
-    stack_ref! {
-        static VAL: &u32;
-        static UNSIZED: &&str;
-        // This one is only used to verify that Sync + Send are not required
-        #[allow(unused)]
-        static RC: &*mut u32;
+    #[ignore]
+    #[test]
+    fn compilation_test() {
+        stack_ref! {
+            #[allow(unused)]
+            static NOT_SYNC_SEND: &*mut u32;
+        }
     }
 
     #[test]
     fn basic() {
+        stack_ref!(static VAL: &u32);
+
         fn consume() {
+            assert!(VAL.has_value());
             assert_eq!(*VAL, 42)
         }
 
         fn produce() {
             let myvar = 42;
+            assert!(!VAL.has_value());
             VAL.with_value(&myvar, consume);
+            assert!(!VAL.has_value());
         }
 
         produce();
@@ -175,6 +185,8 @@ mod test {
 
     #[test]
     fn recursive() {
+        stack_ref!(static VAL: &u32);
+
         fn consume() {
             assert_eq!(*VAL, 84)
         }
@@ -195,6 +207,8 @@ mod test {
 
     #[test]
     fn test_unsized() {
+        stack_ref!(static UNSIZED: &&str);
+
         fn consume() {
             assert_eq!(*UNSIZED, "input string");
         }
@@ -202,6 +216,21 @@ mod test {
         fn produce() {
             let val = "input string";
             UNSIZED.with_value(&val, consume);
+        }
+
+        produce();
+    }
+
+    #[test]
+    fn test_fn() {
+        stack_ref!(static FN: &dyn Fn() -> usize);
+
+        fn consume() {
+            assert_eq!((*FN)(), 42);
+        }
+
+        fn produce() {
+            FN.with_value(&|| 42, consume);
         }
 
         produce();

@@ -10,6 +10,14 @@ pub trait TestHooks: Sized {
     ) -> Result<()> {
         Ok(())
     }
+
+    fn filter<'a>(
+        &self,
+        _cursor: &mut TestVTabCursor<'a, Self>,
+        _args: &mut [&mut ValueRef],
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 
 pub fn setup<Hooks: TestHooks>(hooks: &Hooks) -> rusqlite::Result<rusqlite::Connection> {
@@ -91,9 +99,9 @@ impl<'vtab, Hooks: TestHooks + 'vtab> FindFunctionVTab<'vtab> for TestVTab<'vtab
 impl<'vtab, Hooks: TestHooks + 'vtab> VTabCursor for TestVTabCursor<'vtab, Hooks> {
     type ColumnType = Result<String>;
 
-    fn filter(&mut self, _: i32, _: Option<&str>, _args: &mut [&mut ValueRef]) -> Result<()> {
+    fn filter(&mut self, _: i32, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
         self.rowid = 0;
-        Ok(())
+        self.vtab.hooks.filter(self, args)
     }
 
     fn next(&mut self) -> Result<()> {

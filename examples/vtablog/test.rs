@@ -37,7 +37,7 @@ fn patch_output(input: String) -> String {
 fn read() -> rusqlite::Result<()> {
     let (conn, out) = setup()?;
     let ret = conn
-        .prepare("SELECT * FROM log")?
+        .prepare("SELECT * FROM log WHERE a IN ('a1', 'a2')")?
         .query_map([], |row| {
             Ok(vec![
                 row.get::<_, String>(0)?,
@@ -50,7 +50,7 @@ fn read() -> rusqlite::Result<()> {
     drop(conn);
     assert_eq!(
         ret,
-        (0..3)
+        (1..3)
             .map(|i| vec![format!("a{}", i), format!("b{}", i), format!("c{}", i)])
             .collect::<Vec<Vec<String>>>()
     );
@@ -62,22 +62,37 @@ fn read() -> rusqlite::Result<()> {
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
         <M best_index(tab=100, index_info=IndexInfo { constraints: [], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98 })
-        =M best_index(tab=100, index_info=IndexInfo { constraints: [], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 7 })
+        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, rhs: Err(Sqlite(12)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 7 })
+        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: false, rhs: Err(Sqlite(12)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 7 })
         open(tab=100, cursor=101)
-        filter(tab=100, cursor=101, args=[])
+        filter(tab=100, cursor=101, args=[ValueRef::Text(Ok("a1"))])
         eof(tab=100, cursor=101) -> false
         column(tab=100, cursor=101, idx=0) -> Ok("a0")
-        column(tab=100, cursor=101, idx=1) -> Ok("b0")
-        column(tab=100, cursor=101, idx=2) -> Ok("c0")
         next(tab=100, cursor=101)
           rowid 0 -> 1
         eof(tab=100, cursor=101) -> false
+        column(tab=100, cursor=101, idx=0) -> Ok("a1")
         column(tab=100, cursor=101, idx=0) -> Ok("a1")
         column(tab=100, cursor=101, idx=1) -> Ok("b1")
         column(tab=100, cursor=101, idx=2) -> Ok("c1")
         next(tab=100, cursor=101)
           rowid 1 -> 2
         eof(tab=100, cursor=101) -> false
+        column(tab=100, cursor=101, idx=0) -> Ok("a2")
+        next(tab=100, cursor=101)
+          rowid 2 -> 3
+        eof(tab=100, cursor=101) -> true
+        filter(tab=100, cursor=101, args=[ValueRef::Text(Ok("a2"))])
+        eof(tab=100, cursor=101) -> false
+        column(tab=100, cursor=101, idx=0) -> Ok("a0")
+        next(tab=100, cursor=101)
+          rowid 0 -> 1
+        eof(tab=100, cursor=101) -> false
+        column(tab=100, cursor=101, idx=0) -> Ok("a1")
+        next(tab=100, cursor=101)
+          rowid 1 -> 2
+        eof(tab=100, cursor=101) -> false
+        column(tab=100, cursor=101, idx=0) -> Ok("a2")
         column(tab=100, cursor=101, idx=0) -> Ok("a2")
         column(tab=100, cursor=101, idx=1) -> Ok("b2")
         column(tab=100, cursor=101, idx=2) -> Ok("c2")
@@ -131,7 +146,7 @@ fn update() -> rusqlite::Result<()> {
         =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, rhs: Ok(ValueRef::Integer(1)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 18446744073709551615 })
         begin(tab=100, transaction=102)
         open(tab=100, cursor=101)
-        filter(tab=100, cursor=101, args=[])
+        filter(tab=100, cursor=101, args=[ValueRef::Integer(1)])
         eof(tab=100, cursor=101) -> false
         rowid(tab=100, cursor=101) -> 0
         next(tab=100, cursor=101)
@@ -181,7 +196,7 @@ fn delete() -> rusqlite::Result<()> {
         =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, rhs: Ok(ValueRef::Text(Ok("a1"))), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 1 })
         begin(tab=100, transaction=102)
         open(tab=100, cursor=101)
-        filter(tab=100, cursor=101, args=[])
+        filter(tab=100, cursor=101, args=[ValueRef::Text(Ok("a1"))])
         eof(tab=100, cursor=101) -> false
         column(tab=100, cursor=101, idx=0) -> Ok("a0")
         next(tab=100, cursor=101)

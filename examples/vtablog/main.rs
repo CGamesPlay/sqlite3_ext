@@ -136,6 +136,12 @@ impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
             "best_index(tab={}, index_info={:?})",
             self.id, index_info
         )?;
+        if let Some(mut c) = index_info.constraints().next() {
+            if c.usable() {
+                c.set_argv_index(Some(0));
+                index_info.set_estimated_cost(1.0);
+            }
+        }
         Ok(())
     }
 

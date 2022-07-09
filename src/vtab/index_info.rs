@@ -237,6 +237,22 @@ impl IndexInfoConstraint<'_> {
         }
     }
 
+    /// Return the collation to use for text comparisons on this column.
+    ///
+    /// See [the SQLite documentation](https://www.sqlite.org/c3ref/vtab_collation.html)
+    /// for more details.
+    pub fn collation(&self) -> Result<&str> {
+        sqlite3_require_version!(3_022_000, {
+            let ret = unsafe {
+                CStr::from_ptr(ffi::sqlite3_vtab_collation(
+                    &self.index_info.base as *const _ as _,
+                    self.position as _,
+                ))
+            };
+            Ok(ret.to_str()?)
+        })
+    }
+
     /// Retrieve the value previously set using [set_argv_index](Self::set_argv_index).
     pub fn argv_index(&self) -> Option<u32> {
         match self.usage().argvIndex {
@@ -534,6 +550,12 @@ impl std::fmt::Debug for IndexInfoConstraint<'_> {
         sqlite3_match_version! {
             3_038_000 => {
                 ds.field("rhs", &self.rhs());
+            }
+            _ => (),
+        }
+        sqlite3_match_version! {
+            3_022_000 => {
+                ds.field("collation", &self.collation());
             }
             _ => (),
         }

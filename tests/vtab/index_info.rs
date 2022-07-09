@@ -1,6 +1,5 @@
 use crate::test_vtab::*;
 use sqlite3_ext::{vtab::*, *};
-use std::cell::Cell;
 
 #[test]
 fn best_index_rhs() -> rusqlite::Result<()> {
@@ -28,10 +27,11 @@ fn best_index_rhs() -> rusqlite::Result<()> {
 }
 
 #[test]
+#[cfg(modern_sqlite)]
 fn best_index_in() -> rusqlite::Result<()> {
     #[derive(Default)]
     struct Hooks {
-        num_filter: Cell<u32>,
+        num_filter: std::cell::Cell<u32>,
     }
 
     impl TestHooks for Hooks {
@@ -43,6 +43,8 @@ fn best_index_in() -> rusqlite::Result<()> {
             let mut c = index_info.constraints().next().expect("no constraint");
             if c.usable() {
                 c.set_argv_index(Some(0));
+                assert!(c.value_list_available(), "value list unavailable");
+                assert!(c.set_value_list_wanted(true), "failed to enable multiple");
                 index_info.set_estimated_cost(1.0);
             }
             Ok(())
@@ -54,7 +56,10 @@ fn best_index_in() -> rusqlite::Result<()> {
             args: &mut [&mut ValueRef],
         ) -> Result<()> {
             self.num_filter.set(self.num_filter.get() + 1);
-            println!("filter with {:?}", args);
+            let vals: Vec<String> = ValueList::from_value_ref(args[0])?
+                .mapped(|x| Ok(x.get_str()?.unwrap().to_owned()))
+                .collect::<Result<_>>()?;
+            assert_eq!(vals, vec!("a1", "b2"));
             Ok(())
         }
     }
@@ -66,6 +71,6 @@ fn best_index_in() -> rusqlite::Result<()> {
         [],
         |_| Ok(()),
     )?;
-    assert_eq!(hooks.num_filter.get(), 2);
+    assert_eq!(hooks.num_filter.get(), 1);
     Ok(())
 }

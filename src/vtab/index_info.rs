@@ -1,4 +1,4 @@
-use crate::{ffi, sqlite3_match_version, sqlite3_require_version, stack_ref, types::*};
+use crate::{ffi, sqlite3_match_version, sqlite3_require_version, stack_ref, types::*, value::*};
 use std::{ffi::CStr, ptr};
 
 stack_ref!(static CURRENT_INDEX_INFO: &*const ffi::sqlite3_index_info);
@@ -222,7 +222,7 @@ impl IndexInfoConstraint<'_> {
     ///
     /// Requires SQLite 3.38.0. On earlier versions of SQLite, `Err(Error::not_found())` is
     /// always returned.
-    pub fn rhs(&self) -> Result<&crate::value::ValueRef> {
+    pub fn rhs(&self) -> Result<&ValueRef> {
         sqlite3_match_version! {
             3_038_000 => unsafe {
                 let mut ret: *mut ffi::sqlite3_value = ptr::null_mut();
@@ -271,6 +271,74 @@ impl IndexInfoConstraint<'_> {
     /// for more details.
     pub fn set_omit(&mut self, val: bool) {
         self.usage().omit = val as _;
+    }
+
+    /// Check if all values in this IN constraint are able to be processed simultaneously.
+    /// If this method returns true, then a call to
+    /// [set_value_list_wanted](Self::set_value_list_wanted) would also return true.
+    ///
+    /// Requires SQLite 3.38.0. On earlier versions, this function will always return
+    /// false.
+    pub fn value_list_available(&self) -> bool {
+        sqlite3_match_version! {
+            3_038_000 => unsafe {
+                ffi::sqlite3_vtab_in(
+                    &self.index_info.base as *const _ as _,
+                    self.position as _,
+                    -1,
+                ) != 0
+            },
+            _ => false,
+        }
+    }
+
+    /// Instruct SQLite to return all values in an IN constraint simultaneously.
+    ///
+    /// A constraint on a virtual table in the form of "column IN (...)" is communicated to
+    /// [VTab::best_index](super::VTab::best_index) as a [ConstraintOp::Eq] constraint. If
+    /// the virtual table wants to use this constraint, it must use
+    /// [set_argv_index](Self::set_argv_index) to assign the constraint to an argument.
+    /// Then, SQLite will invoke [VTabCursor::filter](super::VTabCursor::filter) once for
+    /// each value on the right-hand side of the IN operator. Thus, the virtual table only
+    /// sees a single value from the right-hand side of the IN operator at a time.
+    ///
+    /// In some cases, however, it would be advantageous for the virtual table to see all values on the right-hand of the IN operator all at once. This method enables this feature.
+    ///
+    /// Calling this method with true will request [ValueList](crate::ValueList)
+    /// processing. In order for ValueList processing to work:
+    ///
+    /// 1. this constraint must be assigned an argv index using
+    /// [set_argv_index](Self::set_argv_index);
+    /// 2. this method is called with true; and
+    /// 3. SQLite is able to provide all values simultaneously.
+    ///
+    /// If all of these criteria are met, then the corresponding argument passed to
+    /// [VTabCursor::filter](super::VTabCursor::filter) will appear to be SQL NULL, but
+    /// accessible using [ValueList](crate::ValueList). If this facility is requested but
+    /// this method returns false, then VTabCursor::filter will be invoked multiple times
+    /// with each different value of the constraint, as normal.
+    ///
+    /// This method always returns the same value that
+    /// [value_list_available](Self::value_list_available) would. Calling this method with
+    /// false cancels a previous request for a ValueList.
+    ///
+    /// See [the SQLite documentation](https://www.sqlite.org/c3ref/vtab_in.html) for more
+    /// details.
+    ///
+    /// Requires SQLite 3.38.0. On earlier versions, this function will always return
+    /// false.
+    pub fn set_value_list_wanted(&mut self, val: bool) -> bool {
+        let _ = val;
+        sqlite3_match_version! {
+            3_038_000 => unsafe {
+                ffi::sqlite3_vtab_in(
+                    &self.index_info.base as *const _ as _,
+                    self.position as _,
+                    if val { 1 } else { 0 },
+                ) != 0
+            },
+            _ => false,
+        }
     }
 }
 
@@ -463,11 +531,11 @@ impl std::fmt::Debug for IndexInfoConstraint<'_> {
         ds.field("column", &self.column())
             .field("op", &self.op())
             .field("usable", &self.usable());
-        match &self.rhs() {
-            Err(Error::VersionNotSatisfied(_)) => (),
-            x => {
-                ds.field("rhs", x);
+        sqlite3_match_version! {
+            3_038_000 => {
+                ds.field("rhs", &self.rhs());
             }
+            _ => (),
         }
         ds.field("argv_index", &self.argv_index())
             .field("omit", &self.omit())

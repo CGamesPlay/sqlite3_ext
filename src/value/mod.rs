@@ -1,13 +1,15 @@
 use super::{ffi, sqlite3_match_version, types::*};
 pub use blob::*;
 pub use passed_ref::*;
-use std::{ptr, slice, str};
+use std::{marker::PhantomData, ptr, slice, str};
 pub use unsafe_ptr::*;
+pub use value_list::*;
 
 mod blob;
 mod passed_ref;
 mod test;
 mod unsafe_ptr;
+mod value_list;
 
 #[derive(Debug, PartialEq)]
 pub enum ValueType {
@@ -29,6 +31,8 @@ pub enum ValueType {
 #[repr(transparent)]
 pub struct ValueRef {
     base: ffi::sqlite3_value,
+    // Values are not safe to send between threads.
+    phantom: PhantomData<*const ffi::sqlite3_value>,
 }
 
 /// Stores an SQLite-compatible value owned by Rust code.
@@ -42,6 +46,11 @@ pub enum Value {
 }
 
 impl ValueRef {
+    #[cfg_attr(not(modern_sqlite), allow(unused))]
+    pub(crate) unsafe fn from_ptr<'a>(p: *mut ffi::sqlite3_value) -> &'a mut ValueRef {
+        &mut *(p as *mut ValueRef)
+    }
+
     /// Get the underlying SQLite handle.
     ///
     /// # Safety

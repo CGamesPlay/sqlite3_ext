@@ -194,27 +194,21 @@ impl ValueRef {
 impl std::fmt::Debug for ValueRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self.value_type() {
-            ValueType::Integer => f
-                .debug_tuple("ValueRef::Integer")
-                .field(&self.get_i64())
-                .finish(),
-            ValueType::Float => f
-                .debug_tuple("ValueRef::Float")
-                .field(&self.get_f64())
-                .finish(),
+            ValueType::Integer => f.debug_tuple("Integer").field(&self.get_i64()).finish(),
+            ValueType::Float => f.debug_tuple("Float").field(&self.get_f64()).finish(),
             ValueType::Text => f
-                .debug_tuple("ValueRef::Text")
+                .debug_tuple("Text")
                 .field(unsafe { &self.get_str_unchecked() })
                 .finish(),
             ValueType::Blob => f
-                .debug_tuple("ValueRef::Blob")
+                .debug_tuple("Blob")
                 .field(unsafe { &self.get_blob_unchecked() })
                 .finish(),
             ValueType::Null => {
                 if let Some(r) = unsafe { self.get_ref_internal::<()>() } {
-                    f.debug_tuple("ValueRef::Null").field(&r).finish()
+                    f.debug_tuple("Null").field(&r).finish()
                 } else {
-                    f.debug_tuple("ValueRef::Null").finish()
+                    f.debug_tuple("Null").finish()
                 }
             }
         }

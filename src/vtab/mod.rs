@@ -27,7 +27,7 @@ use super::{
 pub use function::*;
 pub use index_info::*;
 pub use module::*;
-use std::ffi::c_void;
+use std::{ffi::c_void, slice};
 
 mod function;
 mod index_info;
@@ -121,29 +121,13 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
 
 /// A virtual table that supports INSERT/UPDATE/DELETE.
 pub trait UpdateVTab<'vtab>: VTab<'vtab> {
-    /// Insert a new row into the virtual table.
+    /// Modify a single row in the virtual table. The info parameter may be used to
+    /// determine the type of change being performed by this update.
     ///
-    /// For rowid tables, the first value is either the provided rowid or NULL. For WITHOUT
-    /// ROWID tables, the first value is always NULL. If the first value is NULL and the
-    /// table is a rowid table, then the returned i64 must be the rowid of the new row. In
-    /// all other cases the returned value is ignored.
-    fn insert(&mut self, args: &mut [&mut ValueRef]) -> Result<i64>;
-
-    /// Update an existing row in the virtual table.
-    ///
-    /// The rowid argument corresponds to the rowid or PRIMARY KEY of the existing row to
-    /// update. For rowid tables, the first value of args will be the new rowid for the
-    /// row. For WITHOUT ROWID tables, the first value of args will be NULL.
-    ///
-    /// On versions of SQLite 3.22.0 and above, it's possible to avoid redundant updates by
-    /// utilizing [ValueRef::nochange].
-    fn update(&mut self, rowid: &mut ValueRef, args: &mut [&mut ValueRef]) -> Result<()>;
-
-    /// Delete a row from the virtual table.
-    ///
-    /// The rowid argument corresopnds to the rowid (or PRIMARY KEY for WITHOUT ROWID
-    /// tables) of the row to delete.
-    fn delete(&mut self, rowid: &mut ValueRef) -> Result<()>;
+    /// If the change is an INSERT for a table with rowids and the provided rowid was NULL,
+    /// then the virtual table must generate and return a rowid for the inserted row. In
+    /// all other cases, the returned Ok value of this method is ignored.
+    fn update(&mut self, info: &mut ChangeInfo) -> Result<i64>;
 }
 
 /// A virtual table that supports ROLLBACK.
@@ -310,10 +294,16 @@ impl VTabConnection {
         unsafe { &mut *(self as *mut VTabConnection as *mut Connection) }
     }
 
-    /// Enable ON CONFLICT support for UPDATEs for this virtual table.
+    /// Indicate that this virtual table properly verifies constraints for updates.
     ///
-    /// Enabling this support has additional requirements on the [UpdateVTab::update]
-    /// method of the virtual table implementation. See [the SQLite documentation](https://www.sqlite.org/c3ref/c_vtab_constraint_support.html#sqlitevtabconstraintsupport) for more details.
+    /// If this is enabled, then the virtual table guarantees that if the
+    /// [UpdateVTab::update] method returns Err([SQLITE_CONSTRAINT]), it will do so before
+    /// any modifications to internal or persistent data structures have been made. If the
+    /// ON CONFLICT mode is ABORT, FAIL, IGNORE or ROLLBACK, SQLite is able to roll back a
+    /// statement or database transaction, and abandon or continue processing the current
+    /// SQL statement as appropriate. If the ON CONFLICT mode is REPLACE and the update
+    /// method returns SQLITE_CONSTRAINT, SQLite handles this as if the ON CONFLICT mode
+    /// had been ABORT.
     ///
     /// Requires SQLite 3.7.7. On earlier versions of SQLite, this is a harmless no-op.
     pub fn enable_constraints(&mut self) {
@@ -350,6 +340,145 @@ impl VTabConnection {
                 .unwrap();
             },
             _ => (),
+        }
+    }
+}
+
+/// Information about an INSERT/UPDATE/DELETE on a virtual table.
+pub struct ChangeInfo {
+    #[cfg_attr(not(modern_sqlite), allow(unused))]
+    db: *mut ffi::sqlite3,
+    argc: usize,
+    argv: *mut *mut ValueRef,
+}
+
+impl ChangeInfo {
+    /// Returns the type of update being performed.
+    pub fn change_type(&self) -> ChangeType {
+        if self.args().len() == 0 {
+            ChangeType::Delete
+        } else if self.rowid().is_null() {
+            ChangeType::Insert
+        } else {
+            ChangeType::Update
+        }
+    }
+
+    /// Returns the rowid (or, for WITHOUT ROWID tables, the PRIMARY KEY column) of the row
+    /// being deleted or updated.
+    ///
+    /// Semantically, an UPDATE to a virtual table is identical to a DELETE followed by an
+    /// INSERT. In that sense, this method returns the rowid or PRIMARY KEY column of the
+    /// row being deleted. The rowid of the row being inserted is available as the first
+    /// element in [args](Self::args).
+    ///
+    /// For the mutable version, see [rowid_mut](Self::rowid_mut).
+    pub fn rowid(&self) -> &ValueRef {
+        debug_assert!(self.argc > 0);
+        unsafe { &**self.argv }
+    }
+
+    /// Mutable version of [rowid](Self::rowid).
+    pub fn rowid_mut(&mut self) -> &mut ValueRef {
+        debug_assert!(self.argc > 0);
+        unsafe { &mut **self.argv }
+    }
+
+    /// Returns the arguments for an INSERT or UPDATE. The meaning of the first element in
+    /// this slice depends on the type of change being performed:
+    ///
+    /// - For an INSERT on a WITHOUT ROWID table, the first element is always NULL. The
+    ///   PRIMARY KEY is listed among the remaining elements.
+    /// - For an INSERT on a regular table, if the first element is NULL, it indicates that
+    ///   a rowid must be generated and returned from [UpdateVTab::update]. Otherwise, the
+    ///   first element is the rowid.
+    /// - For an UPDATE, the first element is the new value for the rowid or PRIMARY KEY
+    ///   column.
+    ///
+    /// In all cases, the second and following elements correspond to the values for all
+    /// columns in the order declared in the virtual table's schema (returned by
+    /// [VTab::connect] / [CreateVTab::create]).
+    ///
+    /// For the mutable version, see [args_mut](Self::args_mut).
+    pub fn args(&self) -> &[&ValueRef] {
+        debug_assert!(self.argc > 0);
+        unsafe { slice::from_raw_parts(self.argv.offset(1) as _, self.argc - 1) }
+    }
+
+    /// Mutable version of [args](Self::args).
+    pub fn args_mut(&mut self) -> &mut [&mut ValueRef] {
+        debug_assert!(self.argc > 0);
+        unsafe { slice::from_raw_parts_mut(self.argv.offset(1) as _, self.argc - 1) }
+    }
+
+    /// Return the ON CONFLICT mode of the current SQL statement. In order for this method
+    /// to be useful, the virtual table needs to have previously enabled ON CONFLICT
+    /// support using [VTabConnection::enable_constraints].
+    ///
+    /// Requires SQLite 3.7.7. On earlier versions, this will always return
+    /// [ConflictMode::Abort].
+    pub fn conflict_mode(&self) -> ConflictMode {
+        sqlite3_match_version! {
+            3_007_007 => {
+                ConflictMode::from_sqlite(unsafe { ffi::sqlite3_vtab_on_conflict(self.db) })
+            }
+            _ => ConflictMode::Abort,
+        }
+    }
+}
+
+impl std::fmt::Debug for ChangeInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        f.debug_struct("ChangeInfo")
+            .field("change_type", &self.change_type())
+            .field("rowid", &self.rowid())
+            .field("args", &self.args())
+            .field("conflict_mode", &self.conflict_mode())
+            .finish()
+    }
+}
+
+/// Indicates the type of modification that is being applied to the virtual table.
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum ChangeType {
+    /// Indicates an SQL INSERT.
+    Insert,
+    /// Indicates an SQL DELETE.
+    Delete,
+    /// Indicates an SQL UPDATE.
+    Update,
+}
+
+/// Indicates the ON CONFLICT mode for the SQL statement currently being executed.
+///
+/// An [UpdateVTab] which has used [VTabConnection::enable_constraints] can examine this value
+/// to determine how to handle a conflict during a change.
+///
+/// For details about what each mode means, see [the SQLite documentation](https://www.sqlite.org/lang_conflict.html).
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum ConflictMode {
+    /// Corresponds to ON CONFLICT ROLLBACK.
+    Rollback,
+    /// Corresponds to ON CONFLICT IGNORE.
+    Ignore,
+    /// Corresponds to ON CONFLICT FAIL.
+    Fail,
+    /// Corresponds to ON CONFLICT ABORT.
+    Abort,
+    /// Corresponds to ON CONFLICT REPLACE.
+    Replace,
+}
+
+impl ConflictMode {
+    #[cfg(modern_sqlite)]
+    fn from_sqlite(val: i32) -> Self {
+        match val {
+            1 => ConflictMode::Rollback,
+            2 => ConflictMode::Ignore,
+            3 => ConflictMode::Fail,
+            4 => ConflictMode::Abort,
+            5 => ConflictMode::Replace,
+            _ => panic!("invalid conflict mode"),
         }
     }
 }

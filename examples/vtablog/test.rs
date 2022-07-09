@@ -66,7 +66,7 @@ fn read() -> rusqlite::Result<()> {
         =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, rhs: Err(Sqlite(12)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 7 })
         =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: false, rhs: Err(Sqlite(12)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 7 })
         open(tab=100, cursor=101)
-        filter(tab=100, cursor=101, args=[ValueRef::Text(Ok("a1"))])
+        filter(tab=100, cursor=101, args=[Text(Ok("a1"))])
         eof(tab=100, cursor=101) -> false
         column(tab=100, cursor=101, idx=0) -> Ok("a0")
         next(tab=100, cursor=101)
@@ -83,7 +83,7 @@ fn read() -> rusqlite::Result<()> {
         next(tab=100, cursor=101)
           rowid 2 -> 3
         eof(tab=100, cursor=101) -> true
-        filter(tab=100, cursor=101, args=[ValueRef::Text(Ok("a2"))])
+        filter(tab=100, cursor=101, args=[Text(Ok("a2"))])
         eof(tab=100, cursor=101) -> false
         column(tab=100, cursor=101, idx=0) -> Ok("a0")
         next(tab=100, cursor=101)
@@ -120,8 +120,8 @@ fn insert() -> rusqlite::Result<()> {
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
         begin(tab=100, transaction=102)
-        insert(tab=100, args=[ValueRef::Null, ValueRef::Integer(1), ValueRef::Integer(2), ValueRef::Integer(3)])
-        insert(tab=100, args=[ValueRef::Null, ValueRef::Integer(4), ValueRef::Integer(5), ValueRef::Integer(6)])
+        update(tab=100, args=ChangeInfo { change_type: Insert, rowid: Null, args: [Null, Integer(1), Integer(2), Integer(3)], conflict_mode: Abort })
+        update(tab=100, args=ChangeInfo { change_type: Insert, rowid: Null, args: [Null, Integer(4), Integer(5), Integer(6)], conflict_mode: Abort })
         sync(tab=100, transaction=102)
         commit(tab=100, transaction=102)
         drop_transaction(tab=100, transaction=102)
@@ -144,10 +144,10 @@ fn update() -> rusqlite::Result<()> {
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
         <M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98 })
-        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, rhs: Ok(ValueRef::Integer(1)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 18446744073709551615 })
+        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: -1, op: Eq, usable: true, rhs: Ok(Integer(1)), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 18446744073709551615 })
         begin(tab=100, transaction=102)
         open(tab=100, cursor=101)
-        filter(tab=100, cursor=101, args=[ValueRef::Integer(1)])
+        filter(tab=100, cursor=101, args=[Integer(1)])
         eof(tab=100, cursor=101) -> false
         rowid(tab=100, cursor=101) -> 0
         next(tab=100, cursor=101)
@@ -168,8 +168,8 @@ fn update() -> rusqlite::Result<()> {
         next(tab=100, cursor=101)
           rowid 2 -> 3
         eof(tab=100, cursor=101) -> true
-        <M update(tab=100, rowid=ValueRef::Integer(1), args=[ValueRef::Integer(1), ValueRef::Text(Ok("b1")), ValueRef::Text(Ok("b1")), ValueRef::Text(Ok("c1"))])
-        =M update(tab=100, rowid=ValueRef::Integer(1), args=[ValueRef::Integer(1), ValueRef::Text(Ok("b1")), ValueRef::Null, ValueRef::Null])
+        <M update(tab=100, args=ChangeInfo { change_type: Update, rowid: Integer(1), args: [Integer(1), Text(Ok("b1")), Text(Ok("b1")), Text(Ok("c1"))], conflict_mode: Abort })
+        =M update(tab=100, args=ChangeInfo { change_type: Update, rowid: Integer(1), args: [Integer(1), Text(Ok("b1")), Null, Null], conflict_mode: Abort })
         =M   unchanged: [2, 3]
         drop(tab=100, cursor=101)
         sync(tab=100, transaction=102)
@@ -194,10 +194,10 @@ fn delete() -> rusqlite::Result<()> {
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
         <M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98 })
-        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, rhs: Ok(ValueRef::Text(Ok("a1"))), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 1 })
+        =M best_index(tab=100, index_info=IndexInfo { constraints: [IndexInfoConstraint { column: 0, op: Eq, usable: true, rhs: Ok(Text(Ok("a1"))), argv_index: None, omit: false }], order_by: [], index_num: 0, index_str: None, order_by_consumed: false, estimated_cost: 5e98, estimated_rows: 25, scan_flags: 0, columns_used: 1 })
         begin(tab=100, transaction=102)
         open(tab=100, cursor=101)
-        filter(tab=100, cursor=101, args=[ValueRef::Text(Ok("a1"))])
+        filter(tab=100, cursor=101, args=[Text(Ok("a1"))])
         eof(tab=100, cursor=101) -> false
         column(tab=100, cursor=101, idx=0) -> Ok("a0")
         next(tab=100, cursor=101)
@@ -212,7 +212,7 @@ fn delete() -> rusqlite::Result<()> {
         next(tab=100, cursor=101)
           rowid 2 -> 3
         eof(tab=100, cursor=101) -> true
-        delete(tab=100, rowid=ValueRef::Integer(1))
+        update(tab=100, args=ChangeInfo { change_type: Delete, rowid: Integer(1), args: [], conflict_mode: Abort })
         drop(tab=100, cursor=101)
         sync(tab=100, transaction=102)
         commit(tab=100, transaction=102)

@@ -9,7 +9,7 @@ fn get_i64() {
     h.with_value(val, |val| {
         assert_eq!(val.value_type(), ValueType::Integer);
         assert_eq!(val.get_i64(), 69420);
-        assert_eq!(format!("{:?}", val), "ValueRef::Integer(69420)");
+        assert_eq!(format!("{:?}", val), "Integer(69420)");
         Ok(())
     });
 }
@@ -21,7 +21,7 @@ fn get_f64() {
     h.with_value(val, |val| {
         assert_eq!(val.value_type(), ValueType::Float);
         assert_eq!(val.get_f64(), PI);
-        assert_eq!(format!("{:?}", val), "ValueRef::Float(3.141592653589793)");
+        assert_eq!(format!("{:?}", val), "Float(3.141592653589793)");
         Ok(())
     });
 }
@@ -35,7 +35,7 @@ fn get_blob() {
         assert_eq!(val.get_blob()?, Some(b"my string".as_slice()));
         assert_eq!(
             format!("{:?}", val),
-            "ValueRef::Blob([109, 121, 32, 115, 116, 114, 105, 110, 103])"
+            "Blob([109, 121, 32, 115, 116, 114, 105, 110, 103])"
         );
         Ok(())
     });
@@ -48,7 +48,7 @@ fn get_blob_null() {
     h.with_value(null, |val| {
         assert_eq!(val.value_type(), ValueType::Null);
         assert_eq!(val.get_blob()?, None);
-        assert_eq!(format!("{:?}", val), "ValueRef::Null");
+        assert_eq!(format!("{:?}", val), "Null");
         Ok(())
     });
 }
@@ -60,7 +60,7 @@ fn get_str() {
     h.with_value(string, |val| {
         assert_eq!(val.value_type(), ValueType::Text);
         assert_eq!(val.get_str()?, Some("my string"));
-        assert_eq!(format!("{:?}", val), "ValueRef::Text(Ok(\"my string\"))");
+        assert_eq!(format!("{:?}", val), "Text(Ok(\"my string\"))");
         Ok(())
     });
 }
@@ -72,7 +72,7 @@ fn get_str_null() {
     h.with_value(null, |val| {
         assert_eq!(val.value_type(), ValueType::Null);
         assert_eq!(val.get_str()?, None);
-        assert_eq!(format!("{:?}", val), "ValueRef::Null");
+        assert_eq!(format!("{:?}", val), "Null");
         Ok(())
     });
 }
@@ -85,48 +85,8 @@ fn get_str_invalid() {
         val.get_str().expect_err("invalid utf8");
         assert_eq!(
             format!("{:?}", val),
-            "ValueRef::Text(Err(Utf8Error(Utf8Error { valid_up_to: 1, error_len: Some(1) })))"
+            "Text(Err(Utf8Error(Utf8Error { valid_up_to: 1, error_len: Some(1) })))"
         );
-        Ok(())
-    });
-}
-
-#[test]
-#[cfg(modern_sqlite)]
-fn get_ref() {
-    let h = TestHelpers::new();
-    #[derive(PartialEq, Debug)]
-    struct MyStruct {
-        s: String,
-    }
-    let owned_struct = MyStruct {
-        s: "input string".to_owned(),
-    };
-    h.with_value(PassedRef::new(owned_struct), |val| {
-        assert_eq!(val.value_type(), ValueType::Null);
-        assert_eq!(
-            val.get_ref::<MyStruct>(),
-            Some(&MyStruct {
-                s: "input string".to_owned()
-            })
-        );
-        let mut dbg = format!("{:?}", val);
-        dbg.replace_range(48..(dbg.len() - 9), "XXX");
-        assert_eq!(
-            dbg,
-            "ValueRef::Null(PassedRef { type_id: TypeId { t: XXX }, .. })"
-        );
-        Ok(())
-    });
-}
-
-#[test]
-#[cfg(modern_sqlite)]
-fn get_ref_invalid() {
-    let h = TestHelpers::new();
-    h.with_value(PassedRef::new(0i32), |val| {
-        assert_eq!(val.value_type(), ValueType::Null);
-        assert_eq!(val.get_ref::<String>(), None);
         Ok(())
     });
 }

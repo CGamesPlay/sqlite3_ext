@@ -10,6 +10,7 @@ use std::{
 struct VTabHandle<'vtab, T: VTab<'vtab>> {
     base: ffi::sqlite3_vtab,
     vtab: T,
+    db: *mut ffi::sqlite3,
     txn: Option<ptr::NonNull<c_void>>,
     phantom: PhantomData<&'vtab T>,
 }
@@ -61,6 +62,7 @@ macro_rules! vtab_connect {
                     zErrMsg: ptr::null_mut(),
                 },
                 vtab,
+                db,
                 txn: None,
                 phantom: PhantomData,
             });
@@ -233,22 +235,17 @@ pub unsafe extern "C" fn vtab_update<'vtab, T: UpdateVTab<'vtab> + 'vtab>(
     p_rowid: *mut i64,
 ) -> c_int {
     let vtab = &mut *(vtab.cast::<VTabHandle<T>>());
-    let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
-    if args.len() == 1 {
-        ffi::handle_result(vtab.vtab.delete(args[0]), &mut vtab.base.zErrMsg)
-    } else {
-        if args[0].is_null() {
-            match vtab.vtab.insert(&mut args[1..]) {
-                Ok(rowid) => {
-                    *p_rowid = rowid;
-                    ffi::SQLITE_OK
-                }
-                Err(e) => ffi::handle_error(e, &mut vtab.base.zErrMsg),
-            }
-        } else {
-            let (rowid, args) = args.split_at_mut(1);
-            ffi::handle_result(vtab.vtab.update(rowid[0], args), &mut vtab.base.zErrMsg)
+    let mut context = ChangeInfo {
+        db: vtab.db,
+        argc: argc as _,
+        argv: argv as _,
+    };
+    match vtab.vtab.update(&mut context) {
+        Ok(rowid) => {
+            *p_rowid = rowid;
+            ffi::SQLITE_OK
         }
+        Err(e) => ffi::handle_error(e, &mut vtab.base.zErrMsg),
     }
 }
 

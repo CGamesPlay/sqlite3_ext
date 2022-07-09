@@ -171,20 +171,11 @@ impl<'vtab, O: Write + 'static> CreateVTab<'vtab> for VTabLog<O> {
 }
 
 impl<'vtab, O: Write + 'static> UpdateVTab<'vtab> for VTabLog<O> {
-    fn insert(&mut self, args: &mut [&mut ValueRef]) -> Result<i64> {
-        writeln!(self, "insert(tab={}, args={:?})", self.id, args)?;
-        Ok(1)
-    }
-
-    fn update(&mut self, rowid: &mut ValueRef, args: &mut [&mut ValueRef]) -> Result<()> {
-        writeln!(
-            self,
-            "update(tab={}, rowid={:?}, args={:?})",
-            self.id, rowid, args
-        )?;
+    fn update(&mut self, info: &mut ChangeInfo) -> Result<i64> {
+        writeln!(self, "update(tab={}, args={:?})", self.id, info)?;
         sqlite3_match_version! {
             3_022_000 => {
-                let unchanged: Vec<_> = args
+                let unchanged: Vec<_> = info.args()
                     .iter()
                     .enumerate()
                     .filter(|(_, a)| a.nochange())
@@ -196,12 +187,7 @@ impl<'vtab, O: Write + 'static> UpdateVTab<'vtab> for VTabLog<O> {
             }
             _ => (),
         }
-        Ok(())
-    }
-
-    fn delete(&mut self, rowid: &mut ValueRef) -> Result<()> {
-        writeln!(self, "delete(tab={}, rowid={:?})", self.id, rowid)?;
-        Ok(())
+        Ok(0)
     }
 }
 

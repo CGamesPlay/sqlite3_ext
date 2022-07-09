@@ -69,3 +69,43 @@ impl<T: 'static> std::fmt::Debug for PassedRef<T> {
             .finish_non_exhaustive()
     }
 }
+
+#[cfg(all(modern_sqlite, test, feature = "static"))]
+mod test {
+    use crate::test_helpers::prelude::*;
+
+    #[test]
+    fn get_ref() {
+        let h = TestHelpers::new();
+        #[derive(PartialEq, Debug)]
+        struct MyStruct {
+            s: String,
+        }
+        let owned_struct = MyStruct {
+            s: "input string".to_owned(),
+        };
+        h.with_value(PassedRef::new(owned_struct), |val| {
+            assert_eq!(val.value_type(), ValueType::Null);
+            assert_eq!(
+                val.get_ref::<MyStruct>(),
+                Some(&MyStruct {
+                    s: "input string".to_owned()
+                })
+            );
+            let mut dbg = format!("{:?}", val);
+            dbg.replace_range(38..(dbg.len() - 9), "XXX");
+            assert_eq!(dbg, "Null(PassedRef { type_id: TypeId { t: XXX }, .. })");
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn get_ref_invalid() {
+        let h = TestHelpers::new();
+        h.with_value(PassedRef::new(0i32), |val| {
+            assert_eq!(val.value_type(), ValueType::Null);
+            assert_eq!(val.get_ref::<String>(), None);
+            Ok(())
+        });
+    }
+}

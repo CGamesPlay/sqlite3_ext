@@ -406,7 +406,7 @@ macro_rules! make_iterator(
 make_iterator!(IndexInfoConstraint, nConstraint);
 make_iterator!(IndexInfoOrderBy, nOrderBy);
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum ConstraintOp {
     Eq,
     GT,
@@ -474,7 +474,7 @@ impl ConstraintOp {
 /// For the purposes of comparing virtual table output values to see if the values are same
 /// value for sorting purposes, two NULL values are considered to be the same. In other words,
 /// the comparison operator is "IS" (or "IS NOT DISTINCT FROM") and not "==".
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum DistinctMode {
     /// The virtual table must return all rows in the correct order according to the
     /// [order_by](IndexInfo::order_by) fields.

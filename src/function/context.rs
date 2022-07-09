@@ -51,7 +51,7 @@ impl InternalContext {
             ffi::sqlite3_aggregate_context(self.as_ptr(), size_of::<AggregateContext<F>>() as _)
                 as *mut AggregateContext<F>;
         if ptr.is_null() {
-            return Err(Error::no_memory());
+            return Err(SQLITE_NOMEM);
         }
         let context = &mut *ptr;
         if !context.init {

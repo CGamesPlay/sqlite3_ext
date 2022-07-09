@@ -1,7 +1,14 @@
 use super::{ffi, sqlite3_require_version};
 use std::os::raw::{c_char, c_int};
 
-#[derive(Debug, Clone)]
+/// Alias for [Error::Sqlite]\([ffi::SQLITE_NOMEM]\).
+pub const SQLITE_NOMEM: Error = Error::Sqlite(ffi::SQLITE_NOMEM);
+/// Alias for [Error::Sqlite]\([ffi::SQLITE_NOTFOUND]\).
+pub const SQLITE_NOTFOUND: Error = Error::Sqlite(ffi::SQLITE_NOTFOUND);
+/// Alias for [Error::Sqlite]\([ffi::SQLITE_CONSTRAINT]\).
+pub const SQLITE_CONSTRAINT: Error = Error::Sqlite(ffi::SQLITE_CONSTRAINT);
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Error {
     /// An error returned by SQLite.
     Sqlite(i32),
@@ -43,21 +50,6 @@ impl Error {
                 ffi::SQLITE_ERROR
             }
         }
-    }
-
-    /// Alias for `Error::Sqlite(ffi::SQLITE_NOMEM)`.
-    pub fn no_memory() -> Error {
-        Error::Sqlite(ffi::SQLITE_NOMEM)
-    }
-
-    /// Alias for `Error::Sqlite(ffi::SQLITE_NOTFOUND)`.
-    pub fn not_found() -> Error {
-        Error::Sqlite(ffi::SQLITE_NOTFOUND)
-    }
-
-    /// Alias for `Error::Sqlite(ffi::SQLITE_CONSTRAINT)`.
-    pub fn constraint() -> Error {
-        Error::Sqlite(ffi::SQLITE_CONSTRAINT)
     }
 }
 

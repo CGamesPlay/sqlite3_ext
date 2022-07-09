@@ -74,14 +74,12 @@ pub trait VTab<'vtab> {
     /// This method is called when SQLite is planning to query a virtual table. See
     /// [IndexInfo] for details.
     ///
-    /// If this method returns [`Err(Error::constraint())`](Error::constraint), that does
-    /// not indicate an error. Rather, it indicates that the particular combination of
-    /// input parameters specified is insufficient for the virtual table to do its job.
-    /// This is logically the same as setting the
-    /// [estimated_cost](IndexInfo::set_estimated_cost) to infinity. If every call to
-    /// best_index for a particular query plan returns this error, that means there is no
-    /// way for the virtual table to be safely used, and the SQLite call will fail with a
-    /// "no query solution" error.
+    /// If this method returns Err([SQLITE_CONSTRAINT]), that does not indicate an error. Rather,
+    /// it indicates that the particular combination of input parameters specified is insufficient
+    /// for the virtual table to do its job. This is logically the same as setting the
+    /// [estimated_cost](IndexInfo::set_estimated_cost) to infinity. If every call to best_index
+    /// for a particular query plan returns this error, that means there is no way for the virtual
+    /// table to be safely used, and the SQLite call will fail with a "no query solution" error.
     fn best_index(&'vtab self, index_info: &mut IndexInfo) -> Result<()>;
 
     /// Create an uninitialized query.

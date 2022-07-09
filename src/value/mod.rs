@@ -112,7 +112,7 @@ impl ValueRef {
                 if self.value_type() == ValueType::Null {
                     return Ok(None);
                 } else {
-                    return Err(Error::no_memory());
+                    return Err(SQLITE_NOMEM);
                 }
             } else {
                 Ok(Some(slice::from_raw_parts(data as _, len as _)))

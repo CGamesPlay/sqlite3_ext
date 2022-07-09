@@ -102,7 +102,7 @@ impl<U, T: AggregateFunction<U>> LegacyAggregateFunction<U> for T {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct FunctionOptions {
     n_args: i32,
     flags: i32,

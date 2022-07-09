@@ -11,7 +11,7 @@ mod test;
 mod unsafe_ptr;
 mod value_list;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum ValueType {
     Integer,
     Float,
@@ -36,7 +36,7 @@ pub struct ValueRef {
 }
 
 /// Stores an SQLite-compatible value owned by Rust code.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Integer(i64),
     Float(f64),

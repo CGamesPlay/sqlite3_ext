@@ -88,6 +88,7 @@ impl Connection {
 ///
 /// See [this discussion](https://www.sqlite.org/src/doc/latest/doc/trusted-schema.md) for more
 /// details about the motivation and implications.
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum RiskLevel {
     /// An innocuous function or virtual table is one that can only read content from the
     /// database file in which it resides, and can only alter the database in which it

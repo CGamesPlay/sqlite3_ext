@@ -94,6 +94,20 @@ impl Blob {
     }
 }
 
+impl Clone for Blob {
+    fn clone(&self) -> Self {
+        let mut ret = Blob::alloc(self.len());
+        ret.as_mut_slice().copy_from_slice(self.as_slice());
+        ret
+    }
+}
+
+impl PartialEq for Blob {
+    fn eq(&self, other: &Blob) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
 impl Drop for Blob {
     fn drop(&mut self) {
         unsafe { dealloc(self.data.as_ptr(), blob_layout(self.len())) }

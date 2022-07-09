@@ -136,7 +136,7 @@ impl VTabCursor for Cursor {
         for a in args.iter() {
             // If any of the constraints have a NULL value, then return no rows.
             // See ticket https://www.sqlite.org/src/info/fac496b61722daf2
-            if let ValueType::Null = a.value_type() {
+            if a.is_null() {
                 self.max_value = -1;
                 return Ok(());
             }

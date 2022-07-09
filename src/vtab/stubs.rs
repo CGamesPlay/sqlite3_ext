@@ -237,7 +237,7 @@ pub unsafe extern "C" fn vtab_update<'vtab, T: UpdateVTab<'vtab> + 'vtab>(
     if args.len() == 1 {
         ffi::handle_result(vtab.vtab.delete(args[0]), &mut vtab.base.zErrMsg)
     } else {
-        if args[0].value_type() == ValueType::Null {
+        if args[0].is_null() {
             match vtab.vtab.insert(&mut args[1..]) {
                 Ok(rowid) => {
                     *p_rowid = rowid;

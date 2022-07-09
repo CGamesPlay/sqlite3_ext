@@ -79,7 +79,7 @@ fn with_value_from_sql() {
     let h = TestHelpers::new();
     let did_run = Cell::new(false);
     h.with_value_from_sql("NULL", |val| {
-        assert_eq!(val.value_type(), ValueType::Null);
+        assert!(val.is_null());
         did_run.set(true);
         Ok(())
     });

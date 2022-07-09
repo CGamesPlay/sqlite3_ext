@@ -75,6 +75,11 @@ impl ValueRef {
         }
     }
 
+    /// Convenience method equivalent to `self.value_type() == ValueType::Null`.
+    pub fn is_null(&self) -> bool {
+        self.value_type() == ValueType::Null
+    }
+
     /// Return true if the value is unchanged by an UPDATE operation. Specifically, this method is guaranteed to return true if all of the following are true:
     ///
     /// - this ValueRef is a parameter to an [UpdateVTab](crate::vtab::UpdateVTab) method;

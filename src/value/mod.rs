@@ -20,6 +20,19 @@ pub enum ValueType {
     Null,
 }
 
+impl ValueType {
+    pub(crate) fn from_sqlite(val: i32) -> ValueType {
+        match val {
+            ffi::SQLITE_INTEGER => ValueType::Integer,
+            ffi::SQLITE_FLOAT => ValueType::Float,
+            ffi::SQLITE_TEXT => ValueType::Text,
+            ffi::SQLITE_BLOB => ValueType::Blob,
+            ffi::SQLITE_NULL => ValueType::Null,
+            _ => unreachable!(),
+        }
+    }
+}
+
 /// Stores a protected SQL value. SQLite always owns all value objects, so there is no way to directly
 /// create one.
 ///
@@ -62,22 +75,35 @@ impl ValueRef {
         &self.base as *const ffi::sqlite3_value as _
     }
 
+    /// Returns the data type of the ValueRef. Note that calling get methods on the
+    /// ValueRef may cause a conversion to a different data type, but this is not
+    /// guaranteed.
     pub fn value_type(&self) -> ValueType {
-        unsafe {
-            match ffi::sqlite3_value_type(self.as_ptr() as _) {
-                ffi::SQLITE_INTEGER => ValueType::Integer,
-                ffi::SQLITE_FLOAT => ValueType::Float,
-                ffi::SQLITE_TEXT => ValueType::Text,
-                ffi::SQLITE_BLOB => ValueType::Blob,
-                ffi::SQLITE_NULL => ValueType::Null,
-                _ => unreachable!(),
-            }
-        }
+        unsafe { ValueType::from_sqlite(ffi::sqlite3_value_type(self.as_ptr())) }
     }
 
     /// Convenience method equivalent to `self.value_type() == ValueType::Null`.
     pub fn is_null(&self) -> bool {
         self.value_type() == ValueType::Null
+    }
+
+    /// Attempt to convert the ValueRef to a numeric data type, and return the resulting
+    /// data type. This conversion will only happen if it is losles, otherwise the
+    /// underlying value will remain its original type.
+    pub fn numeric_type(&mut self) -> ValueType {
+        unsafe { ValueType::from_sqlite(ffi::sqlite3_value_numeric_type(self.as_ptr())) }
+    }
+
+    /// Returns true if this ValueRef originated from one of the sqlite3_bind interfaces.
+    /// If it comes from an SQL literal value, or a table column, or an expression, then
+    /// this method returns false.
+    ///
+    /// Requires SQLite 3.28.0. On earlier versions, this method always returns false.
+    pub fn is_from_bind(&self) -> bool {
+        sqlite3_match_version! {
+            3_028_000 => unsafe { ffi::sqlite3_value_frombind(self.as_ptr()) != 0 },
+            _ => false,
+        }
     }
 
     /// Return true if the value is unchanged by an UPDATE operation. Specifically, this method is guaranteed to return true if all of the following are true:
@@ -98,6 +124,10 @@ impl ValueRef {
             3_022_000 => (unsafe { ffi::sqlite3_value_nochange(self.as_ptr()) } != 0),
             _ => false,
         }
+    }
+
+    pub fn get_i32(&self) -> i32 {
+        unsafe { ffi::sqlite3_value_int(self.as_ptr()) }
     }
 
     pub fn get_i64(&self) -> i64 {

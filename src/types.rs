@@ -13,6 +13,8 @@ pub enum Error {
     /// An error returned by SQLite.
     Sqlite(i32),
     Utf8Error(std::str::Utf8Error),
+    /// A string being passed from Rust to SQLite contained an interior nul byte.
+    NulError(std::ffi::NulError),
     /// Caused by an attempt to use an API that is not supported in the current version of
     /// SQLite.
     VersionNotSatisfied(std::os::raw::c_int),
@@ -39,6 +41,7 @@ impl Error {
         match self {
             Error::Sqlite(code) => code,
             e @ Error::Utf8Error(_)
+            | e @ Error::NulError(_)
             | e @ Error::VersionNotSatisfied(_)
             | e @ Error::Module(_)
             | e @ Error::NoChange => {
@@ -68,6 +71,7 @@ impl std::fmt::Display for Error {
                 }
             }
             Error::Utf8Error(e) => e.fmt(f),
+            Error::NulError(e) => e.fmt(f),
             Error::Module(s) => write!(f, "{}", s),
             Error::VersionNotSatisfied(v) => write!(
                 f,
@@ -86,6 +90,12 @@ impl std::error::Error for Error {}
 impl From<std::str::Utf8Error> for Error {
     fn from(err: std::str::Utf8Error) -> Self {
         Self::Utf8Error(err)
+    }
+}
+
+impl From<std::ffi::NulError> for Error {
+    fn from(err: std::ffi::NulError) -> Self {
+        Self::NulError(err)
     }
 }
 

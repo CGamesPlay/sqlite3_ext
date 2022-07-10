@@ -140,7 +140,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_malloc64 |  | :grey_exclamation: | Available via ffi |
 | sqlite3_memory_highwater |  | | |
 | sqlite3_memory_used |  | | |
-| sqlite3_mprintf |  | :grey_exclamation: | Available via ffi |
+| sqlite3_mprintf | char | :grey_exclamation: | Available via ffi |
 | sqlite3_msize |  | :grey_exclamation: | Available via ffi |
 | sqlite3_mutex_alloc |  | :grey_exclamation: | Available via ffi |
 | sqlite3_mutex_enter |  | :grey_exclamation: | Available via ffi |
@@ -208,7 +208,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_snapshot_get |  | | |
 | sqlite3_snapshot_open |  | | |
 | sqlite3_snapshot_recover |  | | |
-| sqlite3_snprintf |  | | |
+| sqlite3_snprintf | char | :grey_exclamation: | Available via ffi |
 | sqlite3_soft_heap_limit64 |  | | |
 | sqlite3_sourceid |  | :white_check_mark: | SQLITE_VERSION.sourceid |
 | sqlite3_sql | sqlite3_stmt | | |
@@ -232,9 +232,9 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_str_reset | sqlite3_str | :grey_exclamation: | Available via ffi |
 | sqlite3_str_value | sqlite3_str | :grey_exclamation: | Available via ffi |
 | sqlite3_str_vappendf | sqlite3_str | :grey_exclamation: | Available via ffi |
-| sqlite3_strglob | char | | |
-| sqlite3_stricmp | char | | |
-| sqlite3_strlike | char | | |
+| sqlite3_strglob | char | :white_check_mark: | sqlite3_strglob |
+| sqlite3_stricmp | char | :white_check_mark: | sqlite3_stricmp |
+| sqlite3_strlike | char | :white_check_mark: | sqlite3_strlike |
 | sqlite3_strnicmp | char | :grey_exclamation: | Unnecessary |
 | sqlite3_system_errno | sqlite3 | :grey_exclamation: | Available via ffi |
 | sqlite3_table_column_metadata |  | | |
@@ -246,10 +246,10 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_txn_state |  |  | |
 | sqlite3_unlock_notify |  | | |
 | sqlite3_update_hook |  | | |
-| sqlite3_uri_boolean |  | | |
-| sqlite3_uri_int64 |  | | |
-| sqlite3_uri_key |  | | |
-| sqlite3_uri_parameter |  | | |
+| sqlite3_uri_boolean |  | :grey_exclamation: | Available via ffi |
+| sqlite3_uri_int64 |  | :grey_exclamation: | Available via ffi |
+| sqlite3_uri_key |  | :grey_exclamation: | Available via ffi |
+| sqlite3_uri_parameter |  | :grey_exclamation: | Available via ffi |
 | sqlite3_user_data | sqlite3_context | :white_check_mark: | Use a closure for the function |
 | sqlite3_value_blob | sqlite3_value | :white_check_mark: | ValueRef::get_blob |
 | sqlite3_value_bytes | sqlite3_value | :grey_exclamation: | Unnecessary |
@@ -272,9 +272,9 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_vfs_find |  | | |
 | sqlite3_vfs_register |  | | |
 | sqlite3_vfs_unregister |  | | |
-| sqlite3_vmprintf |  | :grey_exclamation: | Unnecessary |
-| sqlite3_vsnprintf |  | :grey_exclamation: | Unnecessary |
-| sqlite3_vtab_collation | sqlite3_index_info | | IndexInfoConstraint::collation |
+| sqlite3_vmprintf | char | :grey_exclamation: | Unnecessary |
+| sqlite3_vsnprintf | char | :grey_exclamation: | Unnecessary |
+| sqlite3_vtab_collation | sqlite3_index_info | :white_check_mark: | IndexInfoConstraint::collation |
 | sqlite3_vtab_config | sqlite3 | :white_check_mark: | VTabConnection |
 | sqlite3_vtab_distinct | sqlite3_index_info | :white_check_mark: | IndexInfo::distinct_mode |
 | sqlite3_vtab_in | sqlite3_index_info | :white_check_mark: | IndexInfoConstraint::set_value_list_wanted |

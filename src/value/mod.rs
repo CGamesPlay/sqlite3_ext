@@ -33,6 +33,40 @@ impl ValueType {
     }
 }
 
+/// Allows access to an underlying SQLite value.
+pub trait FromValue {
+    /// Returns the data type of the ValueRef. Note that calling get methods on the
+    /// ValueRef may cause a conversion to a different data type, but this is not
+    /// guaranteed.
+    fn value_type(&self) -> ValueType;
+
+    /// Convenience method equivalent to `self.value_type() == ValueType::Null`.
+    fn is_null(&self) -> bool {
+        self.value_type() == ValueType::Null
+    }
+
+    /// Interpret this value as i32.
+    fn get_i32(&self) -> i32;
+
+    /// Interpret this value as i64.
+    fn get_i64(&self) -> i64;
+
+    /// Interpret this value as f64.
+    fn get_f64(&self) -> f64;
+
+    /// Interpret this value as a BLOB.
+    fn get_blob(&mut self) -> Result<Option<&[u8]>>;
+
+    /// Interpret the value as `Option<&str>`.
+    ///
+    /// This method will fail if SQLite runs out of memory while converting the value, or
+    /// if the value has invalid UTF-8. The returned value is `None` if the underlying
+    /// value is SQL NULL.
+    fn get_str(&mut self) -> Result<Option<&str>> {
+        Ok(self.get_blob()?.map(|b| str::from_utf8(b)).transpose()?)
+    }
+}
+
 /// Stores a protected SQL value. SQLite always owns all value objects, so there is no way to directly
 /// create one.
 ///
@@ -48,16 +82,6 @@ pub struct ValueRef {
     phantom: PhantomData<*const ffi::sqlite3_value>,
 }
 
-/// Stores an SQLite-compatible value owned by Rust code.
-#[derive(Debug, PartialEq, Clone)]
-pub enum Value {
-    Integer(i64),
-    Float(f64),
-    Text(String),
-    Blob(Blob),
-    Null,
-}
-
 impl ValueRef {
     #[cfg_attr(not(modern_sqlite), allow(unused))]
     pub(crate) unsafe fn from_ptr<'a>(p: *mut ffi::sqlite3_value) -> &'a mut ValueRef {
@@ -68,23 +92,11 @@ impl ValueRef {
     ///
     /// # Safety
     ///
-    /// Invoking SQLite methods on the returned value maay invalidate existing references
+    /// Invoking SQLite methods on the returned value may invalidate existing references
     /// previously returned by this object. This is safe as long as a mutable reference to
     /// this ValueRef is held.
     pub unsafe fn as_ptr(&self) -> *mut ffi::sqlite3_value {
         &self.base as *const ffi::sqlite3_value as _
-    }
-
-    /// Returns the data type of the ValueRef. Note that calling get methods on the
-    /// ValueRef may cause a conversion to a different data type, but this is not
-    /// guaranteed.
-    pub fn value_type(&self) -> ValueType {
-        unsafe { ValueType::from_sqlite(ffi::sqlite3_value_type(self.as_ptr())) }
-    }
-
-    /// Convenience method equivalent to `self.value_type() == ValueType::Null`.
-    pub fn is_null(&self) -> bool {
-        self.value_type() == ValueType::Null
     }
 
     /// Attempt to convert the ValueRef to a numeric data type, and return the resulting
@@ -126,35 +138,6 @@ impl ValueRef {
         }
     }
 
-    pub fn get_i32(&self) -> i32 {
-        unsafe { ffi::sqlite3_value_int(self.as_ptr()) }
-    }
-
-    pub fn get_i64(&self) -> i64 {
-        unsafe { ffi::sqlite3_value_int64(self.as_ptr()) }
-    }
-
-    pub fn get_f64(&self) -> f64 {
-        unsafe { ffi::sqlite3_value_double(self.as_ptr()) }
-    }
-
-    /// Interpret this value as a BLOB.
-    pub fn get_blob(&mut self) -> Result<Option<&[u8]>> {
-        unsafe {
-            let data = ffi::sqlite3_value_blob(self.as_ptr());
-            let len = ffi::sqlite3_value_bytes(self.as_ptr());
-            if data.is_null() {
-                if self.value_type() == ValueType::Null {
-                    return Ok(None);
-                } else {
-                    return Err(SQLITE_NOMEM);
-                }
-            } else {
-                Ok(Some(slice::from_raw_parts(data as _, len as _)))
-            }
-        }
-    }
-
     /// Get the bytes of this BLOB value.
     ///
     /// # Safety
@@ -164,15 +147,6 @@ impl ValueRef {
         let len = ffi::sqlite3_value_bytes(self.as_ptr());
         let data = ffi::sqlite3_value_blob(self.as_ptr());
         slice::from_raw_parts(data as _, len as _)
-    }
-
-    /// Interpret the value as `Option<&str>`.
-    ///
-    /// This method will fail if SQLite runs out of memory while converting the value, or
-    /// if the value has invalid UTF-8. The returned value is `None` if the underlying
-    /// value is SQL NULL.
-    pub fn get_str(&mut self) -> Result<Option<&str>> {
-        Ok(self.get_blob()?.map(|b| str::from_utf8(b)).transpose()?)
     }
 
     /// Get the underlying TEXT value.
@@ -221,6 +195,44 @@ impl ValueRef {
     }
 }
 
+impl FromValue for ValueRef {
+    fn value_type(&self) -> ValueType {
+        unsafe { ValueType::from_sqlite(ffi::sqlite3_value_type(self.as_ptr())) }
+    }
+
+    fn get_i32(&self) -> i32 {
+        unsafe { ffi::sqlite3_value_int(self.as_ptr()) }
+    }
+
+    fn get_i64(&self) -> i64 {
+        unsafe { ffi::sqlite3_value_int64(self.as_ptr()) }
+    }
+
+    fn get_f64(&self) -> f64 {
+        unsafe { ffi::sqlite3_value_double(self.as_ptr()) }
+    }
+
+    fn get_blob(&mut self) -> Result<Option<&[u8]>> {
+        unsafe {
+            let data = ffi::sqlite3_value_blob(self.as_ptr());
+            let len = ffi::sqlite3_value_bytes(self.as_ptr());
+            if data.is_null() {
+                if self.value_type() == ValueType::Null {
+                    return Ok(None);
+                } else {
+                    return Err(SQLITE_NOMEM);
+                }
+            } else {
+                Ok(Some(slice::from_raw_parts(data as _, len as _)))
+            }
+        }
+    }
+
+    fn get_str(&mut self) -> Result<Option<&str>> {
+        Ok(self.get_blob()?.map(|b| str::from_utf8(b)).transpose()?)
+    }
+}
+
 impl std::fmt::Debug for ValueRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self.value_type() {
@@ -243,6 +255,16 @@ impl std::fmt::Debug for ValueRef {
             }
         }
     }
+}
+
+/// Stores an SQLite-compatible value owned by Rust code.
+#[derive(Debug, PartialEq, Clone)]
+pub enum Value {
+    Integer(i64),
+    Float(f64),
+    Text(String),
+    Blob(Blob),
+    Null,
 }
 
 macro_rules! value_from {

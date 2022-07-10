@@ -25,7 +25,7 @@ use std::ptr;
 /// Alternatively, the [mapped](Self::mapped) method turns this struct into an [Iterator]:
 ///
 /// ```no_run
-/// use sqlite3_ext::{ValueRef, ValueList, Result};
+/// use sqlite3_ext::{ValueRef, ValueList, FromValue, Result};
 ///
 /// fn filter_list(list: &mut ValueRef) -> Result<()> {
 ///     let list: Vec<Option<String>> = ValueList::from_value_ref(list)?

@@ -67,10 +67,11 @@ pub trait FromValue {
     }
 }
 
-/// Stores a protected SQL value. SQLite always owns all value objects, so there is no way to directly
-/// create one.
+/// A protected SQL value.
 ///
-/// "Protected" means that SQLite holds a mutex for the lifetime of the reference.
+/// SQLite always owns all value objects. Consequently, this struct is never owned by Rust
+/// code, but instead always borrowed. A "protected" value means that SQLite holds a mutex for
+/// the lifetime of the reference.
 ///
 /// SQLite automatically converts data to any requested type where possible. This conversion is
 /// typically done in-place, which is why many of the conversion methods of this type require

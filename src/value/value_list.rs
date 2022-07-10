@@ -2,8 +2,10 @@ use super::ValueRef;
 use crate::{ffi, iterator::*, sqlite3_match_version, sqlite3_require_version, types::*};
 use std::ptr;
 
-/// Represents a list of values from SQLite. SQLite provides these when a virtual table is
-/// processing all values of an IN constraint simultaneously, see
+/// Represents a list of values from SQLite.
+///
+/// SQLite provides these when a virtual table is processing all values of an IN constraint
+/// simultaneously, see
 /// [IndexInfoConstraint::set_value_list_wanted](crate::vtab::IndexInfoConstraint::set_value_list_wanted)
 /// for more information.
 ///

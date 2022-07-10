@@ -1,13 +1,18 @@
+//! Facilities for running SQL queries.
 use super::{ffi, iterator::*, sqlite3_match_version, types::*, value::*, Connection};
 use std::{ffi::CStr, mem::MaybeUninit, ptr, slice, str};
 
 mod test;
 
+/// A prepared statement.
+///
+/// These can be created using methods such as [Connection::prepare].
 pub struct Statement {
     base: *mut ffi::sqlite3_stmt,
 }
 
 impl Connection {
+    /// Prepare some SQL for execution.
     pub fn prepare(&self, sql: &str) -> Result<Statement> {
         let mut ret = MaybeUninit::uninit();
         unsafe {
@@ -42,7 +47,7 @@ impl Statement {
     }
 
     /// Return an iterator over the result of the query.
-    pub fn query(&mut self) -> Result<ResultSet<'_>> {
+    pub fn query<'a>(&'a mut self) -> Result<ResultSet<'a>> {
         unsafe { ffi::sqlite3_reset(self.base) };
         Ok(ResultSet::new(self))
     }
@@ -115,6 +120,7 @@ impl<'stmt> FallibleIteratorMut for ResultSet<'stmt> {
     }
 }
 
+/// A row returned from a query.
 pub struct QueryResult<'stmt> {
     stmt: &'stmt mut Statement,
 }
@@ -124,6 +130,7 @@ impl<'stmt> QueryResult<'stmt> {
         Self { stmt }
     }
 
+    /// Returns the number of columns in the result.
     pub fn len(&self) -> usize {
         self.stmt.column_count()
     }
@@ -137,7 +144,8 @@ impl<'stmt> QueryResult<'stmt> {
         Column::new(self.stmt, index)
     }
 
-    pub fn col(&mut self, index: usize) -> Column<'_> {
+    /// Get the value in the requested column.
+    pub fn col<'a>(&'a mut self, index: usize) -> Column<'a> {
         unsafe { self.col_unchecked(index) }
     }
 }
@@ -152,6 +160,10 @@ impl std::fmt::Debug for QueryResult<'_> {
     }
 }
 
+/// A single value returned from a query.
+///
+/// SQLite automatically converts between data types on request, which is why many of the
+/// methods require `&mut`.
 pub struct Column<'stmt> {
     stmt: &'stmt Statement,
     position: usize,

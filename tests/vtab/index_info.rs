@@ -1,5 +1,5 @@
 use crate::test_vtab::*;
-use sqlite3_ext::{iterator::*, vtab::*, *};
+use sqlite3_ext::{vtab::*, *};
 
 #[test]
 fn best_index_rhs() -> rusqlite::Result<()> {
@@ -55,6 +55,8 @@ fn best_index_in() -> rusqlite::Result<()> {
             _cursor: &mut TestVTabCursor<'a, Self>,
             args: &mut [&mut ValueRef],
         ) -> Result<()> {
+            use sqlite3_ext::iterator::*;
+
             self.num_filter.set(self.num_filter.get() + 1);
             let vals: Vec<String> = ValueList::from_value_ref(args[0])?
                 .map(|x| Ok(x.get_str()?.unwrap().to_owned()))

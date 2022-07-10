@@ -51,28 +51,28 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_close_v2 |  | | |
 | sqlite3_collation_needed | sqlite3 | :white_check_mark: | Connection::set_collation_needed_func |
 | sqlite3_collation_needed16 | sqlite3 | :grey_exclamation: | Use UTF-8 equivalent |
-| sqlite3_column_blob | sqlite3_stmt | | |
-| sqlite3_column_bytes | sqlite3_stmt | | |
+| sqlite3_column_blob | sqlite3_stmt | :white_check_mark: | Column::get_blob |
+| sqlite3_column_bytes | sqlite3_stmt | :grey_exclamation: | Unnecessary |
 | sqlite3_column_bytes16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
-| sqlite3_column_count | sqlite3_stmt | | |
-| sqlite3_column_database_name | sqlite3_stmt | | |
+| sqlite3_column_count | sqlite3_stmt | :white_check_mark: | Statement::column_count |
+| sqlite3_column_database_name | sqlite3_stmt | :white_check_mark: | Column::database_name |
 | sqlite3_column_database_name16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
-| sqlite3_column_decltype | sqlite3_stmt | | |
+| sqlite3_column_decltype | sqlite3_stmt | :white_check_mark: | Column::decltype |
 | sqlite3_column_decltype16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
-| sqlite3_column_double | sqlite3_stmt | | |
-| sqlite3_column_int | sqlite3_stmt | | |
-| sqlite3_column_int64 | sqlite3_stmt | | |
-| sqlite3_column_name | sqlite3_stmt | | |
+| sqlite3_column_double | sqlite3_stmt | :white_check_mark: | Column::get_f64 |
+| sqlite3_column_int | sqlite3_stmt | :white_check_mark: | Column::get_i32 |
+| sqlite3_column_int64 | sqlite3_stmt | :white_check_mark: | Column::get_i64 |
+| sqlite3_column_name | sqlite3_stmt | :white_check_mark: | Column::name |
 | sqlite3_column_name16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
-| sqlite3_column_origin_name | sqlite3_stmt | | |
+| sqlite3_column_origin_name | sqlite3_stmt | :white_check_mark: | Column::origin_name |
 | sqlite3_column_origin_name16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
-| sqlite3_column_table_name | sqlite3_stmt | | |
+| sqlite3_column_table_name | sqlite3_stmt | :white_check_mark: | Column::table_name |
 | sqlite3_column_table_name16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
-| sqlite3_column_text | sqlite3_stmt | | |
+| sqlite3_column_text | sqlite3_stmt | :white_check_mark: | Column::get_str |
 | sqlite3_column_text16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
-| sqlite3_column_type | sqlite3_stmt | | |
+| sqlite3_column_type | sqlite3_stmt | :white_check_mark: | Column::value_type |
 | sqlite3_column_value | sqlite3_stmt | | |
-| sqlite3_commit_hook | sqlite3_stmt | | |
+| sqlite3_commit_hook | sqlite3 | | |
 | sqlite3_compileoption_get |  | | |
 | sqlite3_compileoption_used |  | | |
 | sqlite3_complete |  | | |
@@ -155,12 +155,12 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_open16 | sqlite3 | :grey_exclamation: | Use UTF-8 equivalent |
 | sqlite3_open_v2 | sqlite3 | | |
 | sqlite3_overload_function | sqlite3 | :white_check_mark: | Connection::create_overloaded_function |
-| sqlite3_prepare | sqlite3_stmt | | |
+| sqlite3_prepare | sqlite3_stmt | :grey_exclamation: | Unnecessary |
 | sqlite3_prepare16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
 | sqlite3_prepare16_v2 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
 | sqlite3_prepare16_v3 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
-| sqlite3_prepare_v2 | sqlite3_stmt | | |
-| sqlite3_prepare_v3 | sqlite3_stmt | | |
+| sqlite3_prepare_v2 | sqlite3_stmt | :grey_exclamation: | Unnecessary |
+| sqlite3_prepare_v3 | sqlite3_stmt | :white_check_mark: | Connection::prepare |
 | sqlite3_preupdate_blobwrite |  | | |
 | sqlite3_preupdate_count |  | | |
 | sqlite3_preupdate_depth |  | | |
@@ -173,7 +173,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_realloc |  | :grey_exclamation: | Available via ffi |
 | sqlite3_realloc64 |  | :grey_exclamation: | Available via ffi |
 | sqlite3_release_memory |  | | |
-| sqlite3_reset | sqlite3_stmt | | |
+| sqlite3_reset | sqlite3_stmt | :white_check_mark: | Statement::query |
 | sqlite3_reset_auto_extension |  | :white_check_mark: | Extension::reset_auto |
 | sqlite3_result_blob | sqlite3_context | :white_check_mark: | ToContextResult |
 | sqlite3_result_blob64 | sqlite3_context | :white_check_mark: | ToContextResult |
@@ -196,7 +196,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_result_value | sqlite3_context | | |
 | sqlite3_result_zeroblob | sqlite3_context | | |
 | sqlite3_result_zeroblob64 | sqlite3_context | | |
-| sqlite3_rollback_hook |  | | |
+| sqlite3_rollback_hook | sqlite3 | | |
 | sqlite3_serialize |  | | |
 | sqlite3_set_authorizer |  | | |
 | sqlite3_set_auxdata | sqlite3_context | :white_check_mark: | Context::set_aux_data |
@@ -211,10 +211,10 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_snprintf | char | :grey_exclamation: | Available via ffi |
 | sqlite3_soft_heap_limit64 |  | | |
 | sqlite3_sourceid |  | :white_check_mark: | SQLITE_VERSION.sourceid |
-| sqlite3_sql | sqlite3_stmt | | |
+| sqlite3_sql | sqlite3_stmt | :white_check_mark: | Statement::sql |
 | sqlite3_status |  | | |
 | sqlite3_status64 |  | | |
-| sqlite3_step | sqlite3_stmt | | |
+| sqlite3_step | sqlite3_stmt | :white_check_mark: | ResultSet::next |
 | sqlite3_stmt_busy | sqlite3_stmt | | |
 | sqlite3_stmt_isexplain | sqlite3_stmt | | |
 | sqlite3_stmt_readonly | sqlite3_stmt | | |

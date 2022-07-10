@@ -8,6 +8,7 @@ mod extension;
 pub mod ffi;
 pub mod function;
 mod globals;
+pub mod query;
 pub mod static_ext;
 mod test_helpers;
 mod types;

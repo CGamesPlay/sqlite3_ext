@@ -7,11 +7,15 @@ pub const SQLITE_NOMEM: Error = Error::Sqlite(ffi::SQLITE_NOMEM);
 pub const SQLITE_NOTFOUND: Error = Error::Sqlite(ffi::SQLITE_NOTFOUND);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_CONSTRAINT]\).
 pub const SQLITE_CONSTRAINT: Error = Error::Sqlite(ffi::SQLITE_CONSTRAINT);
+/// Alias for [Error::Sqlite]\([ffi::SQLITE_MISUSE]\).
+pub const SQLITE_MISUSE: Error = Error::Sqlite(ffi::SQLITE_MISUSE);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Error {
     /// An error returned by SQLite.
     Sqlite(i32),
+    /// A string received from SQLite contains invalid UTF-8, and cannot be converted to a
+    /// `&str`.
     Utf8Error(std::str::Utf8Error),
     /// A string being passed from Rust to SQLite contained an interior nul byte.
     NulError(std::ffi::NulError),

@@ -1,7 +1,5 @@
-use crate::{ffi, sqlite3_match_version, sqlite3_require_version, stack_ref, types::*, value::*};
+use crate::{ffi, sqlite3_match_version, sqlite3_require_version, types::*, value::*};
 use std::{ffi::CStr, ptr};
-
-stack_ref!(static CURRENT_INDEX_INFO: &*const ffi::sqlite3_index_info);
 
 /// Information about a query plan.
 ///
@@ -19,10 +17,6 @@ pub struct IndexInfo {
 }
 
 impl IndexInfo {
-    pub(crate) fn with_current<F: FnOnce(&mut Self) -> R, R>(&mut self, f: F) -> R {
-        CURRENT_INDEX_INFO.with_value(&(&self.base as *const _), || f(self))
-    }
-
     pub fn constraints(&self) -> IndexInfoConstraintIterator {
         IndexInfoConstraintIterator::new(self)
     }

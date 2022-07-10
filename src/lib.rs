@@ -8,7 +8,6 @@ mod extension;
 pub mod ffi;
 pub mod function;
 mod globals;
-pub mod stack_ref;
 pub mod static_ext;
 mod test_helpers;
 mod types;

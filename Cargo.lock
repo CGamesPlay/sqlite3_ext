@@ -370,6 +370,7 @@ name = "sqlite3_ext"
 version = "0.1.0"
 dependencies = [
  "bigdecimal",
+ "fallible-iterator",
  "indoc",
  "lazy_static",
  "libsqlite3-sys",

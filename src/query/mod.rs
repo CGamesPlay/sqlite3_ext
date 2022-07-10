@@ -1,4 +1,4 @@
-use super::{ffi, sqlite3_match_version, types::*, value::*, Connection};
+use super::{ffi, iterator::*, sqlite3_match_version, types::*, value::*, Connection};
 use std::{ffi::CStr, mem::MaybeUninit, ptr, slice, str};
 
 mod test;
@@ -60,10 +60,10 @@ impl Statement {
         unsafe { ffi::sqlite3_column_count(self.base) as _ }
     }
 
-    fn step(&mut self) -> Result<Option<QueryResult<'_>>> {
+    fn step(&mut self) -> Result<bool> {
         match unsafe { ffi::sqlite3_step(self.base) } {
-            ffi::SQLITE_DONE => Ok(None),
-            ffi::SQLITE_ROW => Ok(Some(QueryResult::new(self))),
+            ffi::SQLITE_DONE => Ok(false),
+            ffi::SQLITE_ROW => Ok(true),
             e => Err(Error::Sqlite(e)),
         }
     }
@@ -77,30 +77,39 @@ impl Drop for Statement {
 
 /// An iterator of results for a [Statement].
 pub struct ResultSet<'stmt> {
-    stmt: &'stmt mut Statement,
     finished: bool,
+    result: QueryResult<'stmt>,
 }
 
 impl<'stmt> ResultSet<'stmt> {
     fn new(stmt: &'stmt mut Statement) -> Self {
         Self {
-            stmt,
             finished: false,
+            result: QueryResult::new(stmt),
         }
     }
+}
 
-    pub fn next(&mut self) -> Result<Option<QueryResult<'_>>> {
+impl<'stmt> FallibleIteratorMut for ResultSet<'stmt> {
+    type Item = QueryResult<'stmt>;
+    type Error = Error;
+
+    fn next(&mut self) -> Result<Option<&mut Self::Item>> {
         if self.finished {
             // This is to avoid a case where continuing to use the iterator after
             // it ends would automatically reset the statement, so it would return
             // its results again.
             return Err(SQLITE_MISUSE);
         }
-        match self.stmt.step() {
-            Ok(Some(x)) => Ok(Some(x)),
-            x => {
+        match self.result.stmt.step() {
+            Ok(true) => Ok(Some(&mut self.result)),
+            Ok(false) => {
                 self.finished = true;
-                x
+                Ok(None)
+            }
+            Err(x) => {
+                self.finished = true;
+                Err(x)
             }
         }
     }

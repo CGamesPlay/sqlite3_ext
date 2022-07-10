@@ -1,5 +1,5 @@
 use super::ValueRef;
-use crate::{ffi, sqlite3_match_version, sqlite3_require_version, types::*};
+use crate::{ffi, iterator::*, sqlite3_match_version, sqlite3_require_version, types::*};
 use std::ptr;
 
 /// Represents a list of values from SQLite. SQLite provides these when a virtual table is
@@ -11,7 +11,7 @@ use std::ptr;
 /// it. The first is a `while let`:
 ///
 /// ```no_run
-/// use sqlite3_ext::{ValueRef, ValueList, Result};
+/// use sqlite3_ext::{iterator::*, *};
 ///
 /// fn filter_list(list: &mut ValueRef) -> Result<()> {
 ///     let mut list = ValueList::from_value_ref(list)?;
@@ -22,15 +22,15 @@ use std::ptr;
 /// }
 /// ```
 ///
-/// Alternatively, the [mapped](Self::mapped) method turns this struct into an [Iterator]:
+/// Alternatively, the [map](Self::map) method turns this struct into a [FallibleIterator]:
 ///
 /// ```no_run
-/// use sqlite3_ext::{ValueRef, ValueList, FromValue, Result};
+/// use sqlite3_ext::{iterator::*, *};
 ///
 /// fn filter_list(list: &mut ValueRef) -> Result<()> {
 ///     let list: Vec<Option<String>> = ValueList::from_value_ref(list)?
-///         .mapped(|x| Ok(x.get_str()?.map(String::from)))
-///         .collect::<Result<_>>()?;
+///         .map(|x| Ok(x.get_str()?.map(String::from)))
+///         .collect()?;
 ///     println!("values are {:?}", list);
 ///     Ok(())
 /// }
@@ -67,12 +67,13 @@ impl<'list> ValueList<'list> {
             })
         })
     }
+}
 
-    /// Retrieve the next value in the ValueList. Note that the returned value is bound to
-    /// the lifetime of self, and it is therefore not possible to use the returned value
-    /// after a subsequent call to next. See [mapped](Self::mapped) for a more ergonomic
-    /// alternative.
-    pub fn next(&mut self) -> Result<Option<&mut ValueRef>> {
+impl FallibleIteratorMut for ValueList<'_> {
+    type Item = ValueRef;
+    type Error = Error;
+
+    fn next(&mut self) -> Result<Option<&mut Self::Item>> {
         sqlite3_match_version! {
             3_038_000 => match self.pending.take() {
                 Some(Some(x)) => Ok(Some(unsafe { ValueRef::from_ptr(x.as_ptr()) })),
@@ -93,36 +94,6 @@ impl<'list> ValueList<'list> {
                 }
             },
             _ => unreachable!(),
-        }
-    }
-
-    /// Convert this ValueList into a proper [Iterator]. Iterator proceeds by invoking the
-    /// provided function on each ValueRef, which returns a [Result]. See [the struct
-    /// summary](Self) for an example.
-    pub fn mapped<R, F: FnMut(&mut ValueRef) -> Result<R>>(
-        self,
-        f: F,
-    ) -> MappedValues<'list, R, F> {
-        MappedValues { base: self, f }
-    }
-}
-
-/// An iterator over the mapped values in a [ValueList].
-///
-/// F is used to transform the borrowed [ValueRefs](ValueRef) into an owned type.
-pub struct MappedValues<'list, R, F: FnMut(&mut ValueRef) -> Result<R>> {
-    base: ValueList<'list>,
-    f: F,
-}
-
-impl<'list, R, F: FnMut(&mut ValueRef) -> Result<R>> Iterator for MappedValues<'list, R, F> {
-    type Item = Result<R>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.base.next() {
-            Err(x) => Some(Err(x)),
-            Ok(Some(x)) => Some((self.f)(x)),
-            Ok(None) => None,
         }
     }
 }

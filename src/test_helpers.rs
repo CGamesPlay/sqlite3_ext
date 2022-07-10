@@ -5,7 +5,7 @@ use std::{cell::Cell, mem::transmute};
 
 pub mod prelude {
     pub use super::*;
-    pub use crate::{function::*, types::*, value::*, *};
+    pub use crate::{function::*, iterator::*, types::*, value::*, *};
 }
 
 pub struct TestHelpers {

@@ -10,7 +10,7 @@ pub const SQLITE_CONSTRAINT: Error = Error::Sqlite(ffi::SQLITE_CONSTRAINT);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_MISUSE]\).
 pub const SQLITE_MISUSE: Error = Error::Sqlite(ffi::SQLITE_MISUSE);
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Error {
     /// An error returned by SQLite.
     Sqlite(i32),
@@ -85,6 +85,31 @@ impl std::fmt::Display for Error {
                 v % 1000
             ),
             Error::NoChange => write!(f, "invalid Error::NoChange"),
+        }
+    }
+}
+
+impl std::fmt::Debug for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Sqlite(i) => {
+                let errstr: Result<&str> = sqlite3_require_version!(3_007_015, unsafe {
+                    std::ffi::CStr::from_ptr(ffi::sqlite3_errstr(*i))
+                        .to_str()
+                        .map_err(Error::Utf8Error)
+                });
+                match errstr {
+                    Ok(s) => f.debug_tuple("Sqlite").field(&i).field(&s).finish(),
+                    _ => f.debug_tuple("Sqlite").field(&i).finish(),
+                }
+            }
+            Error::Utf8Error(e) => f.debug_tuple("Utf8Error").field(&e).finish(),
+            Error::NulError(e) => f.debug_tuple("NulError").field(&e).finish(),
+            Error::Module(s) => f.debug_tuple("Module").field(&s).finish(),
+            Error::VersionNotSatisfied(v) => {
+                f.debug_tuple("VersionNotSatisfied").field(&v).finish()
+            }
+            Error::NoChange => f.debug_tuple("NoChange").finish(),
         }
     }
 }

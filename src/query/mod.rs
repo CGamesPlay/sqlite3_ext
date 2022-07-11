@@ -38,6 +38,11 @@ impl Connection {
             })
         }
     }
+
+    /// Convenience method for `self.prepare(sql)?.execute()`.
+    pub fn execute(&self, sql: &str) -> Result<i64> {
+        self.prepare(sql)?.execute()
+    }
 }
 
 impl Statement {
@@ -48,8 +53,27 @@ impl Statement {
 
     /// Return an iterator over the result of the query.
     pub fn query<'a>(&'a mut self) -> Result<ResultSet<'a>> {
-        unsafe { ffi::sqlite3_reset(self.base) };
         Ok(ResultSet::new(self))
+    }
+
+    /// Execute a query that is expected to return no results (such as an INSERT, UPDATE,
+    /// or DELETE).
+    ///
+    /// If this query returns rows, this method will fail (use [query](Self::query) for
+    /// such a query).
+    pub fn execute(mut self) -> Result<i64> {
+        let db = self.db().lock();
+        if self.step()? != false {
+            // Query returned rows!
+            Err(SQLITE_MISUSE)
+        } else {
+            Ok(unsafe {
+                sqlite3_match_version! {
+                    3_037_000 => ffi::sqlite3_changes64(db.as_ptr() as _),
+                    _ => ffi::sqlite3_changes(db.as_ptr() as _) as _,
+                }
+            })
+        }
     }
 
     /// Returns the original text of the prepared statement.
@@ -63,6 +87,10 @@ impl Statement {
     /// Returns the number of columns in the result set returned by this query.
     pub fn column_count(&self) -> usize {
         unsafe { ffi::sqlite3_column_count(self.base) as _ }
+    }
+
+    pub fn db<'a>(&self) -> &'a Connection {
+        unsafe { Connection::from_ptr(ffi::sqlite3_db_handle(self.base)) }
     }
 
     fn step(&mut self) -> Result<bool> {
@@ -117,6 +145,12 @@ impl<'stmt> FallibleIteratorMut for ResultSet<'stmt> {
                 Err(x)
             }
         }
+    }
+}
+
+impl Drop for ResultSet<'_> {
+    fn drop(&mut self) {
+        unsafe { ffi::sqlite3_reset(self.result.stmt.base) };
     }
 }
 

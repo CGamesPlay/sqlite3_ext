@@ -94,7 +94,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_db_cacheflush |  | | |
 | sqlite3_db_config |  | | |
 | sqlite3_db_filename |  | | |
-| sqlite3_db_handle | sqlite3_stmt | | |
+| sqlite3_db_handle | sqlite3_stmt | :grey_exclamation: | Available via ffi |
 | sqlite3_db_mutex |  | | |
 | sqlite3_db_readonly |  | | |
 | sqlite3_db_release_memory |  | | |
@@ -109,7 +109,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_errmsg16 | sqlite3 | :grey_exclamation: | Use UTF-8 equivalent |
 | sqlite3_error_offset | sqlite3 | | |
 | sqlite3_errstr | - | :white_check_mark: | Error::fmt |
-| sqlite3_exec |  | | |
+| sqlite3_exec | sqlite3 | :grey_exclamation: | Unnecessary |
 | sqlite3_expanded_sql | sqlite3_stmt | | |
 | sqlite3_extended_errcode | sqlite3 | | |
 | sqlite3_extended_result_codes | sqlite3 | | |
@@ -159,7 +159,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_prepare16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
 | sqlite3_prepare16_v2 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
 | sqlite3_prepare16_v3 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
-| sqlite3_prepare_v2 | sqlite3_stmt | :grey_exclamation: | Unnecessary |
+| sqlite3_prepare_v2 | sqlite3_stmt | :white_check_mark: | Connection::prepare |
 | sqlite3_prepare_v3 | sqlite3_stmt | :white_check_mark: | Connection::prepare |
 | sqlite3_preupdate_blobwrite |  | | |
 | sqlite3_preupdate_count |  | | |

@@ -14,10 +14,10 @@ fn basic() -> Result<()> {
         decltype: Option<String>,
     }
     let h = TestHelpers::new();
-    h.db.execute("CREATE TABLE tbl(a TEXT,b,c)", []).unwrap();
-    h.db.execute("INSERT INTO tbl VALUES ('a1', 'b1', 'c1')", [])
-        .unwrap();
     let conn = h.sqlite3_ext();
+    conn.execute("CREATE TABLE tbl(a TEXT,b,c)").unwrap();
+    conn.execute("INSERT INTO tbl VALUES ('a1', 'b1', 'c1')")
+        .unwrap();
     let ret: Vec<Row> = conn
         .prepare("SELECT a AS a_alias FROM tbl")?
         .query()?

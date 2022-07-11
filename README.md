@@ -19,19 +19,19 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_backup_pagecount |  | | |
 | sqlite3_backup_remaining |  | | |
 | sqlite3_backup_step |  | | |
-| sqlite3_bind_blob | sqlite3_stmt | | |
-| sqlite3_bind_blob64 | sqlite3_stmt | | |
-| sqlite3_bind_double | sqlite3_stmt | | |
-| sqlite3_bind_int | sqlite3_stmt | | |
-| sqlite3_bind_int64 | sqlite3_stmt | | |
-| sqlite3_bind_null | sqlite3_stmt | | |
+| sqlite3_bind_blob | sqlite3_stmt | :white_check_mark: | ToParam |
+| sqlite3_bind_blob64 | sqlite3_stmt | :white_check_mark: | ToParam |
+| sqlite3_bind_double | sqlite3_stmt | :white_check_mark: | ToParam |
+| sqlite3_bind_int | sqlite3_stmt | :white_check_mark: | ToParam |
+| sqlite3_bind_int64 | sqlite3_stmt | :white_check_mark: | ToParam |
+| sqlite3_bind_null | sqlite3_stmt | :white_check_mark: | ToParam |
 | sqlite3_bind_parameter_count | sqlite3_stmt | | |
 | sqlite3_bind_parameter_index | sqlite3_stmt | | |
 | sqlite3_bind_parameter_name | sqlite3_stmt | | |
 | sqlite3_bind_pointer | sqlite3_stmt | | |
-| sqlite3_bind_text | sqlite3_stmt | | |
+| sqlite3_bind_text | sqlite3_stmt | :white_check_mark: | ToParam |
 | sqlite3_bind_text16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
-| sqlite3_bind_text64 | sqlite3_stmt | | |
+| sqlite3_bind_text64 | sqlite3_stmt | :white_check_mark: | ToParam |
 | sqlite3_bind_value | sqlite3_stmt | | |
 | sqlite3_bind_zeroblob | sqlite3_stmt | | |
 | sqlite3_bind_zeroblob64 | sqlite3_stmt | | |

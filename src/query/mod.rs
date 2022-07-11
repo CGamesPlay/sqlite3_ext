@@ -1,6 +1,11 @@
 //! Facilities for running SQL queries.
 use super::{ffi, iterator::*, sqlite3_match_version, types::*, value::*, Connection};
-use std::{ffi::CStr, mem::MaybeUninit, ptr, slice, str};
+use sealed::sealed;
+use std::{
+    ffi::{CStr, CString},
+    mem::MaybeUninit,
+    ptr, slice, str,
+};
 
 mod test;
 
@@ -40,8 +45,8 @@ impl Connection {
     }
 
     /// Convenience method for `self.prepare(sql)?.execute()`.
-    pub fn execute(&self, sql: &str) -> Result<i64> {
-        self.prepare(sql)?.execute()
+    pub fn execute<P: Params>(&self, sql: &str, params: P) -> Result<i64> {
+        self.prepare(sql)?.execute(params)
     }
 }
 
@@ -52,7 +57,8 @@ impl Statement {
     }
 
     /// Return an iterator over the result of the query.
-    pub fn query<'a>(&'a mut self) -> Result<ResultSet<'a>> {
+    pub fn query<'a, P: Params>(&'a mut self, params: P) -> Result<ResultSet<'a>> {
+        params.bind_params(self.as_ptr())?;
         Ok(ResultSet::new(self))
     }
 
@@ -61,7 +67,8 @@ impl Statement {
     ///
     /// If this query returns rows, this method will fail (use [query](Self::query) for
     /// such a query).
-    pub fn execute(mut self) -> Result<i64> {
+    pub fn execute<P: Params>(&mut self, params: P) -> Result<i64> {
+        params.bind_params(self.as_ptr())?;
         let db = self.db().lock();
         if self.step()? != false {
             // Query returned rows!
@@ -362,6 +369,126 @@ impl std::fmt::Debug for Column<'_> {
                 .field(unsafe { &self.get_blob_unchecked() })
                 .finish(),
             ValueType::Null => f.debug_tuple("Null").finish(),
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! params {
+    ($($val:expr),* $(,)?) => {
+        |stmt| unsafe {
+            use $crate::query::ToParam;
+            let mut i = 1i32;
+            $(
+            $val.bind_param(stmt, i)?;
+            #[allow(unused_assignments)]
+            { i += 1; }
+            )*
+            Ok(())
+        }
+    }
+}
+
+#[sealed]
+pub trait Params {
+    #[doc(hidden)]
+    fn bind_params(self, stmt: *mut ffi::sqlite3_stmt) -> Result<()>;
+}
+
+#[sealed]
+impl Params for () {
+    fn bind_params(self, _: *mut ffi::sqlite3_stmt) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[sealed]
+impl<T> Params for T
+where
+    T: FnOnce(*mut ffi::sqlite3_stmt) -> Result<()>,
+{
+    fn bind_params(self, stmt: *mut ffi::sqlite3_stmt) -> Result<()> {
+        self(stmt)
+    }
+}
+
+#[sealed]
+impl<T: ToParam + std::fmt::Debug, const N: usize> Params for [T; N] {
+    fn bind_params(self, stmt: *mut ffi::sqlite3_stmt) -> Result<()> {
+        for (pos, val) in self.into_iter().enumerate() {
+            unsafe { val.bind_param(stmt, pos as i32 + 1)? };
+        }
+        Ok(())
+    }
+}
+
+#[sealed]
+pub trait ToParam {
+    #[doc(hidden)]
+    unsafe fn bind_param(self, stmt: *mut ffi::sqlite3_stmt, position: i32) -> Result<()>;
+}
+
+macro_rules! to_param {
+    ($(#[$attr:meta])* $ty:ty as ($stmt:ident, $pos:ident, $val:ident) => $impl:expr) => {
+        $(#[$attr])*
+        #[sealed]
+        impl ToParam for $ty {
+            unsafe fn bind_param(self, $stmt: *mut ffi::sqlite3_stmt, $pos: i32) -> Result<()> {
+                let $val = self;
+                Error::from_sqlite($impl)
+            }
+        }
+    };
+}
+
+to_param!(() as (stmt, pos, _val) => ffi::sqlite3_bind_null(stmt, pos));
+to_param!(bool as (stmt, pos, val) => ffi::sqlite3_bind_int(stmt, pos, val as i32));
+to_param!(i32 as (stmt, pos, val) => ffi::sqlite3_bind_int(stmt, pos, val));
+to_param!(i64 as (stmt, pos, val) => ffi::sqlite3_bind_int64(stmt, pos, val));
+to_param!(f64 as (stmt, pos, val) => ffi::sqlite3_bind_double(stmt, pos, val));
+to_param!(&'static str as (stmt, pos, val) => {
+    let val = val.as_bytes();
+    let len = val.len();
+    sqlite3_match_version! {
+        3_008_007 => ffi::sqlite3_bind_text64(stmt, pos, val.as_ptr() as _, len as _, None, ffi::SQLITE_UTF8 as _),
+        _ => ffi::sqlite3_bind_text(stmt, pos, val.as_ptr() as _, len as _, None),
+    }
+});
+to_param!(String as (stmt, pos, val) => {
+    let val = val.as_bytes();
+    let len = val.len();
+    let cstring = CString::new(val).unwrap().into_raw();
+    sqlite3_match_version! {
+        3_008_007 => ffi::sqlite3_bind_text64(stmt, pos, cstring, len as _, Some(ffi::drop_cstring), ffi::SQLITE_UTF8 as _),
+        _ => ffi::sqlite3_bind_text(stmt, pos, cstring, len as _, Some(ffi::drop_cstring)),
+    }
+});
+
+#[sealed]
+impl<T: 'static> ToParam for T
+where
+    Blob: From<T>,
+{
+    unsafe fn bind_param(self, stmt: *mut ffi::sqlite3_stmt, pos: i32) -> Result<()> {
+        let blob = Blob::from(self);
+        let len = blob.len();
+        let rc = sqlite3_match_version! {
+            3_008_007 => ffi::sqlite3_bind_blob64(stmt, pos, blob.into_raw(), len as _, Some(ffi::drop_blob),),
+            _ => ffi::sqlite3_bind_blob(stmt, pos, blob.into_raw(), len as _, Some(ffi::drop_blob)),
+        };
+        Error::from_sqlite(rc)
+    }
+}
+
+#[sealed]
+impl<T> ToParam for Option<T>
+where
+    T: ToParam,
+{
+    unsafe fn bind_param(self, stmt: *mut ffi::sqlite3_stmt, pos: i32) -> Result<()> {
+        match self {
+            Some(x) => x.bind_param(stmt, pos),
+            None => Error::from_sqlite(ffi::sqlite3_bind_null(stmt, pos)),
         }
     }
 }

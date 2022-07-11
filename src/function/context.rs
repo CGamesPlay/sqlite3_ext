@@ -1,5 +1,6 @@
 use super::FromUserData;
 use crate::{ffi, sqlite3_match_version, types::*, value::*, Connection};
+use sealed::sealed;
 use std::{
     any::TypeId,
     ffi::CString,
@@ -142,6 +143,7 @@ impl Context {
 /// - For fallible functions, [Result]\<ToContextResult\> provides an implementation.
 /// - For types known only at run-time, [Value] provides an implementation.
 /// - For arbitrary Rust objects, [PassedRef] provides an implementation.
+#[sealed]
 pub trait ToContextResult: 'static {
     #[doc(hidden)]
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context);
@@ -151,6 +153,7 @@ macro_rules! to_context_result {
     ($($(#[$attr:meta])* match $ty:ty as ($ctx:ident, $val:ident) => $impl:expr),*) => {
         $(
         $(#[$attr])*
+        #[sealed]
         impl ToContextResult for $ty {
             unsafe fn assign_to(self, $ctx: *mut ffi::sqlite3_context) {
                 let $val = self;
@@ -184,7 +187,7 @@ to_context_result! {
         let cstring = CString::new(val).unwrap().into_raw();
         sqlite3_match_version! {
             3_008_007 => ffi::sqlite3_result_text64(ctx, cstring, len as _, Some(ffi::drop_cstring), ffi::SQLITE_UTF8 as _),
-            _ => ffi::sqlite3_result_text(ctx, cstring, len as _, None),
+            _ => ffi::sqlite3_result_text(ctx, cstring, len as _, Some(ffi::drop_cstring)),
         }
     },
     /// Sets the context error to this error.
@@ -202,6 +205,7 @@ to_context_result! {
     }
 }
 
+#[sealed]
 impl<T: 'static> ToContextResult for T
 where
     Blob: From<T>,
@@ -217,6 +221,7 @@ where
 }
 
 /// Sets the context result to the contained value or NULL.
+#[sealed]
 impl<T: ToContextResult> ToContextResult for Option<T> {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
         match self {
@@ -227,6 +232,7 @@ impl<T: ToContextResult> ToContextResult for Option<T> {
 }
 
 /// Sets either the context result or error, depending on the result.
+#[sealed]
 impl<T: ToContextResult> ToContextResult for Result<T> {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
         match self {
@@ -237,6 +243,7 @@ impl<T: ToContextResult> ToContextResult for Result<T> {
 }
 
 /// Sets a dynamically typed [Value] to the context result.
+#[sealed]
 impl ToContextResult for Value {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
         match self {
@@ -250,6 +257,7 @@ impl ToContextResult for Value {
 }
 
 /// Sets an arbitrary pointer to the context result.
+#[sealed]
 impl<T: 'static + ?Sized> ToContextResult for UnsafePtr<T> {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
         sqlite3_match_version! {
@@ -264,6 +272,7 @@ impl<T: 'static + ?Sized> ToContextResult for UnsafePtr<T> {
 }
 
 /// Sets the context result to NULL with this value as an associated pointer.
+#[sealed]
 impl<T: 'static> ToContextResult for PassedRef<T> {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
         let _ = (POINTER_TAG, context);

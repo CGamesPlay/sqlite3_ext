@@ -65,6 +65,9 @@ pub trait FromValue {
     fn get_str(&mut self) -> Result<Option<&str>> {
         Ok(self.get_blob()?.map(|b| str::from_utf8(b)).transpose()?)
     }
+
+    /// Clone the value, returning a [Value].
+    fn to_owned(&self) -> Result<Value>;
 }
 
 /// A protected SQL value.
@@ -231,6 +234,16 @@ impl FromValue for ValueRef {
 
     fn get_str(&mut self) -> Result<Option<&str>> {
         Ok(self.get_blob()?.map(|b| str::from_utf8(b)).transpose()?)
+    }
+
+    fn to_owned(&self) -> Result<Value> {
+        match self.value_type() {
+            ValueType::Integer => Ok(Value::from(self.get_i64())),
+            ValueType::Float => Ok(Value::from(self.get_f64())),
+            ValueType::Text => unsafe { Ok(Value::from(self.get_str_unchecked()?.to_owned())) },
+            ValueType::Blob => unsafe { Ok(Value::from(Blob::from(self.get_blob_unchecked()))) },
+            ValueType::Null => Ok(Value::Null),
+        }
     }
 }
 

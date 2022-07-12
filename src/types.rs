@@ -5,6 +5,8 @@ use std::os::raw::{c_char, c_int};
 pub const SQLITE_NOMEM: Error = Error::Sqlite(ffi::SQLITE_NOMEM);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_NOTFOUND]\).
 pub const SQLITE_NOTFOUND: Error = Error::Sqlite(ffi::SQLITE_NOTFOUND);
+/// Alias for [Error::Sqlite]\([ffi::SQLITE_EMPTY]\).
+pub const SQLITE_EMPTY: Error = Error::Sqlite(ffi::SQLITE_EMPTY);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_CONSTRAINT]\).
 pub const SQLITE_CONSTRAINT: Error = Error::Sqlite(ffi::SQLITE_CONSTRAINT);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_MISUSE]\).

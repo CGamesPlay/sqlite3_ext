@@ -1,5 +1,6 @@
 #![cfg(all(test, feature = "static"))]
 
+use crate::query::{Statement, ToParam};
 use crate::test_helpers::prelude::*;
 
 #[test]
@@ -15,9 +16,8 @@ fn basic() -> Result<()> {
     }
     let h = TestHelpers::new();
     let conn = h.sqlite3_ext();
-    conn.execute("CREATE TABLE tbl(a TEXT,b,c)", ()).unwrap();
-    conn.execute("INSERT INTO tbl VALUES ('a1', 'b1', 'c1')", ())
-        .unwrap();
+    conn.execute("CREATE TABLE tbl(a TEXT,b,c)", ())?;
+    conn.execute("INSERT INTO tbl VALUES ('a1', 'b1', 'c1')", ())?;
     let ret: Vec<Row> = conn
         .prepare("SELECT a AS a_alias FROM tbl")?
         .query(())?
@@ -47,11 +47,20 @@ fn basic() -> Result<()> {
 }
 
 #[test]
+fn invalid_execute() {
+    let h = TestHelpers::new();
+    let conn = h.sqlite3_ext();
+    let err = conn.execute("SELECT 1", ());
+    assert_eq!(err, Err(SQLITE_MISUSE));
+}
+
+#[test]
 fn params() -> Result<()> {
     let h = TestHelpers::new();
     let conn = h.sqlite3_ext();
     let mut stmt = conn.prepare("VALUES (?), (?), (?), (?), (?), (?), (?)")?;
     assert_eq!(stmt.parameter_count(), 7);
+    assert_eq!(stmt.sql(), Ok("VALUES (?), (?), (?), (?), (?), (?), (?)"));
 
     let ret: Vec<Value> = stmt
         .query(params!(
@@ -84,9 +93,8 @@ fn params() -> Result<()> {
 fn value_params() -> Result<()> {
     let h = TestHelpers::new();
     let conn = h.sqlite3_ext();
-    let mut stmt = conn.prepare("VALUES (?), (?), (?), (?), (?)")?;
-
-    let ret: Vec<Value> = stmt
+    let ret: Vec<Value> = conn
+        .prepare("VALUES (?), (?), (?), (?), (?)")?
         .query([
             Value::Integer(1),
             Value::Float(std::f64::consts::PI),
@@ -106,6 +114,24 @@ fn value_params() -> Result<()> {
             Value::Null,
         ]
     );
+    Ok(())
+}
+
+#[test]
+fn func_params() -> Result<()> {
+    let h = TestHelpers::new();
+    let conn = h.sqlite3_ext();
+    let ret: Vec<i32> = conn
+        .prepare("VALUES (?), (?), (?)")?
+        .query(|stmt: &mut Statement| {
+            for x in 1..=3i64 {
+                x.bind_param(stmt, x as _)?;
+            }
+            Ok(())
+        })?
+        .map(|r| Ok(r.col(0).get_i32()))
+        .collect()?;
+    assert_eq!(ret, vec![1, 2, 3]);
     Ok(())
 }
 
@@ -151,20 +177,25 @@ fn passed_ref() -> Result<()> {
     let s = MyStruct {
         s: "string from passed ref".to_owned(),
     };
-    let ret: Vec<String> = conn
-        .prepare("SELECT extract(?)")?
-        .query(params!(PassedRef::new(s)))?
-        .map(|r| Ok(r.col(0).get_str()?.unwrap().to_owned()))
-        .collect()?;
-    assert_eq!(ret, vec!["string from passed ref".to_owned()]);
+    let ret: String = conn.query_row("SELECT extract(?)", params!(PassedRef::new(s)), |r| {
+        Ok(r.col(0).get_str()?.unwrap().to_owned())
+    })?;
+    assert_eq!(ret, "string from passed ref".to_owned());
     Ok(())
 }
 
 #[test]
-fn sql() -> Result<()> {
+fn reuse_statement() -> Result<()> {
     let h = TestHelpers::new();
     let conn = h.sqlite3_ext();
-    let stmt = conn.prepare("SELECT 1")?;
-    assert_eq!(stmt.sql(), Ok("SELECT 1"));
+    let mut stmt = conn.prepare("SELECT ?")?;
+
+    let ret = stmt.query_row([1], |r| Ok(r.col(0).get_i32()))?;
+    assert_eq!(ret, 1);
+    let ret = stmt.query_row([2], |r| Ok(r.col(0).get_i32()))?;
+    assert_eq!(ret, 2);
+    // Ensure that bindings were cleared out
+    let ret = stmt.query_row((), |r| Ok(r.col(0).to_owned()?))?;
+    assert_eq!(ret, Value::Null);
     Ok(())
 }

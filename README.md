@@ -22,13 +22,13 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_bind_blob | sqlite3_stmt | :white_check_mark: | ToParam |
 | sqlite3_bind_blob64 | sqlite3_stmt | :white_check_mark: | ToParam |
 | sqlite3_bind_double | sqlite3_stmt | :white_check_mark: | ToParam |
-| sqlite3_bind_int | sqlite3_stmt | :white_check_mark: | ToParam |
+| sqlite3_bind_int | sqlite3_stmt | :grey_exclamation: | Unnecessary |
 | sqlite3_bind_int64 | sqlite3_stmt | :white_check_mark: | ToParam |
 | sqlite3_bind_null | sqlite3_stmt | :white_check_mark: | ToParam |
-| sqlite3_bind_parameter_count | sqlite3_stmt | | |
-| sqlite3_bind_parameter_index | sqlite3_stmt | | |
-| sqlite3_bind_parameter_name | sqlite3_stmt | | |
-| sqlite3_bind_pointer | sqlite3_stmt | | |
+| sqlite3_bind_parameter_count | sqlite3_stmt | :white_check_mark: | Statement::parameter_count |
+| sqlite3_bind_parameter_index | sqlite3_stmt | :white_check_mark: | Statement::parameter_position |
+| sqlite3_bind_parameter_name | sqlite3_stmt | :white_check_mark: | Statement::parameter_name |
+| sqlite3_bind_pointer | sqlite3_stmt | :white_check_mark: | ToParam |
 | sqlite3_bind_text | sqlite3_stmt | :white_check_mark: | ToParam |
 | sqlite3_bind_text16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
 | sqlite3_bind_text64 | sqlite3_stmt | :white_check_mark: | ToParam |
@@ -44,9 +44,9 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_busy_handler |  | | |
 | sqlite3_busy_timeout |  | | |
 | sqlite3_cancel_auto_extension | - | :white_check_mark: | Extension::cancel_auto |
-| sqlite3_changes |  | | |
-| sqlite3_changes64 |  | | |
-| sqlite3_clear_bindings | sqlite3_stmt | | |
+| sqlite3_changes |  | :white_check_mark: | Statement::execute |
+| sqlite3_changes64 |  | :white_check_mark: | Statement::execute |
+| sqlite3_clear_bindings | sqlite3_stmt | :grey_exclamation: | Unnecessary |
 | sqlite3_close |  | | |
 | sqlite3_close_v2 |  | | |
 | sqlite3_collation_needed | sqlite3 | :white_check_mark: | Connection::set_collation_needed_func |

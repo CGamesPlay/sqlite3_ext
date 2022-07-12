@@ -50,13 +50,16 @@ fn basic() -> Result<()> {
 fn params() -> Result<()> {
     let h = TestHelpers::new();
     let conn = h.sqlite3_ext();
-    let ret: Vec<Value> = conn
-        .prepare("VALUES (?), (?), (?), (?), (?), (?)")?
+    let mut stmt = conn.prepare("VALUES (?), (?), (?), (?), (?), (?), (?)")?;
+    assert_eq!(stmt.parameter_count(), 7);
+
+    let ret: Vec<Value> = stmt
         .query(params!(
             1,
             std::f64::consts::PI,
             "a string",
             "owned string".to_owned(),
+            [254, 253, 252],
             None as Option<i64>,
             (),
         ))?
@@ -69,10 +72,91 @@ fn params() -> Result<()> {
             Value::Float(std::f64::consts::PI),
             Value::Text("a string".to_owned()),
             Value::Text("owned string".to_owned()),
+            Value::Blob(Blob::from([254, 253, 252])),
             Value::Null,
             Value::Null,
         ]
     );
+    Ok(())
+}
+
+#[test]
+fn value_params() -> Result<()> {
+    let h = TestHelpers::new();
+    let conn = h.sqlite3_ext();
+    let mut stmt = conn.prepare("VALUES (?), (?), (?), (?), (?)")?;
+
+    let ret: Vec<Value> = stmt
+        .query([
+            Value::Integer(1),
+            Value::Float(std::f64::consts::PI),
+            Value::Text("owned string".to_owned()),
+            Value::Blob(Blob::from([255, 254, 253])),
+            Value::Null,
+        ])?
+        .map(|r| r.col(0).to_owned())
+        .collect()?;
+    assert_eq!(
+        ret,
+        vec![
+            Value::Integer(1),
+            Value::Float(std::f64::consts::PI),
+            Value::Text("owned string".to_owned()),
+            Value::Blob(Blob::from([255, 254, 253])),
+            Value::Null,
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn named_params() -> Result<()> {
+    let h = TestHelpers::new();
+    let conn = h.sqlite3_ext();
+    let mut stmt = conn.prepare("VALUES (:first_value), (?), (:second_value), (?)")?;
+
+    let mut param_names = Vec::with_capacity(stmt.parameter_count() as _);
+    for i in 1..=stmt.parameter_count() {
+        param_names.push(stmt.parameter_name(i));
+    }
+    assert_eq!(
+        param_names,
+        vec!(Some(":first_value"), None, Some(":second_value"), None)
+    );
+
+    let ret: Vec<i32> = stmt
+        .query(params!((":second_value", 1), 2, (":first_value", 3), 4))?
+        .map(|r| Ok(r.col(0).get_i32()))
+        .collect()?;
+    assert_eq!(ret, vec![3, 2, 1, 4]);
+    Ok(())
+}
+
+#[test]
+#[cfg(modern_sqlite)]
+fn passed_ref() -> Result<()> {
+    #[derive(PartialEq, Debug)]
+    struct MyStruct {
+        s: String,
+    }
+
+    let h = TestHelpers::new();
+    let conn = h.sqlite3_ext();
+
+    conn.create_scalar_function(
+        "extract",
+        &FunctionOptions::default().set_n_args(1),
+        |_, args| args[0].get_ref::<MyStruct>().unwrap().s.to_owned(),
+    )?;
+    let s = MyStruct {
+        s: "string from passed ref".to_owned(),
+    };
+    let ret: Vec<String> = conn
+        .prepare("SELECT extract(?)")?
+        .query(params!(PassedRef::new(s)))?
+        .map(|r| Ok(r.col(0).get_str()?.unwrap().to_owned()))
+        .collect()?;
+    assert_eq!(ret, vec!["string from passed ref".to_owned()]);
     Ok(())
 }
 

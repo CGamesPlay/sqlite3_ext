@@ -9,6 +9,8 @@ pub const SQLITE_NOTFOUND: Error = Error::Sqlite(ffi::SQLITE_NOTFOUND);
 pub const SQLITE_CONSTRAINT: Error = Error::Sqlite(ffi::SQLITE_CONSTRAINT);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_MISUSE]\).
 pub const SQLITE_MISUSE: Error = Error::Sqlite(ffi::SQLITE_MISUSE);
+/// Alias for [Error::Sqlite]\([ffi::SQLITE_RANGE]\).
+pub const SQLITE_RANGE: Error = Error::Sqlite(ffi::SQLITE_RANGE);
 
 #[derive(Clone, Eq, PartialEq)]
 pub enum Error {

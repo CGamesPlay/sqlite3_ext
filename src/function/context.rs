@@ -171,6 +171,7 @@ to_context_result! {
     match i32 as (ctx, val) => ffi::sqlite3_result_int(ctx, val),
     match i64 as (ctx, val) => ffi::sqlite3_result_int64(ctx, val),
     match f64 as (ctx, val) => ffi::sqlite3_result_double(ctx, val),
+    match UnprotectedValue as (ctx, val) => ffi::sqlite3_result_value(ctx, val.as_ptr()),
     /// Assign a static string to the context result.
     match &'static str as (ctx, val) => {
         let val = val.as_bytes();

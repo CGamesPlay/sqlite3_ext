@@ -294,6 +294,12 @@ impl<'stmt> Column<'stmt> {
         Self { stmt, position }
     }
 
+    pub fn get_unprotected_value(&self) -> UnprotectedValue {
+        UnprotectedValue::from_ptr(unsafe {
+            ffi::sqlite3_column_value(self.stmt.base, self.position as _)
+        })
+    }
+
     /// Get the bytes of this BLOB value.
     ///
     /// # Safety

@@ -2,12 +2,14 @@ use super::{ffi, sqlite3_match_version, types::*};
 pub use blob::*;
 pub use passed_ref::*;
 use std::{marker::PhantomData, ptr, slice, str};
+pub use unprotected::*;
 pub use unsafe_ptr::*;
 pub use value_list::*;
 
 mod blob;
 mod passed_ref;
 mod test;
+mod unprotected;
 mod unsafe_ptr;
 mod value_list;
 

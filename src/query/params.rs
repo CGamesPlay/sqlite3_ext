@@ -148,6 +148,7 @@ to_param!(() as (stmt, pos, _val) => ffi::sqlite3_bind_null(stmt, pos));
 to_param!(bool as (stmt, pos, val) => ffi::sqlite3_bind_int(stmt, pos, val as i32));
 to_param!(i64 as (stmt, pos, val) => ffi::sqlite3_bind_int64(stmt, pos, val));
 to_param!(f64 as (stmt, pos, val) => ffi::sqlite3_bind_double(stmt, pos, val));
+to_param!(UnprotectedValue as (stmt, pos, val) => ffi::sqlite3_bind_value(stmt, pos, val.as_ptr()));
 to_param!(&'static str as (stmt, pos, val) => {
     let val = val.as_bytes();
     let len = val.len();

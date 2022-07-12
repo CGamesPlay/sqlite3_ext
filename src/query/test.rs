@@ -185,6 +185,18 @@ fn passed_ref() -> Result<()> {
 }
 
 #[test]
+fn unprotected_value() -> Result<()> {
+    let h = TestHelpers::new();
+    let conn = h.sqlite3_ext();
+    let ret = conn.query_row("SELECT zeroblob(1024)", (), |r| {
+        Ok(r.col(0).get_unprotected_value())
+    })?;
+    let ret: i64 = conn.query_row("SELECT length(?)", [ret], |r| Ok(r.col(0).get_i64()))?;
+    assert_eq!(ret, 1024);
+    Ok(())
+}
+
+#[test]
 fn reuse_statement() -> Result<()> {
     let h = TestHelpers::new();
     let conn = h.sqlite3_ext();

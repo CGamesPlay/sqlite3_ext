@@ -249,12 +249,7 @@ fn rename() -> Result<()> {
 #[cfg(modern_sqlite)]
 fn shadow_name() -> Result<()> {
     let (conn, out) = setup()?;
-    unsafe {
-        rusqlite::Connection::from_handle(conn.as_mut_ptr())
-            .unwrap()
-            .set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
-            .unwrap();
-    }
+    conn.db_config_defensive(true)?;
     match conn.execute("CREATE TABLE log_shadow (a, b, c)", ()) {
         Err(_) => (),
         _ => panic!("expected error, got ok"),

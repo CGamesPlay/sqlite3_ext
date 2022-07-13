@@ -1,4 +1,4 @@
-use crate::{ffi, types::*};
+use crate::{ffi, sqlite3_match_version, types::*};
 use std::{
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
@@ -22,8 +22,37 @@ impl Connection {
     }
 
     /// Get the underlying SQLite handle.
-    pub fn as_mut_ptr(&self) -> *mut ffi::sqlite3 {
+    ///
+    /// # Safety
+    ///
+    /// Using the returned pointer may cause undefined behavior in other, safe code.
+    pub unsafe fn as_mut_ptr(&self) -> *mut ffi::sqlite3 {
         &self.db as *const _ as _
+    }
+
+    /// Enable or disable the "defensive" flag for the database.
+    ///
+    /// See
+    /// [SQLITE_DBCONFIG_DEFENSIVE](https://www.sqlite.org/c3ref/c_dbconfig_defensive.html#sqlitedbconfigdefensive)
+    /// for details.
+    ///
+    /// Requires SQLite 3.26.0. On earlier versions, this method is a no-op.
+    pub fn db_config_defensive(&self, enable: bool) -> Result<()> {
+        let _ = enable;
+        sqlite3_match_version! {
+            3_026_000 => unsafe {
+                Error::from_sqlite_desc_unchecked(
+                    ffi::sqlite3_db_config(
+                        self.as_mut_ptr(),
+                        ffi::SQLITE_DBCONFIG_DEFENSIVE,
+                        enable as i32,
+                        0 as i32,
+                    ),
+                    self.as_mut_ptr(),
+                )
+            },
+            _ => Ok(()),
+        }
     }
 }
 

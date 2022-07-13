@@ -283,18 +283,18 @@ impl Connection {
         let name = CString::new(name).unwrap();
         let vtab = vtab.module().clone();
         let handle = Box::new(Handle::<'vtab, T> { vtab, aux });
-        let rc = unsafe {
-            ffi::sqlite3_create_module_v2(
-                self.as_mut_ptr(),
-                name.as_ptr() as _,
-                &handle.vtab,
-                Box::into_raw(handle) as _,
-                Some(ffi::drop_boxed::<Handle<T>>),
-            )
-        };
-        match rc {
-            ffi::SQLITE_OK => Ok(()),
-            _ => Err(Error::Sqlite(rc)),
-        }
+        let guard = self.lock();
+        Error::from_sqlite_desc(
+            unsafe {
+                ffi::sqlite3_create_module_v2(
+                    self.as_mut_ptr(),
+                    name.as_ptr() as _,
+                    &handle.vtab,
+                    Box::into_raw(handle) as _,
+                    Some(ffi::drop_boxed::<Handle<T>>),
+                )
+            },
+            guard,
+        )
     }
 }

@@ -178,10 +178,7 @@ macro_rules! sqlite3_require_version {
 }
 
 pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
-    let len: usize = val
-        .len()
-        .checked_add(1)
-        .ok_or(Error::Sqlite(SQLITE_NOMEM))?;
+    let len: usize = val.len().checked_add(1).ok_or(crate::types::SQLITE_NOMEM)?;
     unsafe {
         let ptr: *mut c_char = sqlite3_match_version! {
             3_008_007 => sqlite3_malloc64(len as _) as _,
@@ -192,7 +189,7 @@ pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
             *ptr.add(len - 1) = 0;
             Ok(ptr)
         } else {
-            Err(Error::Sqlite(SQLITE_NOMEM))
+            Err(crate::types::SQLITE_NOMEM)
         }
     }
 }

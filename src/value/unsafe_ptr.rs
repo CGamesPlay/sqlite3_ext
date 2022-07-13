@@ -91,7 +91,7 @@ impl<T: ?Sized> UnsafePtr<T> {
                     subtype,
                 })
             } else if len != size_of::<&T>() || !subtype_match {
-                Err(Error::Sqlite(ffi::SQLITE_MISMATCH))
+                Err(SQLITE_MISMATCH)
             } else {
                 let bits = ffi::sqlite3_value_blob(val.as_ptr()) as *const *const T;
                 let ret = ptr::read_unaligned::<*const T>(bits);

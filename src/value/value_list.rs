@@ -24,7 +24,8 @@ use std::ptr;
 /// }
 /// ```
 ///
-/// Alternatively, the [map](Self::map) method turns this struct into a [FallibleIterator]:
+/// Alternatively, the [map](Self::map) method turns this struct into a
+/// [FallibleIterator](crate::FallibleIterator):
 ///
 /// ```no_run
 /// use sqlite3_ext::*;

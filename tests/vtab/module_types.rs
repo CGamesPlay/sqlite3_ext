@@ -89,7 +89,7 @@ fn eponymous_only() -> Result<()> {
     let err = conn
         .execute("CREATE VIRTUAL TABLE tbl USING eponymous_only_vtab()", ())
         .unwrap_err();
-    assert_eq!(err.to_string(), "SQL logic error");
+    assert_eq!(err.to_string(), "no such module: eponymous_only_vtab");
     conn.query_row("SELECT COUNT(*) FROM eponymous_only_vtab", (), |_| Ok(()))?;
     Ok(())
 }
@@ -112,7 +112,7 @@ fn standard() -> Result<()> {
     let err = conn
         .query_row("SELECT COUNT(*) FROM standard_vtab", (), |_| Ok(()))
         .unwrap_err();
-    assert_eq!(err.to_string(), "SQL logic error");
+    assert_eq!(err.to_string(), "no such table: standard_vtab");
     conn.query_row("SELECT COUNT(*) FROM tbl", (), |_| Ok(()))?;
     Ok(())
 }

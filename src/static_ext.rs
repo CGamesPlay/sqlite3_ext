@@ -6,7 +6,7 @@ use super::*;
 
 impl Connection {
     /// Convert a rusqlite::Connection to an sqlite3_ext::Connection.
-    pub fn from_rusqlite(conn: &rusqlite::Connection) -> &mut Self {
+    pub fn from_rusqlite(conn: &rusqlite::Connection) -> &Self {
         unsafe { Connection::from_ptr(conn.handle()) }
     }
 }

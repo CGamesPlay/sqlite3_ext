@@ -1,6 +1,7 @@
 pub use connection::*;
 pub use extension::Extension;
 pub use globals::*;
+pub use iterator::*;
 pub use sqlite3_ext_macro::*;
 pub use types::*;
 pub use value::*;
@@ -10,7 +11,7 @@ mod extension;
 pub mod ffi;
 pub mod function;
 mod globals;
-pub mod iterator;
+mod iterator;
 mod mutex;
 pub mod query;
 pub mod static_ext;

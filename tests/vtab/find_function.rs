@@ -3,7 +3,7 @@ use sqlite3_ext::{function::*, *};
 use std::cell::Cell;
 
 #[test]
-fn find_function() -> rusqlite::Result<()> {
+fn find_function() -> Result<()> {
     #[derive(Default)]
     struct Hooks {
         pub was_called: Cell<bool>,
@@ -20,9 +20,12 @@ fn find_function() -> rusqlite::Result<()> {
 
     let hooks = Hooks::default();
     let conn = setup(&hooks)?;
-    Connection::from_rusqlite(&conn)
-        .create_overloaded_function("overloaded_func", &FunctionOptions::default().set_n_args(1))?;
-    conn.query_row("SELECT a FROM tbl WHERE overloaded_func(a)", [], |_| Ok(()))?;
+    conn.create_overloaded_function("overloaded_func", &FunctionOptions::default().set_n_args(1))?;
+    conn.query_row(
+        "SELECT a FROM tbl WHERE overloaded_func(a) LIMIT 1",
+        (),
+        |_| Ok(()),
+    )?;
 
     assert!(hooks.was_called.get(), "overloaded_func was not called");
     Ok(())

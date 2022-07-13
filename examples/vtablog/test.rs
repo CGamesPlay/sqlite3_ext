@@ -3,16 +3,15 @@ use indoc::indoc;
 use lazy_static::lazy_static;
 use pretty_assertions::assert_eq;
 use regex::Regex;
-use rusqlite;
 use std::str::from_utf8;
 
-fn setup() -> rusqlite::Result<(rusqlite::Connection, Rc<RefCell<Vec<u8>>>)> {
-    let conn = rusqlite::Connection::open_in_memory()?;
+fn setup() -> Result<(Database, Rc<RefCell<Vec<u8>>>)> {
+    let conn = Database::open_in_memory()?;
     let out = Rc::new(RefCell::new(vec![]));
-    init(Connection::from_rusqlite(&conn), out.clone())?;
+    init(&conn, out.clone())?;
     conn.execute(
         "CREATE VIRTUAL TABLE temp.log USING vtablog(schema='CREATE TABLE x(a,b,c)', rows=3)",
-        [],
+        (),
     )?;
     Ok((conn, out))
 }
@@ -34,19 +33,19 @@ fn patch_output(input: String) -> String {
 }
 
 #[test]
-fn read() -> rusqlite::Result<()> {
+fn read() -> Result<()> {
     let (conn, out) = setup()?;
-    let ret = conn
+    let ret: Vec<Vec<String>> = conn
         .prepare("SELECT * FROM log WHERE a IN ('a1', 'a2')")?
-        .query_map([], |row| {
+        .query(())?
+        .map(|row| {
             Ok(vec![
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
+                row.col(0).get_str()?.unwrap().to_owned(),
+                row.col(1).get_str()?.unwrap().to_owned(),
+                row.col(2).get_str()?.unwrap().to_owned(),
             ])
-        })?
-        .into_iter()
-        .collect::<rusqlite::Result<Vec<Vec<String>>>>()?;
+        })
+        .collect()?;
     drop(conn);
     assert_eq!(
         ret,
@@ -108,9 +107,9 @@ fn read() -> rusqlite::Result<()> {
 }
 
 #[test]
-fn insert() -> rusqlite::Result<()> {
+fn insert() -> Result<()> {
     let (conn, out) = setup()?;
-    conn.execute("INSERT INTO log VALUES ( 1, 2, 3 ), (4, 5, 6)", [])?;
+    conn.execute("INSERT INTO log VALUES ( 1, 2, 3 ), (4, 5, 6)", ())?;
     drop(conn);
     let out = from_utf8(&out.borrow()).unwrap().to_owned();
     let expected = indoc! {r#"
@@ -132,9 +131,9 @@ fn insert() -> rusqlite::Result<()> {
 }
 
 #[test]
-fn update() -> rusqlite::Result<()> {
+fn update() -> Result<()> {
     let (conn, out) = setup()?;
-    conn.execute("UPDATE log SET a = b WHERE rowid = 1", [])?;
+    conn.execute("UPDATE log SET a = b WHERE rowid = 1", ())?;
     drop(conn);
     let out = from_utf8(&out.borrow()).unwrap().to_owned();
     let expected = patch_output(indoc! {r#"
@@ -182,9 +181,9 @@ fn update() -> rusqlite::Result<()> {
 }
 
 #[test]
-fn delete() -> rusqlite::Result<()> {
+fn delete() -> Result<()> {
     let (conn, out) = setup()?;
-    conn.execute("DELETE FROM log WHERE a = 'a1'", [])?;
+    conn.execute("DELETE FROM log WHERE a = 'a1'", ())?;
     drop(conn);
     let out = from_utf8(&out.borrow()).unwrap().to_owned();
     let expected = patch_output(indoc! {r#"
@@ -224,10 +223,10 @@ fn delete() -> rusqlite::Result<()> {
 }
 
 #[test]
-fn rename() -> rusqlite::Result<()> {
+fn rename() -> Result<()> {
     let (conn, out) = setup()?;
-    conn.execute("ALTER TABLE log RENAME to newname", [])?;
-    conn.execute("DROP TABLE newname", [])?;
+    conn.execute("ALTER TABLE log RENAME to newname", ())?;
+    conn.execute("DROP TABLE newname", ())?;
     drop(conn);
     let out = from_utf8(&out.borrow()).unwrap().to_owned();
     let expected = indoc! {r#"
@@ -248,10 +247,15 @@ fn rename() -> rusqlite::Result<()> {
 
 #[test]
 #[cfg(modern_sqlite)]
-fn shadow_name() -> rusqlite::Result<()> {
+fn shadow_name() -> Result<()> {
     let (conn, out) = setup()?;
-    conn.set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)?;
-    match conn.execute("CREATE TABLE log_shadow (a, b, c)", []) {
+    unsafe {
+        rusqlite::Connection::from_handle(conn.as_mut_ptr())
+            .unwrap()
+            .set_db_config(rusqlite::config::DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
+            .unwrap();
+    }
+    match conn.execute("CREATE TABLE log_shadow (a, b, c)", ()) {
         Err(_) => (),
         _ => panic!("expected error, got ok"),
     }

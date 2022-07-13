@@ -10,7 +10,7 @@ pub use fallible_iterator::FallibleIterator;
 /// FallibleIterator, and it's also possible to use with a `while let` loop:
 ///
 /// ```
-/// use sqlite3_ext::iterator::FallibleIteratorMut;
+/// use sqlite3_ext::FallibleIteratorMut;
 ///
 /// fn dump<I: FallibleIteratorMut>(mut it: I) -> Result<(), I::Error>
 /// where

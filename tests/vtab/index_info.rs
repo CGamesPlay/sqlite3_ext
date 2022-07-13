@@ -2,7 +2,7 @@ use crate::test_vtab::*;
 use sqlite3_ext::{vtab::*, *};
 
 #[test]
-fn best_index_rhs() -> rusqlite::Result<()> {
+fn best_index_rhs() -> Result<()> {
     #[derive(Default)]
     struct Hooks;
 
@@ -22,13 +22,13 @@ fn best_index_rhs() -> rusqlite::Result<()> {
 
     let hooks = Hooks::default();
     let conn = setup(&hooks)?;
-    conn.query_row("SELECT COUNT(*) FROM tbl WHERE a = 20", [], |_| Ok(()))?;
+    conn.query_row("SELECT COUNT(*) FROM tbl WHERE a = 20", (), |_| Ok(()))?;
     Ok(())
 }
 
 #[test]
 #[cfg(modern_sqlite)]
-fn best_index_in() -> rusqlite::Result<()> {
+fn best_index_in() -> Result<()> {
     #[derive(Default)]
     struct Hooks {
         num_filter: std::cell::Cell<u32>,
@@ -55,8 +55,6 @@ fn best_index_in() -> rusqlite::Result<()> {
             _cursor: &mut TestVTabCursor<'a, Self>,
             args: &mut [&mut ValueRef],
         ) -> Result<()> {
-            use sqlite3_ext::iterator::*;
-
             self.num_filter.set(self.num_filter.get() + 1);
             let vals: Vec<String> = ValueList::from_value_ref(args[0])?
                 .map(|x| Ok(x.get_str()?.unwrap().to_owned()))
@@ -70,7 +68,7 @@ fn best_index_in() -> rusqlite::Result<()> {
     let conn = setup(&hooks)?;
     conn.query_row(
         "SELECT COUNT(*) FROM tbl WHERE a IN ('a1', 'b2')",
-        [],
+        (),
         |_| Ok(()),
     )?;
     assert_eq!(hooks.num_filter.get(), 1);

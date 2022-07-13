@@ -8,6 +8,7 @@ use std::{cmp::Ordering, ffi::CString, ptr::null_mut};
 
 mod context;
 mod stubs;
+mod test;
 
 /// Constructor for aggregate functions.
 ///

@@ -218,31 +218,30 @@ fn init(db: &Connection) -> Result<()> {
 #[cfg(all(test, feature = "static"))]
 mod test {
     use super::*;
-    use rusqlite;
 
-    fn setup() -> rusqlite::Result<rusqlite::Connection> {
-        let conn = rusqlite::Connection::open_in_memory()?;
-        init(Connection::from_rusqlite(&conn))?;
+    fn setup() -> Result<Database> {
+        let conn = Database::open_in_memory()?;
+        init(&conn)?;
         Ok(conn)
     }
 
     #[test]
-    fn example() -> rusqlite::Result<()> {
+    fn example() -> Result<()> {
         let conn = setup()?;
         let results: Vec<i64> = conn
             .prepare("SELECT value FROM generate_series(5, 100, 5)")?
-            .query_map([], |row| Ok(row.get::<_, i64>(0)?))?
-            .into_iter()
-            .collect::<rusqlite::Result<_>>()?;
+            .query(())?
+            .map(|row| Ok(row.col(0).get_i64()))
+            .collect()?;
         assert_eq!(
             results,
             vec![5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]
         );
         let results: Vec<i64> = conn
             .prepare("SELECT value FROM generate_series(20) LIMIT 10")?
-            .query_map([], |row| Ok(row.get::<_, i64>(0)?))?
-            .into_iter()
-            .collect::<rusqlite::Result<_>>()?;
+            .query(())?
+            .map(|row| Ok(row.col(0).get_i64()))
+            .collect()?;
         assert_eq!(results, vec![20, 21, 22, 23, 24, 25, 26, 27, 28, 29]);
         Ok(())
     }
@@ -250,13 +249,13 @@ mod test {
     macro_rules! case {
         ($test_name:ident { sql: $sql:expr, expected: $expected:expr, }) => {
             #[test]
-            fn $test_name() -> rusqlite::Result<()> {
+            fn $test_name() -> Result<()> {
                 let conn = setup()?;
                 let results = conn
                     .prepare($sql)?
-                    .query_map([], |row| Ok(row.get::<_, i64>(0)?))?
-                    .into_iter()
-                    .collect::<rusqlite::Result<_>>();
+                    .query(())?
+                    .map(|row| Ok(row.col(0).get_i64()))
+                    .collect();
                 assert_eq!(results, $expected);
                 Ok(())
             }

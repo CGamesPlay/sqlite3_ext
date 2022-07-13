@@ -34,10 +34,6 @@ syn = { version = "1.0", features = [ "parsing", "full" ] }
 quote = "1.0"
 
 [[test]]
-name = "functions"
-required-features = [ "static" ]
-
-[[test]]
 name = "vtab"
 required-features = [ "static" ]
 

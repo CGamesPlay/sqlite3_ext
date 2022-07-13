@@ -1,6 +1,22 @@
 # sqlite3_ext
 
-Create SQLite loadable extensions in Rust.
+Create SQLite loadable extensions in Rust. The design philosophy of the API is gradual enhancement: extensions written with this crate support versions of SQLite back to 3.6.8, unless they explicitly require newer features.
+
+## Crate features
+
+- `static` - The consumer of this crate is not an SQLite loadable extension. The SQLite API will be provided by the linker. To avoid link errors, sqlite3_ext disables all APIs that are added after 3.6.8.
+- `static_modern` - Same as `static`, but sqlite3_ext does not disable any APIs. This will cause link errors if the linked version of SQLite is older than the version supported by sqlite3_ext.
+
+## Compilation Modes
+
+There are three supported compilation modes for sqlite3_ext:
+
+- As a loadable extension. Your crate is `crate-type = [ "cdylib" ]` and is loaded into another process as an SQLite loadable extension.
+  - SQLite methods are provided by SQLite at run-time.
+- As a statically linked extension. Your crate is `crate-type = [ "staticlib" ]` and is statically linked into another program.
+  - Linker provides the SQLite methods.
+- As a rust library. Your crate has any type and uses sqlite3_ext like any other crate.
+  - You are responsible for providing SQLite (e.g. via Rusqlite).
 
 ## Interfaces supported
 

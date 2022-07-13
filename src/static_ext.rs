@@ -1,13 +1,13 @@
 //! Helpers for when this extension is intended to be statically linked into a Rust program,
 //! rather than being dynamically loaded.
-#![cfg(feature = "static")]
+#![cfg(feature = "rusqlite")]
 
 use super::*;
 
 impl Connection {
     /// Convert a rusqlite::Connection to an sqlite3_ext::Connection.
     pub fn from_rusqlite(conn: &rusqlite::Connection) -> &Self {
-        unsafe { Connection::from_ptr(conn.handle()) }
+        unsafe { Connection::from_ptr(conn.handle() as _) }
     }
 }
 

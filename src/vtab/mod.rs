@@ -305,7 +305,7 @@ impl VTabConnection {
         sqlite3_match_version! {
             3_007_007 => unsafe {
                 let guard = self.lock();
-                Error::from_sqlite_desc(ffi::sqlite3_vtab_config(
+                Error::from_sqlite_desc(ffi::sqlite3_vtab_config()(
                     guard.as_mut_ptr(),
                     ffi::SQLITE_VTAB_CONSTRAINT_SUPPORT,
                     1,
@@ -327,7 +327,7 @@ impl VTabConnection {
         sqlite3_match_version! {
             3_031_000 => unsafe {
                 let guard = self.lock();
-                Error::from_sqlite_desc(ffi::sqlite3_vtab_config(
+                Error::from_sqlite_desc(ffi::sqlite3_vtab_config()(
                     guard.as_mut_ptr(),
                     match level {
                         super::RiskLevel::Innocuous => ffi::SQLITE_VTAB_INNOCUOUS,

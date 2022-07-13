@@ -7,13 +7,12 @@ edition = "2021"
 members = [ "sqlite3_ext_macro" ]
 
 [features]
-static = [ "dep:rusqlite", "dep:libsqlite3-sys" ]
-static_modern = [ "static", "rusqlite?/modern_sqlite" ]
+static = []
+static_modern = [ "static" ]
 
 [dependencies]
 bigdecimal = { version = "0.3.0", optional = true }
 fallible-iterator = "0.2.0"
-libsqlite3-sys = { version = "0.24.0", optional = true }
 paste = "1.0.7"
 rusqlite = { version = "0.27.0", optional = true }
 sealed = "0.4.0"
@@ -28,6 +27,7 @@ lazy_static = "1.4.0"
 trybuild = "1.0.63"
 
 [build-dependencies]
+pkg-config = "0.3.25"
 proc-macro2 = "1.0"
 which = "4.2.5"
 syn = { version = "1.0", features = [ "parsing", "full" ] }

@@ -42,7 +42,7 @@ impl Connection {
         sqlite3_match_version! {
             3_026_000 => unsafe {
                 Error::from_sqlite_desc_unchecked(
-                    ffi::sqlite3_db_config(
+                    ffi::sqlite3_db_config()(
                         self.as_mut_ptr(),
                         ffi::SQLITE_DBCONFIG_DEFENSIVE,
                         enable as i32,

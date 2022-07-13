@@ -3,21 +3,20 @@
 #![allow(dead_code)]
 
 use crate::{value::Blob, Error};
-#[cfg(not(feature = "static"))]
-pub use dynamic_link::*;
-#[cfg(feature = "static")]
-pub use static_link::*;
+pub use linking::*;
+pub use sqlite3types::*;
 use std::{
     ffi::{c_void, CString},
     os::raw::{c_char, c_int},
     ptr,
 };
 
-#[cfg(not(feature = "static"))]
-mod dynamic_link;
-mod sqlite3ext;
-#[cfg(feature = "static")]
-mod static_link;
+mod sqlite3funcs;
+mod sqlite3types;
+
+mod linking {
+    include!(concat!(env!("OUT_DIR"), "/linking.rs"));
+}
 
 /// We have to do this trampoline construct because the cfg attributes are evaluated in the
 /// context of the transcribed crate.

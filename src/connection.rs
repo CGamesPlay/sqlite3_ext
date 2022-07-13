@@ -1,0 +1,85 @@
+use crate::{ffi, types::*};
+use std::{
+    mem::MaybeUninit,
+    ops::{Deref, DerefMut},
+    thread::panicking,
+};
+
+/// Represents a borrowed connection to an SQLite database.
+#[repr(transparent)]
+pub struct Connection {
+    db: ffi::sqlite3,
+}
+
+impl Connection {
+    /// Convert an SQLite handle into a reference to Connection.
+    ///
+    /// # Safety
+    ///
+    /// The behavior of this method is undefined if the passed pointer is not valid.
+    pub unsafe fn from_ptr<'a>(db: *mut ffi::sqlite3) -> &'a mut Connection {
+        &mut *(db as *mut Connection)
+    }
+
+    /// Get the underlying SQLite handle.
+    pub fn as_mut_ptr(&self) -> *mut ffi::sqlite3 {
+        &self.db as *const _ as _
+    }
+}
+
+/// Represents an owned connection to an SQLite database.
+///
+/// This struct is an owned version of [Connection]. When this struct is dropped, it will close
+/// the underlying connection to SQLite.
+pub struct Database {
+    db: *mut ffi::sqlite3,
+}
+
+impl Database {
+    pub fn open_in_memory() -> Result<Database> {
+        const FILENAME: &[u8] = b":memory:\0";
+        let mut db = MaybeUninit::uninit();
+        let rc = Error::from_sqlite(unsafe {
+            ffi::sqlite3_open(FILENAME.as_ptr() as _, db.as_mut_ptr())
+        });
+        match rc {
+            Ok(()) => Ok(Database {
+                db: unsafe { *db.as_ptr() },
+            }),
+            Err(e) => {
+                if !db.as_ptr().is_null() {
+                    // Panic if we can't close the database we failed to open
+                    Error::from_sqlite(unsafe { ffi::sqlite3_close(*db.as_ptr()) }).unwrap();
+                }
+                Err(e)
+            }
+        }
+    }
+}
+
+impl Drop for Database {
+    fn drop(&mut self) {
+        let rc = Error::from_sqlite(unsafe { ffi::sqlite3_close(self.db) });
+        if let Err(e) = rc {
+            if panicking() {
+                eprintln!("Error while closing SQLite connection: {:?}", e);
+            } else {
+                panic!("Error while closing SQLite connection: {:?}", e);
+            }
+        }
+    }
+}
+
+impl Deref for Database {
+    type Target = Connection;
+
+    fn deref(&self) -> &Connection {
+        unsafe { Connection::from_ptr(self.db) }
+    }
+}
+
+impl DerefMut for Database {
+    fn deref_mut(&mut self) -> &mut Connection {
+        unsafe { Connection::from_ptr(self.db) }
+    }
+}

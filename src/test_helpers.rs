@@ -9,17 +9,13 @@ pub mod prelude {
 }
 
 pub struct TestHelpers {
-    pub db: rusqlite::Connection,
+    pub db: Database,
 }
 
 impl TestHelpers {
     pub fn new() -> TestHelpers {
-        let db = rusqlite::Connection::open_in_memory().expect("failed to open database");
+        let db = Database::open_in_memory().expect("failed to open database");
         TestHelpers { db }
-    }
-
-    pub fn sqlite3_ext<'a>(&self) -> &'a mut crate::Connection {
-        unsafe { crate::Connection::from_ptr(self.db.handle()) }
     }
 
     pub fn with_value<T: ToContextResult, F: Fn(&mut ValueRef) -> Result<()>>(
@@ -32,19 +28,17 @@ impl TestHelpers {
         let func: Box<dyn Fn(&mut ValueRef) -> Result<()>> = Box::new(func);
         // Safe because we remove the function inside this function.
         let func: Box<dyn 'static + Fn(&mut ValueRef) -> Result<()>> = unsafe { transmute(func) };
-        self.sqlite3_ext()
+        self.db
             .create_scalar_function("produce", &opts, move |_, _| input.replace(None).unwrap())
             .unwrap();
-        self.sqlite3_ext()
+        self.db
             .create_scalar_function("with_value", &opts, move |_, args| func(args[0]))
             .unwrap();
         self.db
-            .query_row("SELECT with_value(produce())", [], |_| Ok(()))
+            .query_row("SELECT with_value(produce())", (), |_| Ok(()))
             .unwrap();
-        self.sqlite3_ext()
-            .remove_function("with_value", -1)
-            .unwrap();
-        self.sqlite3_ext().remove_function("produce", -1).unwrap();
+        self.db.remove_function("with_value", -1).unwrap();
+        self.db.remove_function("produce", -1).unwrap();
     }
 
     pub fn with_value_from_sql<F: Fn(&mut ValueRef) -> Result<()>>(&self, sql: &str, func: F) {
@@ -52,13 +46,13 @@ impl TestHelpers {
         let func: Box<dyn Fn(&mut ValueRef) -> Result<()>> = Box::new(func);
         // Safe because we remove the function inside this function.
         let func: Box<dyn 'static + Fn(&mut ValueRef) -> Result<()>> = unsafe { transmute(func) };
-        self.sqlite3_ext()
+        self.db
             .create_scalar_function("with_value", &opts, move |_, args| func(args[0]))
             .unwrap();
         self.db
-            .query_row(&format!("SELECT with_value({})", sql), [], |_| Ok(()))
+            .query_row(&format!("SELECT with_value({})", sql), (), |_| Ok(()))
             .unwrap();
-        self.sqlite3_ext().remove_function("with_value", 1).unwrap();
+        self.db.remove_function("with_value", 1).unwrap();
     }
 }
 

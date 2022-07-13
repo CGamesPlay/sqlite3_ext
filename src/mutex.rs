@@ -3,7 +3,7 @@ use std::ops::Deref;
 
 impl Connection {
     pub(crate) fn lock(&self) -> SQLiteMutexGuard<'_, Connection> {
-        let mutex = unsafe { ffi::sqlite3_db_mutex(self.as_ptr() as _) };
+        let mutex = unsafe { ffi::sqlite3_db_mutex(self.as_mut_ptr()) };
         unsafe { ffi::sqlite3_mutex_enter(mutex) };
         SQLiteMutexGuard { mutex, data: self }
     }

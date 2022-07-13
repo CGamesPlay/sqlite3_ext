@@ -191,7 +191,7 @@ impl Connection {
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
         unsafe {
             Error::from_sqlite(ffi::sqlite3_overload_function(
-                self.as_ptr() as _,
+                self.as_mut_ptr(),
                 name.as_ptr() as _,
                 opts.n_args,
             ))
@@ -219,7 +219,7 @@ impl Connection {
         unsafe {
             Error::from_sqlite(sqlite3_match_version! {
                 3_007_003 => ffi::sqlite3_create_function_v2(
-                    self.as_ptr() as _,
+                    self.as_mut_ptr(),
                     name.as_ptr() as _,
                     opts.n_args,
                     opts.flags,
@@ -230,7 +230,7 @@ impl Connection {
                     Some(ffi::drop_boxed::<F>),
                 ),
                 _ => ffi::sqlite3_create_function(
-                    self.as_ptr() as _,
+                    self.as_mut_ptr(),
                     name.as_ptr() as _,
                     opts.n_args,
                     opts.flags,
@@ -266,7 +266,7 @@ impl Connection {
         unsafe {
             Error::from_sqlite(sqlite3_match_version! {
                 3_007_003 => ffi::sqlite3_create_function_v2(
-                    self.as_ptr() as _,
+                    self.as_mut_ptr(),
                     name.as_ptr() as _,
                     opts.n_args,
                     opts.flags,
@@ -277,7 +277,7 @@ impl Connection {
                     Some(ffi::drop_boxed::<U>),
                 ),
                 _ => ffi::sqlite3_create_function(
-                    self.as_ptr() as _,
+                    self.as_mut_ptr(),
                     name.as_ptr() as _,
                     opts.n_args,
                     opts.flags,
@@ -309,7 +309,7 @@ impl Connection {
                 let user_data = Box::new(user_data);
                 unsafe {
                     Error::from_sqlite(ffi::sqlite3_create_window_function(
-                        self.as_ptr() as _,
+                        self.as_mut_ptr(),
                         name.as_ptr() as _,
                         opts.n_args,
                         opts.flags,
@@ -331,7 +331,7 @@ impl Connection {
     pub fn remove_function(&self, name: &str, n_args: i32) -> Result<()> {
         unsafe {
             Error::from_sqlite(ffi::sqlite3_create_function(
-                self.as_ptr() as _,
+                self.as_mut_ptr(),
                 name.as_ptr() as _,
                 n_args,
                 0,
@@ -353,7 +353,7 @@ impl Connection {
         let func = Box::into_raw(Box::new(func));
         unsafe {
             let rc = ffi::sqlite3_create_collation_v2(
-                self.as_ptr() as _,
+                self.as_mut_ptr(),
                 name.as_ptr() as _,
                 ffi::SQLITE_UTF8,
                 func as _,
@@ -380,7 +380,7 @@ impl Connection {
         let func = Box::new(func);
         unsafe {
             Error::from_sqlite(ffi::sqlite3_collation_needed(
-                self.as_ptr() as _,
+                self.as_mut_ptr(),
                 Box::into_raw(func) as _,
                 Some(stubs::collation_needed::<F>),
             ))

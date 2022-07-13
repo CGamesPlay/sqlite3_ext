@@ -29,7 +29,7 @@ impl Connection {
         unsafe {
             sqlite3_match_version! {
                 3_020_000 => Error::from_sqlite(ffi::sqlite3_prepare_v3(
-                    self.as_ptr() as _,
+                    self.as_mut_ptr(),
                     sql.as_ptr() as _,
                     sql.len() as _,
                     0,
@@ -37,7 +37,7 @@ impl Connection {
                     ptr::null_mut(),
                 ))?,
                 _ => Error::from_sqlite(ffi::sqlite3_prepare_v2(
-                    self.as_ptr() as _,
+                    self.as_mut_ptr(),
                     sql.as_ptr() as _,
                     sql.len() as _,
                     ret.as_mut_ptr(),
@@ -107,8 +107,8 @@ impl Statement {
         } else {
             Ok(unsafe {
                 sqlite3_match_version! {
-                    3_037_000 => ffi::sqlite3_changes64(db.as_ptr() as _),
-                    _ => ffi::sqlite3_changes(db.as_ptr() as _) as _,
+                    3_037_000 => ffi::sqlite3_changes64(db.as_mut_ptr()),
+                    _ => ffi::sqlite3_changes(db.as_mut_ptr()) as _,
                 }
             })
         }

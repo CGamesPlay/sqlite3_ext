@@ -1,5 +1,5 @@
-//! Helpers for when this extension is intended to be statically linked into a Rust program,
-//! rather than being dynamically loaded.
+//! Helpers for when using sqltie3_ext extensions from within Rust programs that use
+//! [rusqlite].
 #![cfg(feature = "rusqlite")]
 
 use super::*;

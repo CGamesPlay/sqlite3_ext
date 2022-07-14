@@ -14,11 +14,11 @@ mod globals;
 mod iterator;
 mod mutex;
 pub mod query;
-pub mod static_ext;
 mod test_helpers;
 mod types;
 mod value;
 pub mod vtab;
+mod with_rusqlite;
 
 /// Indicate the risk level for a function or virtual table.
 ///

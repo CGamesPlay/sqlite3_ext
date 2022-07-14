@@ -155,7 +155,9 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
                 err_msg: *mut *mut ::std::os::raw::c_char,
                 api: *mut ::sqlite3_ext::ffi::sqlite3_api_routines,
             ) -> ::std::os::raw::c_int {
-                ::sqlite3_ext::ffi::init_api_routines(api);
+                if let Err(e) = ::sqlite3_ext::ffi::init_api_routines(api) {
+                    return ::sqlite3_ext::ffi::handle_error(e, err_msg);
+                }
                 match #name(::sqlite3_ext::Connection::from_ptr(db)) {
                     Ok(_) => #load_result,
                     Err(e) => ::sqlite3_ext::ffi::handle_error(e, err_msg),

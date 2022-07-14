@@ -25,6 +25,7 @@ pretty_assertions = "1.2.1"
 indoc = "1.0"
 regex = "1.5.6"
 lazy_static = "1.4.0"
+test-cdylib = "1.1.0"
 trybuild = "1.0.63"
 
 [build-dependencies]
@@ -37,18 +38,22 @@ quote = "1.0"
 name = "vtab"
 required-features = [ "static" ]
 
+[[test]]
+name = "loadable_extension"
+required-features = [ "static_modern" ]
+
 [[example]]
 name = "generate_series"
-crate-type = [ "staticlib", "cdylib" ]
+crate-type = [ "cdylib", "staticlib" ]
 test = true
 
 [[example]]
 name = "vtablog"
-crate-type = [ "staticlib", "cdylib" ]
+crate-type = [ "cdylib", "staticlib" ]
 test = true
 
 [[example]]
 name = "decimal"
 required-features = [ "bigdecimal" ]
-crate-type = [ "staticlib", "cdylib" ]
+crate-type = [ "cdylib", "staticlib" ]
 test = true

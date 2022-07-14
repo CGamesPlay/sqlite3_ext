@@ -18,6 +18,23 @@ There are three supported compilation modes for sqlite3_ext:
 - As a rust library. Your crate has any type and uses sqlite3_ext like any other crate.
   - You are responsible for providing SQLite (e.g. via Rusqlite).
 
+## Crate configurations
+
+- By default, the crate is configured to be dynamically loaded by SQLite.
+- Using feature `static`, the crate is able to be linked into a Rust or C program statically. This is highly compatible, but disables many features of SQLite.
+- Using feature `static_modern`, the crate is able to be linked into a Rust or C program statically. This requires that the system's SQLite is at least the version supported by sqlite3_ext, or there will be link errors.
+
+### Test configurations
+
+Tests run with modern SQLite:
+
+- All tests from `Cargo.toml` with crate feature `static`.
+- All tests from `Cargo.toml` with crate feature `static_modern`.
+
+Todo:
+
+- Run tests against SQLite 3.6.8.
+
 ## Interfaces supported
 
 Here is a compatibility chart showing which parts of the SQLite API are currently covered by sqlite3_ext. Iconography:

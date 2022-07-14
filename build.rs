@@ -126,13 +126,28 @@ fn generate_ffi(static_link: bool, modern_sqlite: bool) {
     let preamble = if static_link {
         quote! {
             extern crate libsqlite3_sys;
-            pub unsafe fn init_api_routines(_: *mut sqlite3_api_routines) {}
+            pub unsafe fn init_api_routines(api: *mut sqlite3_api_routines) -> crate::types::Result<()> {
+                // This method is called when this statically linked extension is
+                // loaded on a database connection. However, it's possible that
+                // the extension is being loaded dynamically, in which case there
+                // may be multiple versions of SQLite. We can check this by
+                // verifying that the dynamically-provided API routines are at
+                // the same address as our statically-known ones. Note that if
+                // api is a null pointer, it means we are statically linked into
+                // an application with SQLITE_OMIT_LOAD_EXTENSION (so no
+                // worries).
+                if !api.is_null() && (*api).libversion_number.unwrap() != libsqlite3_sys::sqlite3_libversion_number {
+                    return Err(crate::types::Error::Module("this extension is statically linked to a different version of SQLite".to_owned()));
+                }
+                Ok(())
+            }
         }
     } else {
         quote! {
             static mut API: *mut sqlite3_api_routines = std::ptr::null_mut();
-            pub unsafe fn init_api_routines(api: *mut sqlite3_api_routines) {
+            pub unsafe fn init_api_routines(api: *mut sqlite3_api_routines) -> crate::types::Result<()> {
                 API = api;
+                Ok(())
             }
         }
     };

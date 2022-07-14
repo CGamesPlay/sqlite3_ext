@@ -1,4 +1,4 @@
-use sqlite3_ext::{iterator::*, query::*, *};
+use sqlite3_ext::{query::*, *};
 
 fn column_borrow(conn: &Connection) -> Result<()> {
     let mut stmt = conn.prepare("SELECT 1, 2, 3")?;

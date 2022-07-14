@@ -1,4 +1,4 @@
-use sqlite3_ext::{iterator::*, *};
+use sqlite3_ext::*;
 
 fn column_borrow(conn: &Connection) -> Result<()> {
     let results: Vec<bool> = conn

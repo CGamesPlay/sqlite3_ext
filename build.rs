@@ -13,11 +13,6 @@ const BINDGEN_OUTPUT: &str = "src/ffi/sqlite3types.rs";
 fn main() {
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_STATIC");
     let static_link = if let Some(_) = env::var_os("CARGO_FEATURE_STATIC") {
-        pkg_config::Config::new()
-            .atleast_version("3.6.8")
-            .statik(true)
-            .probe("sqlite3")
-            .unwrap();
         true
     } else {
         false
@@ -130,6 +125,7 @@ fn generate_ffi(static_link: bool, modern_sqlite: bool) {
 
     let preamble = if static_link {
         quote! {
+            extern crate libsqlite3_sys;
             pub unsafe fn init_api_routines(_: *mut sqlite3_api_routines) {}
         }
     } else {

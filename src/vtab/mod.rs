@@ -27,7 +27,7 @@ use super::{
 pub use function::*;
 pub use index_info::*;
 pub use module::*;
-use std::{ffi::c_void, slice};
+use std::{ffi::c_void, ops::Deref, slice};
 
 mod function;
 mod index_info;
@@ -289,11 +289,6 @@ pub struct VTabConnection {
 }
 
 impl VTabConnection {
-    /// Return the underlying [Connection].
-    pub fn get(&mut self) -> &mut Connection {
-        unsafe { &mut *(self as *mut VTabConnection as *mut Connection) }
-    }
-
     /// Indicate that this virtual table properly verifies constraints for updates.
     ///
     /// If this is enabled, then the virtual table guarantees that if the
@@ -309,11 +304,12 @@ impl VTabConnection {
     pub fn enable_constraints(&mut self) {
         sqlite3_match_version! {
             3_007_007 => unsafe {
-                Error::from_sqlite(ffi::sqlite3_vtab_config(
-                    &mut self.db,
+                let guard = self.lock();
+                Error::from_sqlite_desc(ffi::sqlite3_vtab_config()(
+                    guard.as_mut_ptr(),
                     ffi::SQLITE_VTAB_CONSTRAINT_SUPPORT,
                     1,
-                ))
+                ), guard)
                 .unwrap()
             },
             _ => (),
@@ -330,17 +326,26 @@ impl VTabConnection {
         let _ = level;
         sqlite3_match_version! {
             3_031_000 => unsafe {
-                Error::from_sqlite(ffi::sqlite3_vtab_config(
-                    &mut self.db,
+                let guard = self.lock();
+                Error::from_sqlite_desc(ffi::sqlite3_vtab_config()(
+                    guard.as_mut_ptr(),
                     match level {
                         super::RiskLevel::Innocuous => ffi::SQLITE_VTAB_INNOCUOUS,
                         super::RiskLevel::DirectOnly => ffi::SQLITE_VTAB_DIRECTONLY,
                     },
-                ))
+                ), guard)
                 .unwrap();
             },
             _ => (),
         }
+    }
+}
+
+impl Deref for VTabConnection {
+    type Target = Connection;
+
+    fn deref(&self) -> &Connection {
+        unsafe { &*(self as *const VTabConnection as *const Connection) }
     }
 }
 

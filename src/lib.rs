@@ -1,14 +1,17 @@
+pub use connection::*;
 pub use extension::Extension;
 pub use globals::*;
+pub use iterator::*;
 pub use sqlite3_ext_macro::*;
 pub use types::*;
 pub use value::*;
 
+mod connection;
 mod extension;
 pub mod ffi;
 pub mod function;
 mod globals;
-pub mod iterator;
+mod iterator;
 mod mutex;
 pub mod query;
 pub mod static_ext;
@@ -16,32 +19,6 @@ mod test_helpers;
 mod types;
 mod value;
 pub mod vtab;
-
-#[repr(transparent)]
-pub struct Connection {
-    db: ffi::sqlite3,
-}
-
-impl Connection {
-    /// Convert an SQLite handle into a reference to Connection.
-    ///
-    /// # Safety
-    ///
-    /// The behavior of this method is undefined if the passed pointer is not valid.
-    pub unsafe fn from_ptr<'a>(db: *mut ffi::sqlite3) -> &'a mut Connection {
-        &mut *(db as *mut Connection)
-    }
-
-    /// Get the underlying SQLite handle.
-    pub fn as_ptr(&self) -> *const ffi::sqlite3 {
-        &self.db
-    }
-
-    /// Get the underlying SQLite handle, mutably.
-    pub fn as_mut_ptr(&mut self) -> *mut ffi::sqlite3 {
-        &self.db as *const _ as _
-    }
-}
 
 /// Indicate the risk level for a function or virtual table.
 ///

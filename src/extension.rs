@@ -63,17 +63,24 @@ impl Extension {
     /// The provided method will be invoked on all database connections opened in the
     /// future. For more information, consult the SQLite documentation for
     /// `sqlite3_auto_extension`.
+    ///
+    /// Requires SQLite 3.8.7.
     pub fn register_auto(&'static self) -> Result<()> {
-        unsafe { Error::from_sqlite(ffi::sqlite3_auto_extension(Some(self.c_entry))) }
+        sqlite3_require_version!(3_008_007, unsafe {
+            Error::from_sqlite(ffi::sqlite3_auto_extension(Some(self.c_entry)))
+        })
     }
 
     /// Remove all registered automatic extensions.
     ///
     /// For more information, consult the SQLite documentation for
     /// `sqlite3_reset_auto_extension`.
+    ///
+    /// Requires SQLite 3.8.7. On earlier verions this method is a no-op.
     pub fn reset_auto() {
-        unsafe {
-            ffi::sqlite3_reset_auto_extension();
+        sqlite3_match_version! {
+            3_008_007 => unsafe { ffi::sqlite3_reset_auto_extension() },
+            _ => (),
         }
     }
 

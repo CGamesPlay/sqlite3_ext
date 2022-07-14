@@ -96,89 +96,82 @@ fn init(db: &Connection) -> Result<()> {
 #[cfg(all(test, feature = "static"))]
 mod test {
     use super::*;
-    use rusqlite;
 
-    fn setup() -> rusqlite::Result<rusqlite::Connection> {
-        let conn = rusqlite::Connection::open_in_memory()?;
-        init(Connection::from_rusqlite(&conn))?;
+    fn setup() -> Result<Database> {
+        let conn = Database::open_in_memory()?;
+        init(&conn)?;
         Ok(conn)
     }
 
-    fn case<T: rusqlite::types::FromSql + std::fmt::Debug + PartialEq>(
-        data: Vec<(&str, T)>,
-    ) -> rusqlite::Result<()> {
+    fn case(data: Vec<(&str, Value)>) -> Result<()> {
         let conn = setup()?;
-        let (sql, expected): (Vec<&str>, Vec<T>) = data.into_iter().unzip();
+        let (sql, expected): (Vec<&str>, Vec<Value>) = data.into_iter().unzip();
         let sql = format!("SELECT {}", sql.join(", "));
         println!("{}", sql);
-        let ret: Vec<T> = conn.query_row(&sql, [], |r| {
+        let ret: Vec<Value> = conn.query_row(&sql, (), |r| {
             (0..expected.len())
-                .map(|i| r.get::<_, T>(i))
-                .collect::<rusqlite::Result<_>>()
+                .map(|i| r.col(i).to_owned())
+                .collect::<Result<_>>()
         })?;
         assert_eq!(ret, expected);
         Ok(())
     }
 
     #[test]
-    fn decimal_add() -> rusqlite::Result<()> {
+    fn decimal_add() -> Result<()> {
         case(vec![
             (
                 "decimal_add('1000000000000000', '0.0000000000000001')",
-                Some("1000000000000000.0000000000000001".to_owned()),
+                Value::Text("1000000000000000.0000000000000001".to_owned()),
             ),
-            ("decimal_add(NULL, '0')", None),
-            ("decimal_add('0', NULL)", None),
-            ("decimal_add(NULL, NULL)", None),
-            ("decimal_add('invalid', 2)", Some("2".to_owned())),
+            ("decimal_add(NULL, '0')", Value::Null),
+            ("decimal_add('0', NULL)", Value::Null),
+            ("decimal_add(NULL, NULL)", Value::Null),
+            ("decimal_add('invalid', 2)", Value::Text("2".to_owned())),
         ])
     }
 
     #[test]
-    fn decimal_sub() -> rusqlite::Result<()> {
+    fn decimal_sub() -> Result<()> {
         case(vec![
             (
                 "decimal_sub('1000000000000000', '0.0000000000000001')",
-                Some("999999999999999.9999999999999999".to_owned()),
+                Value::Text("999999999999999.9999999999999999".to_owned()),
             ),
-            ("decimal_sub(NULL, '0')", None),
-            ("decimal_sub('0', NULL)", None),
-            ("decimal_sub(NULL, NULL)", None),
-            ("decimal_sub('invalid', 2)", Some("-2".to_owned())),
+            ("decimal_sub(NULL, '0')", Value::Null),
+            ("decimal_sub('0', NULL)", Value::Null),
+            ("decimal_sub(NULL, NULL)", Value::Null),
+            ("decimal_sub('invalid', 2)", Value::Text("-2".to_owned())),
         ])
     }
 
     #[test]
-    fn decimal_mul() -> rusqlite::Result<()> {
+    fn decimal_mul() -> Result<()> {
         case(vec![
             (
                 "decimal_mul('1000000000000000', '0.0000000000000001')",
-                Some("0.1".to_owned()),
+                Value::Text("0.1".to_owned()),
             ),
-            ("decimal_mul(NULL, '0')", None),
-            ("decimal_mul('0', NULL)", None),
-            ("decimal_mul(NULL, NULL)", None),
-            ("decimal_mul('invalid', 2)", Some("0".to_owned())),
+            ("decimal_mul(NULL, '0')", Value::Null),
+            ("decimal_mul('0', NULL)", Value::Null),
+            ("decimal_mul(NULL, NULL)", Value::Null),
+            ("decimal_mul('invalid', 2)", Value::Text("0".to_owned())),
         ])
     }
 
     #[test]
-    fn decimal_cmp() -> rusqlite::Result<()> {
+    fn decimal_cmp() -> Result<()> {
         case(vec![
-            ("decimal_cmp('1', '-1')", Some(1)),
-            ("decimal_cmp('-1', '1')", Some(-1)),
-            ("decimal_cmp('1', '1')", Some(0)),
-            ("decimal_cmp(NULL, '0')", None),
-            ("decimal_cmp('0', NULL)", None),
-            ("decimal_cmp(NULL, NULL)", None),
+            ("decimal_cmp('1', '-1')", Value::Integer(1)),
+            ("decimal_cmp('-1', '1')", Value::Integer(-1)),
+            ("decimal_cmp('1', '1')", Value::Integer(0)),
+            ("decimal_cmp(NULL, '0')", Value::Null),
+            ("decimal_cmp('0', NULL)", Value::Null),
+            ("decimal_cmp(NULL, NULL)", Value::Null),
         ])
     }
 
-    fn aggregate_case<T: rusqlite::types::FromSql + std::fmt::Debug + PartialEq>(
-        expr: &str,
-        data: Vec<&str>,
-        expected: Vec<T>,
-    ) -> rusqlite::Result<()> {
+    fn aggregate_case(expr: &str, data: Vec<&str>, expected: Vec<Value>) -> Result<()> {
         let conn = setup()?;
         let sql = format!(
             "SELECT {} FROM ( VALUES {} )",
@@ -189,35 +182,38 @@ mod test {
                 .join(", ")
         );
         println!("{}", sql);
-        let ret: Vec<T> = conn
+        let ret: Vec<Value> = conn
             .prepare(&sql)?
-            .query_map([], |r| r.get::<_, T>(0))?
-            .into_iter()
-            .collect::<rusqlite::Result<_>>()?;
+            .query(())?
+            .map(|r| r.col(0).to_owned())
+            .collect()?;
         assert_eq!(ret, expected);
         Ok(())
     }
 
     #[test]
-    fn decimal_sum() -> rusqlite::Result<()> {
+    fn decimal_sum() -> Result<()> {
         aggregate_case(
             "decimal_sum(column1)",
             vec!["1000000000000000", "0.0000000000000001", "1"],
-            vec![Some("1000000000000001.0000000000000001".to_owned())],
+            vec![Value::Text("1000000000000001.0000000000000001".to_owned())],
         )?;
         aggregate_case(
             "decimal_sum(column1)",
             vec!["1", "NULL"],
-            vec![Some("1".to_owned())],
+            vec![Value::Text("1".to_owned())],
         )?;
         aggregate_case(
             "decimal_sum(column1)",
             vec!["NULL"],
-            vec![Some("0".to_owned())],
+            vec![Value::Text("0".to_owned())],
         )?;
-        case(vec![("decimal_sum(NULL)", Some("0".to_owned()))])?;
-        case(vec![("decimal_sum('invalid')", Some("0".to_owned()))])?;
-        case(vec![("decimal_sum(1) WHERE 1 = 0", None as Option<String>)])?;
+        case(vec![("decimal_sum(NULL)", Value::Text("0".to_owned()))])?;
+        case(vec![(
+            "decimal_sum('invalid')",
+            Value::Text("0".to_owned()),
+        )])?;
+        case(vec![("decimal_sum(1) WHERE 1 = 0", Value::Null)])?;
         aggregate_case(
             "decimal_sum(column1) OVER ( ROWS 1 PRECEDING )",
             vec![
@@ -228,25 +224,25 @@ mod test {
                 "1",
             ],
             vec![
-                Some("1000000000000000".to_owned()),
-                Some("1000000000000000.0000000000000001".to_owned()),
-                Some("0.0000000000000001".to_owned()),
-                Some("0".to_owned()),
-                Some("1".to_owned()),
+                Value::Text("1000000000000000".to_owned()),
+                Value::Text("1000000000000000.0000000000000001".to_owned()),
+                Value::Text("0.0000000000000001".to_owned()),
+                Value::Text("0".to_owned()),
+                Value::Text("1".to_owned()),
             ],
         )?;
         Ok(())
     }
 
     #[test]
-    fn collation() -> rusqlite::Result<()> {
+    fn collation() -> Result<()> {
         let conn = setup()?;
         let ret: Vec<String> = conn
             .prepare(
                 "SELECT column1 FROM ( VALUES (('1')), (('0100')), (('.1')) ) ORDER BY column1 COLLATE decimal",
             )?
-            .query_map([], |row| row.get::<_, String>(0))?
-            .collect::<rusqlite::Result<_>>()?;
+            .query(())?.map(|row| Ok(row.col(0).get_str()?.unwrap().to_owned()))
+            .collect()?;
         assert_eq!(
             ret,
             vec![".1".to_owned(), "1".to_owned(), "0100".to_owned()]

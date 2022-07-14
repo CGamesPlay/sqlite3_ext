@@ -194,7 +194,11 @@ to_context_result! {
     /// Sets the context error to this error.
     match Error as (ctx, err) => {
         match err {
-            Error::Sqlite(code) => ffi::sqlite3_result_error_code(ctx, code),
+            Error::Sqlite(_, Some(desc)) => {
+                let bytes = desc.as_bytes();
+                ffi::sqlite3_result_error(ctx, bytes.as_ptr() as _, bytes.len() as _)
+            },
+            Error::Sqlite(code, None) => ffi::sqlite3_result_error_code(ctx, code),
             Error::NoChange => (),
             _ => {
                 let msg = format!("{}", err);

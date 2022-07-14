@@ -79,48 +79,40 @@ impl VTabCursor for TestCursor {
 
 #[test]
 #[cfg(modern_sqlite)]
-fn eponymous_only() -> rusqlite::Result<()> {
-    let conn = rusqlite::Connection::open_in_memory()?;
-    Connection::from_rusqlite(&conn).create_module(
+fn eponymous_only() -> Result<()> {
+    let conn = Database::open_in_memory()?;
+    conn.create_module(
         "eponymous_only_vtab",
         EponymousOnlyModule::<TestVTab>::new().unwrap(),
         (),
     )?;
     let err = conn
-        .execute("CREATE VIRTUAL TABLE tbl USING eponymous_only_vtab()", [])
+        .execute("CREATE VIRTUAL TABLE tbl USING eponymous_only_vtab()", ())
         .unwrap_err();
     assert_eq!(err.to_string(), "no such module: eponymous_only_vtab");
-    conn.query_row("SELECT COUNT(*) FROM eponymous_only_vtab", [], |_| Ok(()))?;
+    conn.query_row("SELECT COUNT(*) FROM eponymous_only_vtab", (), |_| Ok(()))?;
     Ok(())
 }
 
 #[test]
-fn eponymous() -> rusqlite::Result<()> {
-    let conn = rusqlite::Connection::open_in_memory()?;
-    Connection::from_rusqlite(&conn).create_module(
-        "eponymous_vtab",
-        EponymousModule::<TestVTab>::new(),
-        (),
-    )?;
-    conn.execute("CREATE VIRTUAL TABLE tbl USING eponymous_vtab()", [])?;
-    conn.query_row("SELECT COUNT(*) FROM eponymous_vtab", [], |_| Ok(()))?;
-    conn.query_row("SELECT COUNT(*) FROM tbl", [], |_| Ok(()))?;
+fn eponymous() -> Result<()> {
+    let conn = Database::open_in_memory()?;
+    conn.create_module("eponymous_vtab", EponymousModule::<TestVTab>::new(), ())?;
+    conn.execute("CREATE VIRTUAL TABLE tbl USING eponymous_vtab()", ())?;
+    conn.query_row("SELECT COUNT(*) FROM eponymous_vtab", (), |_| Ok(()))?;
+    conn.query_row("SELECT COUNT(*) FROM tbl", (), |_| Ok(()))?;
     Ok(())
 }
 
 #[test]
-fn standard() -> rusqlite::Result<()> {
-    let conn = rusqlite::Connection::open_in_memory()?;
-    Connection::from_rusqlite(&conn).create_module(
-        "standard_vtab",
-        StandardModule::<TestVTab>::new(),
-        (),
-    )?;
-    conn.execute("CREATE VIRTUAL TABLE tbl USING standard_vtab()", [])?;
+fn standard() -> Result<()> {
+    let conn = Database::open_in_memory()?;
+    conn.create_module("standard_vtab", StandardModule::<TestVTab>::new(), ())?;
+    conn.execute("CREATE VIRTUAL TABLE tbl USING standard_vtab()", ())?;
     let err = conn
-        .query_row("SELECT COUNT(*) FROM standard_vtab", [], |_| Ok(()))
+        .query_row("SELECT COUNT(*) FROM standard_vtab", (), |_| Ok(()))
         .unwrap_err();
     assert_eq!(err.to_string(), "no such table: standard_vtab");
-    conn.query_row("SELECT COUNT(*) FROM tbl", [], |_| Ok(()))?;
+    conn.query_row("SELECT COUNT(*) FROM tbl", (), |_| Ok(()))?;
     Ok(())
 }

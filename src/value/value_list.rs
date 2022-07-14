@@ -1,5 +1,5 @@
 use super::ValueRef;
-use crate::{ffi, iterator::*, sqlite3_match_version, sqlite3_require_version, types::*};
+use crate::{ffi, sqlite3_match_version, sqlite3_require_version, types::*, FallibleIteratorMut};
 use std::ptr;
 
 /// Represents a list of values from SQLite.
@@ -13,7 +13,7 @@ use std::ptr;
 /// it. The first is a `while let`:
 ///
 /// ```no_run
-/// use sqlite3_ext::{iterator::*, *};
+/// use sqlite3_ext::*;
 ///
 /// fn filter_list(list: &mut ValueRef) -> Result<()> {
 ///     let mut list = ValueList::from_value_ref(list)?;
@@ -24,10 +24,11 @@ use std::ptr;
 /// }
 /// ```
 ///
-/// Alternatively, the [map](Self::map) method turns this struct into a [FallibleIterator]:
+/// Alternatively, the [map](Self::map) method turns this struct into a
+/// [FallibleIterator](crate::FallibleIterator):
 ///
 /// ```no_run
-/// use sqlite3_ext::{iterator::*, *};
+/// use sqlite3_ext::*;
 ///
 /// fn filter_list(list: &mut ValueRef) -> Result<()> {
 ///     let list: Vec<Option<String>> = ValueList::from_value_ref(list)?

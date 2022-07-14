@@ -1,23 +1,28 @@
-use super::{ffi, sqlite3_require_version};
-use std::os::raw::{c_char, c_int};
+use super::{ffi, mutex::SQLiteMutexGuard, sqlite3_require_version, Connection};
+use std::{
+    ffi::CStr,
+    os::raw::{c_char, c_int},
+};
 
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_NOMEM]\).
-pub const SQLITE_NOMEM: Error = Error::Sqlite(ffi::SQLITE_NOMEM);
+pub const SQLITE_NOMEM: Error = Error::Sqlite(ffi::SQLITE_NOMEM, None);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_NOTFOUND]\).
-pub const SQLITE_NOTFOUND: Error = Error::Sqlite(ffi::SQLITE_NOTFOUND);
+pub const SQLITE_NOTFOUND: Error = Error::Sqlite(ffi::SQLITE_NOTFOUND, None);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_EMPTY]\).
-pub const SQLITE_EMPTY: Error = Error::Sqlite(ffi::SQLITE_EMPTY);
+pub const SQLITE_EMPTY: Error = Error::Sqlite(ffi::SQLITE_EMPTY, None);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_CONSTRAINT]\).
-pub const SQLITE_CONSTRAINT: Error = Error::Sqlite(ffi::SQLITE_CONSTRAINT);
+pub const SQLITE_CONSTRAINT: Error = Error::Sqlite(ffi::SQLITE_CONSTRAINT, None);
+/// Alias for [Error::Sqlite]\([ffi::SQLITE_MISMATCH]\).
+pub const SQLITE_MISMATCH: Error = Error::Sqlite(ffi::SQLITE_MISMATCH, None);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_MISUSE]\).
-pub const SQLITE_MISUSE: Error = Error::Sqlite(ffi::SQLITE_MISUSE);
+pub const SQLITE_MISUSE: Error = Error::Sqlite(ffi::SQLITE_MISUSE, None);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_RANGE]\).
-pub const SQLITE_RANGE: Error = Error::Sqlite(ffi::SQLITE_RANGE);
+pub const SQLITE_RANGE: Error = Error::Sqlite(ffi::SQLITE_RANGE, None);
 
 #[derive(Clone, Eq, PartialEq)]
 pub enum Error {
     /// An error returned by SQLite.
-    Sqlite(i32),
+    Sqlite(i32, Option<String>),
     /// A string received from SQLite contains invalid UTF-8, and cannot be converted to a
     /// `&str`.
     Utf8Error(std::str::Utf8Error),
@@ -41,13 +46,45 @@ impl Error {
     pub fn from_sqlite(rc: i32) -> Result<()> {
         match rc {
             ffi::SQLITE_OK | ffi::SQLITE_ROW | ffi::SQLITE_DONE => Ok(()),
-            _ => Err(Error::Sqlite(rc)),
+            _ => Err(Error::Sqlite(rc, None)),
+        }
+    }
+
+    /// Convert the return of an SQLite function into a Result\<()\>, with a complete error
+    /// message. This method is similar to [from_sqlite](Self::from_sqlite), except that it
+    /// retrieves the full error message from SQLite in addition to the error code.
+    pub fn from_sqlite_desc(rc: i32, guard: SQLiteMutexGuard<'_, Connection>) -> Result<()> {
+        unsafe { Self::from_sqlite_desc_unchecked(rc, guard.as_mut_ptr()) }
+    }
+
+    /// Equivalent to [from_sqlite_desc](Self::from_sqlite_desc), but without requiring a
+    /// lock on the database.
+    ///
+    /// # Safety
+    ///
+    /// This method is safe, however it may produce incorrect results if called while a
+    /// lock on the SQLite database is not held.
+    pub unsafe fn from_sqlite_desc_unchecked(rc: i32, conn: *mut ffi::sqlite3) -> Result<()> {
+        match rc {
+            ffi::SQLITE_OK | ffi::SQLITE_ROW | ffi::SQLITE_DONE => Ok(()),
+            rc => {
+                let msg = CStr::from_ptr(ffi::sqlite3_errmsg(conn));
+                let msg = msg.to_str()?.to_owned();
+                Err(Error::Sqlite(rc, Some(msg)))
+            }
         }
     }
 
     pub(crate) fn into_sqlite(self, msg: *mut *mut c_char) -> c_int {
         match self {
-            Error::Sqlite(code) => code,
+            Error::Sqlite(code, s) => {
+                if let Some(s) = s {
+                    if let Ok(s) = ffi::str_to_sqlite3(&s) {
+                        unsafe { *msg = s };
+                    }
+                }
+                code
+            }
             e @ Error::Utf8Error(_)
             | e @ Error::NulError(_)
             | e @ Error::VersionNotSatisfied(_)
@@ -67,7 +104,8 @@ impl Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Sqlite(i) => {
+            Error::Sqlite(_, Some(desc)) => write!(f, "{}", desc),
+            Error::Sqlite(i, None) => {
                 let errstr: Result<&str> = sqlite3_require_version!(3_007_015, unsafe {
                     std::ffi::CStr::from_ptr(ffi::sqlite3_errstr(*i))
                         .to_str()
@@ -96,7 +134,8 @@ impl std::fmt::Display for Error {
 impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Sqlite(i) => {
+            Error::Sqlite(i, Some(desc)) => f.debug_tuple("Sqlite").field(&i).field(&desc).finish(),
+            Error::Sqlite(i, None) => {
                 let errstr: Result<&str> = sqlite3_require_version!(3_007_015, unsafe {
                     std::ffi::CStr::from_ptr(ffi::sqlite3_errstr(*i))
                         .to_str()

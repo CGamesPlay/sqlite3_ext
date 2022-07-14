@@ -25,30 +25,35 @@ pub struct Statement {
 impl Connection {
     /// Prepare some SQL for execution.
     pub fn prepare(&self, sql: &str) -> Result<Statement> {
+        const FLAGS: u32 = 0;
+        let guard = self.lock();
         let mut ret = MaybeUninit::uninit();
-        unsafe {
-            sqlite3_match_version! {
-                3_020_000 => Error::from_sqlite(ffi::sqlite3_prepare_v3(
-                    self.as_ptr() as _,
-                    sql.as_ptr() as _,
-                    sql.len() as _,
-                    0,
-                    ret.as_mut_ptr(),
-                    ptr::null_mut(),
-                ))?,
-                _ => Error::from_sqlite(ffi::sqlite3_prepare_v2(
-                    self.as_ptr() as _,
-                    sql.as_ptr() as _,
-                    sql.len() as _,
-                    ret.as_mut_ptr(),
-                    ptr::null_mut(),
-                ))?,
-            }
-            Ok(Statement {
-                base: ret.assume_init(),
-                used: false,
-            })
-        }
+        Error::from_sqlite_desc(
+            unsafe {
+                sqlite3_match_version! {
+                    3_020_000 => ffi::sqlite3_prepare_v3(
+                        self.as_mut_ptr(),
+                        sql.as_ptr() as _,
+                        sql.len() as _,
+                        FLAGS,
+                        ret.as_mut_ptr(),
+                        ptr::null_mut(),
+                    ),
+                    _ => ffi::sqlite3_prepare_v2(
+                        self.as_mut_ptr(),
+                        sql.as_ptr() as _,
+                        sql.len() as _,
+                        ret.as_mut_ptr(),
+                        ptr::null_mut(),
+                    ),
+                }
+            },
+            guard,
+        )?;
+        Ok(Statement {
+            base: unsafe { ret.assume_init() },
+            used: false,
+        })
     }
 
     /// Convenience method for `self.prepare(sql)?.execute(params)`.
@@ -107,8 +112,8 @@ impl Statement {
         } else {
             Ok(unsafe {
                 sqlite3_match_version! {
-                    3_037_000 => ffi::sqlite3_changes64(db.as_ptr() as _),
-                    _ => ffi::sqlite3_changes(db.as_ptr() as _) as _,
+                    3_037_000 => ffi::sqlite3_changes64(db.as_mut_ptr()),
+                    _ => ffi::sqlite3_changes(db.as_mut_ptr()) as _,
                 }
             })
         }
@@ -186,10 +191,15 @@ impl Statement {
     }
 
     fn step(&mut self) -> Result<bool> {
-        match unsafe { ffi::sqlite3_step(self.base) } {
-            ffi::SQLITE_DONE => Ok(false),
-            ffi::SQLITE_ROW => Ok(true),
-            e => Err(Error::Sqlite(e)),
+        unsafe {
+            let guard = self.db().lock();
+            let rc = ffi::sqlite3_step(self.base);
+            Error::from_sqlite_desc(rc, guard)?;
+            match rc {
+                ffi::SQLITE_DONE => Ok(false),
+                ffi::SQLITE_ROW => Ok(true),
+                _ => unreachable!(),
+            }
         }
     }
 }

@@ -20,13 +20,12 @@ pub trait TestHooks: Sized {
     }
 }
 
-pub fn setup<Hooks: TestHooks>(hooks: &Hooks) -> rusqlite::Result<rusqlite::Connection> {
-    let conn = rusqlite::Connection::open_in_memory()?;
-    let econn = Connection::from_rusqlite(&conn);
-    econn.create_module("vtab", TestVTab::module(), hooks)?;
+pub fn setup<Hooks: TestHooks>(hooks: &Hooks) -> Result<Database> {
+    let conn = Database::open_in_memory()?;
+    conn.create_module("vtab", TestVTab::module(), hooks)?;
     conn.execute(
         "CREATE VIRTUAL TABLE tbl USING vtab(schema='CREATE TABLE x(a,b,c)', rows=3)",
-        [],
+        (),
     )?;
     Ok(conn)
 }

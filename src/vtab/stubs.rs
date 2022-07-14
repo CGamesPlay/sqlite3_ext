@@ -49,7 +49,7 @@ macro_rules! vtab_connect {
                 Err(e) => return ffi::handle_error(e, err_msg),
             };
             let rc = ffi::sqlite3_declare_vtab(
-                conn.as_ptr() as _,
+                conn.as_mut_ptr(),
                 CString::from_vec_unchecked(sql.into_bytes()).as_ptr() as _,
             );
             if rc != ffi::SQLITE_OK {

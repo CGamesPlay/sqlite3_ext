@@ -3,21 +3,20 @@
 #![allow(dead_code)]
 
 use crate::{value::Blob, Error};
-#[cfg(not(feature = "static"))]
-pub use dynamic_link::*;
-#[cfg(feature = "static")]
-pub use static_link::*;
+pub use linking::*;
+pub use sqlite3types::*;
 use std::{
     ffi::{c_void, CString},
     os::raw::{c_char, c_int},
     ptr,
 };
 
-#[cfg(not(feature = "static"))]
-mod dynamic_link;
-mod sqlite3ext;
-#[cfg(feature = "static")]
-mod static_link;
+mod sqlite3funcs;
+mod sqlite3types;
+
+mod linking {
+    include!(concat!(env!("OUT_DIR"), "/linking.rs"));
+}
 
 /// We have to do this trampoline construct because the cfg attributes are evaluated in the
 /// context of the transcribed crate.
@@ -178,10 +177,7 @@ macro_rules! sqlite3_require_version {
 }
 
 pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
-    let len: usize = val
-        .len()
-        .checked_add(1)
-        .ok_or(Error::Sqlite(SQLITE_NOMEM))?;
+    let len: usize = val.len().checked_add(1).ok_or(crate::types::SQLITE_NOMEM)?;
     unsafe {
         let ptr: *mut c_char = sqlite3_match_version! {
             3_008_007 => sqlite3_malloc64(len as _) as _,
@@ -192,7 +188,7 @@ pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
             *ptr.add(len - 1) = 0;
             Ok(ptr)
         } else {
-            Err(Error::Sqlite(SQLITE_NOMEM))
+            Err(crate::types::SQLITE_NOMEM)
         }
     }
 }

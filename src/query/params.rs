@@ -120,6 +120,15 @@ impl<T: ToParam, const N: usize> Params for [T; N] {
     }
 }
 
+impl Params for &mut [&mut ValueRef] {
+    fn bind_params(self, stmt: &mut Statement) -> Result<()> {
+        for (pos, val) in self.into_iter().enumerate() {
+            val.bind_param(stmt, pos as i32 + 1)?;
+        }
+        Ok(())
+    }
+}
+
 /// Trait for types which can be passed into SQLite queries as parameters.
 #[sealed]
 pub trait ToParam {
@@ -148,6 +157,7 @@ to_param!(() as (stmt, pos, _val) => ffi::sqlite3_bind_null(stmt, pos));
 to_param!(bool as (stmt, pos, val) => ffi::sqlite3_bind_int(stmt, pos, val as i32));
 to_param!(i64 as (stmt, pos, val) => ffi::sqlite3_bind_int64(stmt, pos, val));
 to_param!(f64 as (stmt, pos, val) => ffi::sqlite3_bind_double(stmt, pos, val));
+to_param!(&mut ValueRef as (stmt, pos, val) => ffi::sqlite3_bind_value(stmt, pos, val.as_ptr()));
 to_param!(UnprotectedValue as (stmt, pos, val) => ffi::sqlite3_bind_value(stmt, pos, val.as_ptr()));
 to_param!(&'static str as (stmt, pos, val) => {
     let val = val.as_bytes();

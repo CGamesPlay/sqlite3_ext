@@ -111,12 +111,8 @@ impl Connection {
         })
     }
 
-    /// Convenience method for `self.prepare(sql)?.execute(params)`.
-    pub fn execute<P: Params>(&self, sql: &str, params: P) -> Result<i64> {
-        self.prepare(sql)?.execute(params)
-    }
-
-    /// Convenience method for `self.prepare(sql)?.query_row(params, f)`.
+    /// Convenience method for `self.prepare(sql)?.query_row(params, f)`. See
+    /// [Statement::query_row].
     pub fn query_row<P: Params, R, F: FnOnce(&mut QueryResult) -> Result<R>>(
         &self,
         sql: &str,
@@ -124,6 +120,16 @@ impl Connection {
         f: F,
     ) -> Result<R> {
         self.prepare(sql)?.query_row(params, f)
+    }
+
+    /// Convenience method for `self.prepare(sql)?.execute(params)`. See [Statement::execute].
+    pub fn execute<P: Params>(&self, sql: &str, params: P) -> Result<i64> {
+        self.prepare(sql)?.execute(params)
+    }
+
+    /// Convenience method for `self.prepare(sql)?.insert(params)`. See [Statement::insert].
+    pub fn insert<P: Params>(&self, sql: &str, params: P) -> Result<i64> {
+        self.prepare(sql)?.insert(params)
     }
 }
 
@@ -155,6 +161,29 @@ impl Statement {
         Ok(self)
     }
 
+    /// Execute a query which is expected to return only a single row.
+    ///
+    /// This method will fail with [SQLITE_MISUSE] if the query returns more than a single
+    /// row. It will fail with [SQLITE_EMPTY] if the query does not return any rows.
+    ///
+    /// If you are not storing this Statement for later reuse, [Connection::query_row] is a
+    /// shortcut for this method.
+    pub fn query_row<P: Params, R, F: FnOnce(&mut QueryResult) -> Result<R>>(
+        &mut self,
+        params: P,
+        f: F,
+    ) -> Result<R> {
+        let rs = self.query(params)?;
+        let ret = match rs.next()? {
+            None => return Err(SQLITE_EMPTY),
+            Some(r) => f(r)?,
+        };
+        if let Some(_) = rs.next()? {
+            return Err(SQLITE_MISUSE);
+        }
+        Ok(ret)
+    }
+
     /// Execute a query that is expected to return no results (such as an INSERT, UPDATE, or
     /// DELETE).
     ///
@@ -178,27 +207,19 @@ impl Statement {
         }
     }
 
-    /// Execute a query which is expected to return only a single row.
+    /// Execute a query that is expected to be an INSERT, then return the inserted rowid.
     ///
-    /// This method will fail with [SQLITE_MISUSE] if the query returns more than a single
-    /// row. It will fail with [SQLITE_EMPTY] if the query does not return any rows.
-    ///
-    /// If you are not storing this Statement for later reuse, [Connection::query_row] is a
-    /// shortcut for this method.
-    pub fn query_row<P: Params, R, F: FnOnce(&mut QueryResult) -> Result<R>>(
-        &mut self,
-        params: P,
-        f: F,
-    ) -> Result<R> {
-        let rs = self.query(params)?;
-        let ret = match rs.next()? {
-            None => return Err(SQLITE_EMPTY),
-            Some(r) => f(r)?,
-        };
-        if let Some(_) = rs.next()? {
-            return Err(SQLITE_MISUSE);
+    /// This method will fail with [SQLITE_MISUSE] if this method returns rows, but there are no
+    /// other verifications that the executed statement is actually an INSERT. If this Statement is
+    /// not an INSERT, the return value of this function is meaningless.
+    pub fn insert<P: Params>(&mut self, params: P) -> Result<i64> {
+        let db = unsafe { self.db() }.lock();
+        if let Some(_) = self.query(params)?.next()? {
+            // Query returned rows!
+            Err(SQLITE_MISUSE)
+        } else {
+            Ok(unsafe { ffi::sqlite3_last_insert_rowid(db.as_mut_ptr()) })
         }
-        Ok(ret)
     }
 
     /// Returns the original text of the prepared statement.
@@ -244,9 +265,17 @@ impl Statement {
     /// Returns the current result, without advancing the cursor. This method returns `None` if the
     /// query has already run to completion, or if the query has not been started using
     /// [query](Self::query).
-    pub fn current_result(&mut self) -> Option<&mut QueryResult> {
+    pub fn current_result(&self) -> Option<&QueryResult> {
         match self.state {
             QueryState::Active => Some(QueryResult::from_statement(self)),
+            _ => None,
+        }
+    }
+
+    /// Mutable version of [current_result](Self::current_result).
+    pub fn current_result_mut(&mut self) -> Option<&mut QueryResult> {
+        match self.state {
+            QueryState::Active => Some(QueryResult::from_statement_mut(self)),
             _ => None,
         }
     }
@@ -280,7 +309,7 @@ impl FallibleIteratorMut for Statement {
                     }
                     ffi::SQLITE_ROW => {
                         self.state = QueryState::Active;
-                        Ok(Some(QueryResult::from_statement(self)))
+                        Ok(Some(QueryResult::from_statement_mut(self)))
                     }
                     _ => unreachable!(),
                 }
@@ -303,7 +332,11 @@ pub struct QueryResult {
 }
 
 impl QueryResult {
-    fn from_statement(stmt: &mut Statement) -> &mut Self {
+    fn from_statement(stmt: &Statement) -> &Self {
+        unsafe { &*(stmt as *const Statement as *const Self) }
+    }
+
+    fn from_statement_mut(stmt: &mut Statement) -> &mut Self {
         unsafe { &mut *(stmt as *mut Statement as *mut Self) }
     }
 

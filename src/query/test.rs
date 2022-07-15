@@ -22,12 +22,12 @@ fn basic() -> Result<()> {
             .query(())?
             .map(|r| {
                 Ok(Row {
-                    value: r.col(0).get_str()?.map(String::from),
-                    name: r.col(0).name()?.to_owned(),
-                    database_name: r.col(0).database_name()?.map(String::from),
-                    table_name: r.col(0).table_name()?.map(String::from),
-                    origin_name: r.col(0).origin_name()?.map(String::from),
-                    decltype: r.col(0).decltype()?.map(String::from),
+                    value: r[0].get_str()?.map(String::from),
+                    name: r[0].name()?.to_owned(),
+                    database_name: r[0].database_name()?.map(String::from),
+                    table_name: r[0].table_name()?.map(String::from),
+                    origin_name: r[0].origin_name()?.map(String::from),
+                    decltype: r[0].decltype()?.map(String::from),
                 })
             })
             .collect()?;
@@ -69,7 +69,7 @@ fn params() -> Result<()> {
             None as Option<i64>,
             (),
         ))?
-        .map(|r| r.col(0).to_owned())
+        .map(|r| r[0].to_owned())
         .collect()?;
     assert_eq!(
         ret,
@@ -98,7 +98,7 @@ fn value_params() -> Result<()> {
                 Value::Blob(Blob::from([255, 254, 253])),
                 Value::Null,
             ])?
-            .map(|r| r.col(0).to_owned())
+            .map(|r| r[0].to_owned())
             .collect()?;
     assert_eq!(
         ret,
@@ -124,7 +124,7 @@ fn func_params() -> Result<()> {
                 }
                 Ok(())
             })?
-            .map(|r| Ok(r.col(0).get_i32()))
+            .map(|r| Ok(r[0].get_i32()))
             .collect()?;
     assert_eq!(ret, vec![1, 2, 3]);
     Ok(())
@@ -147,7 +147,7 @@ fn named_params() -> Result<()> {
 
     let ret: Vec<i32> = stmt
         .query(params!((":second_value", 1), 2, (":first_value", 3), 4))?
-        .map(|r| Ok(r.col(0).get_i32()))
+        .map(|r| Ok(r[0].get_i32()))
         .collect()?;
     assert_eq!(ret, vec![3, 2, 1, 4]);
     Ok(())
@@ -173,7 +173,7 @@ fn passed_ref() -> Result<()> {
     };
     let ret: String =
         h.db.query_row("SELECT extract(?)", params!(PassedRef::new(s)), |r| {
-            Ok(r.col(0).get_str()?.unwrap().to_owned())
+            Ok(r[0].get_str()?.unwrap().to_owned())
         })?;
     assert_eq!(ret, "string from passed ref".to_owned());
     Ok(())
@@ -183,10 +183,10 @@ fn passed_ref() -> Result<()> {
 fn unprotected_value() -> Result<()> {
     let h = TestHelpers::new();
     let ret = h.db.query_row("SELECT zeroblob(1024)", (), |r| {
-        Ok(r.col(0).get_unprotected_value())
+        Ok(r[0].get_unprotected_value())
     })?;
     let ret: i64 =
-        h.db.query_row("SELECT length(?)", [ret], |r| Ok(r.col(0).get_i64()))?;
+        h.db.query_row("SELECT length(?)", [ret], |r| Ok(r[0].get_i64()))?;
     assert_eq!(ret, 1024);
     Ok(())
 }
@@ -196,12 +196,12 @@ fn reuse_statement() -> Result<()> {
     let h = TestHelpers::new();
     let mut stmt = h.db.prepare("SELECT ?")?;
 
-    let ret = stmt.query_row([1], |r| Ok(r.col(0).get_i32()))?;
+    let ret = stmt.query_row([1], |r| Ok(r[0].get_i32()))?;
     assert_eq!(ret, 1);
-    let ret = stmt.query_row([2], |r| Ok(r.col(0).get_i32()))?;
+    let ret = stmt.query_row([2], |r| Ok(r[0].get_i32()))?;
     assert_eq!(ret, 2);
     // Ensure that bindings were cleared out
-    let ret = stmt.query_row((), |r| Ok(r.col(0).to_owned()?))?;
+    let ret = stmt.query_row((), |r| Ok(r[0].to_owned()?))?;
     assert_eq!(ret, Value::Null);
     Ok(())
 }

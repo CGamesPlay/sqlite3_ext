@@ -227,7 +227,7 @@ mod test {
         let results: Vec<i64> = conn
             .prepare("SELECT value FROM generate_series(5, 100, 5)")?
             .query(())?
-            .map(|row| Ok(row.col(0).get_i64()))
+            .map(|row| Ok(row[0].get_i64()))
             .collect()?;
         assert_eq!(
             results,
@@ -236,7 +236,7 @@ mod test {
         let results: Vec<i64> = conn
             .prepare("SELECT value FROM generate_series(20) LIMIT 10")?
             .query(())?
-            .map(|row| Ok(row.col(0).get_i64()))
+            .map(|row| Ok(row[0].get_i64()))
             .collect()?;
         assert_eq!(results, vec![20, 21, 22, 23, 24, 25, 26, 27, 28, 29]);
         Ok(())
@@ -250,7 +250,7 @@ mod test {
                 let results = conn
                     .prepare($sql)?
                     .query(())?
-                    .map(|row| Ok(row.col(0).get_i64()))
+                    .map(|row| Ok(row[0].get_i64()))
                     .collect();
                 assert_eq!(results, $expected);
                 Ok(())

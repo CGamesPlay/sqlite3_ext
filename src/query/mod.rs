@@ -8,6 +8,7 @@ use std::{
     ffi::{CStr, CString},
     mem::MaybeUninit,
     num::NonZeroI32,
+    ops::{Index, IndexMut},
     ptr, slice, str,
 };
 
@@ -45,8 +46,8 @@ enum QueryState {
 ///     let mut results = Vec::new();
 ///     while let Some(row) = stmt.next()? {
 ///         results.push((
-///             row.col(0).get_i64(),
-///             row.col(1).get_str()?.map(String::from),
+///             row[0].get_i64(),
+///             row[1].get_str()?.map(String::from),
 ///         ));
 ///     }
 ///     Ok(results)
@@ -64,8 +65,8 @@ enum QueryState {
 ///         .query([user_id])?
 ///         .map(|row| {
 ///             Ok((
-///                 row.col(0).get_i64(),
-///                 row.col(1).get_str()?.map(String::from),
+///                 row[0].get_i64(),
+///                 row[1].get_str()?.map(String::from),
 ///             ))
 ///         })
 ///         .collect()?;
@@ -75,6 +76,10 @@ enum QueryState {
 pub struct Statement {
     base: *mut ffi::sqlite3_stmt,
     state: QueryState,
+    // We allocate column objects for all columns so that they can be returned by our Index
+    // implementation. It's possible to skip this if we add a lifetime parameter to Column to
+    // prevent pointer aliasing, but then we can't use Index and IndexMut.
+    columns: Box<[Column]>,
 }
 
 impl Connection {
@@ -105,9 +110,13 @@ impl Connection {
             },
             guard,
         )?;
+        let stmt = unsafe { ret.assume_init() };
+        let len = unsafe { ffi::sqlite3_column_count(stmt) as usize };
+        let columns = (0..len).map(|i| Column::new(stmt, i)).collect();
         Ok(Statement {
-            base: unsafe { ret.assume_init() },
+            base: stmt,
             state: QueryState::Ready,
+            columns,
         })
     }
 
@@ -344,19 +353,19 @@ impl QueryResult {
     pub fn len(&self) -> usize {
         self.stmt.column_count()
     }
+}
 
-    /// # Safety
-    ///
-    /// This method does not verify that only one Column exists for a particular
-    /// (statement, position) pair.
-    unsafe fn col_unchecked(&self, index: usize) -> Column<'_> {
-        debug_assert!(index < self.len(), "index out of bounds");
-        Column::new(&self.stmt, index)
+impl Index<usize> for QueryResult {
+    type Output = Column;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.stmt.columns[index]
     }
+}
 
-    /// Get the value in the requested column.
-    pub fn col<'a>(&'a mut self, index: usize) -> Column<'a> {
-        unsafe { self.col_unchecked(index) }
+impl IndexMut<usize> for QueryResult {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.stmt.columns[index]
     }
 }
 
@@ -364,7 +373,7 @@ impl std::fmt::Debug for QueryResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dt = f.debug_tuple("QueryResult");
         for i in 0..self.len() {
-            unsafe { dt.field(&self.col_unchecked(i)) };
+            dt.field(&self[i]);
         }
         dt.finish()
     }
@@ -374,19 +383,19 @@ impl std::fmt::Debug for QueryResult {
 ///
 /// SQLite automatically converts between data types on request, which is why many of the
 /// methods require `&mut`.
-pub struct Column<'stmt> {
-    stmt: &'stmt Statement,
+pub struct Column {
+    stmt: *mut ffi::sqlite3_stmt,
     position: usize,
 }
 
-impl<'stmt> Column<'stmt> {
-    fn new(stmt: &'stmt Statement, position: usize) -> Self {
+impl Column {
+    fn new(stmt: *mut ffi::sqlite3_stmt, position: usize) -> Self {
         Self { stmt, position }
     }
 
     pub fn get_unprotected_value(&self) -> UnprotectedValue {
         UnprotectedValue::from_ptr(unsafe {
-            ffi::sqlite3_column_value(self.stmt.base, self.position as _)
+            ffi::sqlite3_column_value(self.stmt, self.position as _)
         })
     }
 
@@ -396,8 +405,8 @@ impl<'stmt> Column<'stmt> {
     ///
     /// If the type of this value is not BLOB, the behavior of this function is undefined.
     pub unsafe fn get_blob_unchecked(&self) -> &[u8] {
-        let len = ffi::sqlite3_column_bytes(self.stmt.base, self.position as _);
-        let data = ffi::sqlite3_column_blob(self.stmt.base, self.position as _);
+        let len = ffi::sqlite3_column_bytes(self.stmt, self.position as _);
+        let data = ffi::sqlite3_column_blob(self.stmt, self.position as _);
         slice::from_raw_parts(data as _, len as _)
     }
 
@@ -417,7 +426,7 @@ impl<'stmt> Column<'stmt> {
     /// release of SQLite to the next.
     pub fn name(&self) -> Result<&str> {
         unsafe {
-            let ret = ffi::sqlite3_column_name(self.stmt.base, self.position as _);
+            let ret = ffi::sqlite3_column_name(self.stmt, self.position as _);
             if ret.is_null() {
                 Err(SQLITE_NOMEM)
             } else {
@@ -430,7 +439,7 @@ impl<'stmt> Column<'stmt> {
     /// column.
     pub fn database_name(&self) -> Result<Option<&str>> {
         unsafe {
-            let ret = ffi::sqlite3_column_database_name(self.stmt.base, self.position as _);
+            let ret = ffi::sqlite3_column_database_name(self.stmt, self.position as _);
             if ret.is_null() {
                 Ok(None)
             } else {
@@ -443,7 +452,7 @@ impl<'stmt> Column<'stmt> {
     /// column.
     pub fn table_name(&self) -> Result<Option<&str>> {
         unsafe {
-            let ret = ffi::sqlite3_column_table_name(self.stmt.base, self.position as _);
+            let ret = ffi::sqlite3_column_table_name(self.stmt, self.position as _);
             if ret.is_null() {
                 Ok(None)
             } else {
@@ -456,7 +465,7 @@ impl<'stmt> Column<'stmt> {
     /// column.
     pub fn origin_name(&self) -> Result<Option<&str>> {
         unsafe {
-            let ret = ffi::sqlite3_column_origin_name(self.stmt.base, self.position as _);
+            let ret = ffi::sqlite3_column_origin_name(self.stmt, self.position as _);
             if ret.is_null() {
                 Ok(None)
             } else {
@@ -470,7 +479,7 @@ impl<'stmt> Column<'stmt> {
     /// declared type.
     pub fn decltype(&self) -> Result<Option<&str>> {
         unsafe {
-            let ret = ffi::sqlite3_column_decltype(self.stmt.base, self.position as _);
+            let ret = ffi::sqlite3_column_decltype(self.stmt, self.position as _);
             if ret.is_null() {
                 Ok(None)
             } else {
@@ -480,29 +489,27 @@ impl<'stmt> Column<'stmt> {
     }
 }
 
-impl FromValue for Column<'_> {
+impl FromValue for Column {
     fn value_type(&self) -> ValueType {
-        unsafe {
-            ValueType::from_sqlite(ffi::sqlite3_column_type(self.stmt.base, self.position as _))
-        }
+        unsafe { ValueType::from_sqlite(ffi::sqlite3_column_type(self.stmt, self.position as _)) }
     }
 
     fn get_i32(&self) -> i32 {
-        unsafe { ffi::sqlite3_column_int(self.stmt.base, self.position as _) }
+        unsafe { ffi::sqlite3_column_int(self.stmt, self.position as _) }
     }
 
     fn get_i64(&self) -> i64 {
-        unsafe { ffi::sqlite3_column_int64(self.stmt.base, self.position as _) }
+        unsafe { ffi::sqlite3_column_int64(self.stmt, self.position as _) }
     }
 
     fn get_f64(&self) -> f64 {
-        unsafe { ffi::sqlite3_column_double(self.stmt.base, self.position as _) }
+        unsafe { ffi::sqlite3_column_double(self.stmt, self.position as _) }
     }
 
     fn get_blob(&mut self) -> Result<Option<&[u8]>> {
         unsafe {
-            let data = ffi::sqlite3_column_blob(self.stmt.base, self.position as _);
-            let len = ffi::sqlite3_column_bytes(self.stmt.base, self.position as _);
+            let data = ffi::sqlite3_column_blob(self.stmt, self.position as _);
+            let len = ffi::sqlite3_column_bytes(self.stmt, self.position as _);
             if data.is_null() {
                 if self.value_type() == ValueType::Null {
                     return Ok(None);
@@ -530,7 +537,7 @@ impl FromValue for Column<'_> {
     }
 }
 
-impl std::fmt::Debug for Column<'_> {
+impl std::fmt::Debug for Column {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self.value_type() {
             ValueType::Integer => f.debug_tuple("Integer").field(&self.get_i64()).finish(),

@@ -110,7 +110,7 @@ mod test {
         println!("{}", sql);
         let ret: Vec<Value> = conn.query_row(&sql, (), |r| {
             (0..expected.len())
-                .map(|i| r.col(i).to_owned())
+                .map(|i| r[i].to_owned())
                 .collect::<Result<_>>()
         })?;
         assert_eq!(ret, expected);
@@ -185,7 +185,7 @@ mod test {
         let ret: Vec<Value> = conn
             .prepare(&sql)?
             .query(())?
-            .map(|r| r.col(0).to_owned())
+            .map(|r| r[0].to_owned())
             .collect()?;
         assert_eq!(ret, expected);
         Ok(())
@@ -241,7 +241,7 @@ mod test {
             .prepare(
                 "SELECT column1 FROM ( VALUES (('1')), (('0100')), (('.1')) ) ORDER BY column1 COLLATE decimal",
             )?
-            .query(())?.map(|row| Ok(row.col(0).get_str()?.unwrap().to_owned()))
+            .query(())?.map(|row| Ok(row[0].get_str()?.unwrap().to_owned()))
             .collect()?;
         assert_eq!(
             ret,

@@ -8,7 +8,7 @@ fn main() -> Result<()> {
     let results: Vec<i64> = conn
         .prepare("SELECT value FROM generate_series(5, 100, 5)")?
         .query(())?
-        .map(|row| Ok(row.col(0).get_i64()))
+        .map(|row| Ok(row[0].get_i64()))
         .collect()?;
     assert_eq!(
         results,

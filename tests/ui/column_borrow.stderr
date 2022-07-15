@@ -1,9 +1,9 @@
 error[E0499]: cannot borrow `*r` as mutable more than once at a time
-  --> tests/ui/column_borrow.rs:9:28
+  --> tests/ui/column_borrow.rs:9:29
    |
-8  |             let mut col1 = r.col(0);
-   |                            -------- first mutable borrow occurs here
-9  |             let mut col2 = r.col(1);
-   |                            ^^^^^^^^ second mutable borrow occurs here
+8  |             let col1 = &mut r[0];
+   |                             - first mutable borrow occurs here
+9  |             let col2 = &mut r[1];
+   |                             ^ second mutable borrow occurs here
 10 |             assert_ne!(col1.get_str()?, col2.get_str()?);
    |                        -------------- first borrow later used here

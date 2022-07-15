@@ -45,7 +45,7 @@ fn user_data_scalar() -> Result<()> {
     h.db.create_scalar_function("user_data", &opts, move |_, _| user_data)?;
 
     let ret =
-        h.db.query_row("SELECT user_data()", (), |r| r.col(0).to_owned())?;
+        h.db.query_row("SELECT user_data()", (), |r| r[0].to_owned())?;
     assert_eq!(ret, Value::Text("foo".to_owned()));
 
     Ok(())
@@ -63,7 +63,7 @@ fn user_data_aggregate() -> Result<()> {
     let ret = h.db.query_row(
         "SELECT join_str(column1) FROM ( VALUES ('a'), ('1'), (NULL) )",
         (),
-        |r| r.col(0).to_owned(),
+        |r| r[0].to_owned(),
     )?;
     assert_eq!(ret, Value::Text("a|1|".to_owned()));
 
@@ -94,7 +94,7 @@ fn aux_data() -> Result<()> {
     let ret: Vec<i64> =
         h.db.prepare("SELECT aux_data('foo', column1) FROM ( VALUES ((1)), (('a')), ((NULL)) )")?
             .query(())?
-            .map(|row| Ok(row.col(0).get_i64()))
+            .map(|row| Ok(row[0].get_i64()))
             .collect()?;
     assert_eq!(ret, vec![1, 2, 3]);
     Ok(())
@@ -122,7 +122,7 @@ fn collation() -> Result<()> {
     let ret: Vec<String> =
         h.db.prepare(sql)?
             .query(())?
-            .map(|row| Ok(row.col(0).get_str()?.unwrap().to_owned()))
+            .map(|row| Ok(row[0].get_str()?.unwrap().to_owned()))
             .collect()?;
     assert_eq!(
         ret,

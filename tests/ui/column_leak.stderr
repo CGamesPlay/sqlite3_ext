@@ -1,8 +1,5 @@
-error: lifetime may not live long enough
- --> tests/ui/column_leak.rs:5:60
+error[E0507]: cannot move out of index of `QueryResult`
+ --> tests/ui/column_leak.rs:5:59
   |
-5 |     let results: Vec<Column<'_>> = stmt.query(())?.map(|r| Ok(r.col(0))).collect()?;
-  |                                                         -- ^^^^^^^^^^^^ returning this value requires that `'1` must outlive `'2`
-  |                                                         ||
-  |                                                         |return type of closure is std::result::Result<sqlite3_ext::query::Column<'2>, sqlite3_ext::Error>
-  |                                                         has type `&'1 mut QueryResult`
+5 |     let results: Vec<Column> = stmt.query(())?.map(|r| Ok(r[0])).collect()?;
+  |                                                           ^^^^ move occurs because value has type `sqlite3_ext::query::Column`, which does not implement the `Copy` trait

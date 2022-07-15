@@ -14,12 +14,67 @@ use std::{
 mod params;
 mod test;
 
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum QueryState {
+    Ready,
+    Active,
+    Finished,
+}
+
 /// A prepared statement.
 ///
-/// These can be created using methods such as [Connection::prepare].
+/// The basic method for accessing data using sqlite3_ext is:
+///
+/// 1. Create a Statement using [Connection::prepare].
+/// 2. Bind parameters (if necessary) using [Statement::query].
+/// 3. Retrieve results using [Statement::map] or [Statement::next].
+///
+/// Statement objects can be reused for multiple executions. A call to [query](Self::query) resets
+/// the bound parameters and restarts the query. This also applies to methods that call query
+/// internally, like [execute](Self::execute) and [query_row](Self::query_row).
+///
+/// Results can be accessed in an imperative or functional style. The imperative style looks like
+/// this:
+///
+/// ```no_run
+/// use sqlite3_ext::*;
+///
+/// fn pages_imperative(conn: &Connection, user_id: i64) -> Result<Vec<(i64, Option<String>)>> {
+///     let mut stmt = conn.prepare("SELECT id, name FROM pages WHERE owner_id = ?")?;
+///     stmt.query([user_id])?;
+///     let mut results = Vec::new();
+///     while let Some(row) = stmt.next()? {
+///         results.push((
+///             row.col(0).get_i64(),
+///             row.col(1).get_str()?.map(String::from),
+///         ));
+///     }
+///     Ok(results)
+/// }
+/// ```
+///
+/// The functional style makes use of [FallibleIterator] methods.
+///
+/// ```no_run
+/// use sqlite3_ext::*;
+///
+/// fn pages_functional(conn: &Connection, user_id: i64) -> Result<Vec<(i64, Option<String>)>> {
+///     let results: Vec<(i64, Option<String>)> = conn
+///         .prepare("SELECT id, name FROM pages WHERE owner_id = ?")?
+///         .query([user_id])?
+///         .map(|row| {
+///             Ok((
+///                 row.col(0).get_i64(),
+///                 row.col(1).get_str()?.map(String::from),
+///             ))
+///         })
+///         .collect()?;
+///     Ok(results)
+/// }
+/// ```
 pub struct Statement {
     base: *mut ffi::sqlite3_stmt,
-    used: bool,
+    state: QueryState,
 }
 
 impl Connection {
@@ -52,7 +107,7 @@ impl Connection {
         )?;
         Ok(Statement {
             base: unsafe { ret.assume_init() },
-            used: false,
+            state: QueryState::Ready,
         })
     }
 
@@ -62,7 +117,7 @@ impl Connection {
     }
 
     /// Convenience method for `self.prepare(sql)?.query_row(params, f)`.
-    pub fn query_row<P: Params, R, F: FnOnce(&mut QueryResult<'_>) -> Result<R>>(
+    pub fn query_row<P: Params, R, F: FnOnce(&mut QueryResult) -> Result<R>>(
         &self,
         sql: &str,
         params: P,
@@ -77,33 +132,37 @@ impl Statement {
     ///
     /// # Safety
     ///
-    /// This method is unsafe because applying SQLite methods to the sqlite3_stmt pointer
-    /// returned by this method may violate invariants of other methods on this statement.
+    /// This method is unsafe because applying SQLite methods to the sqlite3_stmt pointer returned
+    /// by this method may violate invariants of other methods on this statement.
     pub unsafe fn as_ptr(&self) -> *mut ffi::sqlite3_stmt {
         self.base
     }
 
-    /// Return an iterator over the result of the query.
-    pub fn query<'a, P: Params>(&'a mut self, params: P) -> Result<ResultSet<'a>> {
-        if self.used {
+    /// Bind the provided parameters to the query. If the query was previously used, it is reset
+    /// and existing paramters are cleared.
+    ///
+    /// This method is not necessary to call on the first execution of a query where there are no
+    /// parameters to bind (e.g. on a single-use hard-coded query).
+    pub fn query<P: Params>(&mut self, params: P) -> Result<&mut Self> {
+        if self.state != QueryState::Ready {
             unsafe {
                 ffi::sqlite3_reset(self.base);
-                // As of SQLite 3.38.5, this method cannot fail, and always
-                // returns SQLITE_OK.
-                let rc = ffi::sqlite3_clear_bindings(self.base);
-                debug_assert!(rc == ffi::SQLITE_OK, "sqlite3_clear_bindings failed");
+                Error::from_sqlite(ffi::sqlite3_clear_bindings(self.base))?;
             }
+            self.state = QueryState::Ready;
         }
-        self.used = true;
         params.bind_params(self)?;
-        Ok(ResultSet::new(self))
+        Ok(self)
     }
 
-    /// Execute a query that is expected to return no results (such as an INSERT, UPDATE,
-    /// or DELETE).
+    /// Execute a query that is expected to return no results (such as an INSERT, UPDATE, or
+    /// DELETE).
     ///
     /// If this query returns rows, this method will fail with [SQLITE_MISUSE] (use
     /// [query](Self::query) for a query which returns rows).
+    ///
+    /// If you are not storing this Statement for later reuse, [Connection::execute] is a shortcut
+    /// for this method.
     pub fn execute<P: Params>(&mut self, params: P) -> Result<i64> {
         let db = unsafe { self.db() }.lock();
         if let Some(_) = self.query(params)?.next()? {
@@ -123,12 +182,15 @@ impl Statement {
     ///
     /// This method will fail with [SQLITE_MISUSE] if the query returns more than a single
     /// row. It will fail with [SQLITE_EMPTY] if the query does not return any rows.
-    pub fn query_row<P: Params, R, F: FnOnce(&mut QueryResult<'_>) -> Result<R>>(
+    ///
+    /// If you are not storing this Statement for later reuse, [Connection::query_row] is a
+    /// shortcut for this method.
+    pub fn query_row<P: Params, R, F: FnOnce(&mut QueryResult) -> Result<R>>(
         &mut self,
         params: P,
         f: F,
     ) -> Result<R> {
-        let mut rs = self.query(params)?;
+        let rs = self.query(params)?;
         let ret = match rs.next()? {
             None => return Err(SQLITE_EMPTY),
             Some(r) => f(r)?,
@@ -179,6 +241,16 @@ impl Statement {
         unsafe { ffi::sqlite3_column_count(self.base) as _ }
     }
 
+    /// Returns the current result, without advancing the cursor. This method returns `None` if the
+    /// query has already run to completion, or if the query has not been started using
+    /// [query](Self::query).
+    pub fn current_result(&mut self) -> Option<&mut QueryResult> {
+        match self.state {
+            QueryState::Active => Some(QueryResult::from_statement(self)),
+            _ => None,
+        }
+    }
+
     /// Returns a handle to the Connection associated with this statement.
     ///
     /// # Safety
@@ -189,17 +261,31 @@ impl Statement {
     pub unsafe fn db<'a>(&self) -> &'a Connection {
         Connection::from_ptr(ffi::sqlite3_db_handle(self.base))
     }
+}
 
-    fn step(&mut self) -> Result<bool> {
-        unsafe {
-            let guard = self.db().lock();
-            let rc = ffi::sqlite3_step(self.base);
-            Error::from_sqlite_desc(rc, guard)?;
-            match rc {
-                ffi::SQLITE_DONE => Ok(false),
-                ffi::SQLITE_ROW => Ok(true),
-                _ => unreachable!(),
-            }
+impl FallibleIteratorMut for Statement {
+    type Item = QueryResult;
+    type Error = Error;
+
+    fn next(&mut self) -> Result<Option<&mut Self::Item>> {
+        match self.state {
+            QueryState::Ready | QueryState::Active => unsafe {
+                let guard = self.db().lock();
+                let rc = ffi::sqlite3_step(self.base);
+                Error::from_sqlite_desc(rc, guard)?;
+                match rc {
+                    ffi::SQLITE_DONE => {
+                        self.state = QueryState::Finished;
+                        Ok(None)
+                    }
+                    ffi::SQLITE_ROW => {
+                        self.state = QueryState::Active;
+                        Ok(Some(QueryResult::from_statement(self)))
+                    }
+                    _ => unreachable!(),
+                }
+            },
+            QueryState::Finished => Ok(None),
         }
     }
 }
@@ -210,54 +296,15 @@ impl Drop for Statement {
     }
 }
 
-/// An iterator of results for a [Statement].
-pub struct ResultSet<'stmt> {
-    finished: bool,
-    result: QueryResult<'stmt>,
-}
-
-impl<'stmt> ResultSet<'stmt> {
-    fn new(stmt: &'stmt mut Statement) -> Self {
-        Self {
-            finished: false,
-            result: QueryResult::new(stmt),
-        }
-    }
-}
-
-impl<'stmt> FallibleIteratorMut for ResultSet<'stmt> {
-    type Item = QueryResult<'stmt>;
-    type Error = Error;
-
-    fn next(&mut self) -> Result<Option<&mut Self::Item>> {
-        if self.finished {
-            // This is to avoid a case where continuing to use the iterator after
-            // it ends would automatically reset the statement, so it would return
-            // its results again.
-            return Err(SQLITE_MISUSE);
-        }
-        match self.result.stmt.step() {
-            Ok(true) => Ok(Some(&mut self.result)),
-            Ok(false) => {
-                self.finished = true;
-                Ok(None)
-            }
-            Err(x) => {
-                self.finished = true;
-                Err(x)
-            }
-        }
-    }
-}
-
 /// A row returned from a query.
-pub struct QueryResult<'stmt> {
-    stmt: &'stmt mut Statement,
+#[repr(transparent)]
+pub struct QueryResult {
+    stmt: Statement,
 }
 
-impl<'stmt> QueryResult<'stmt> {
-    fn new(stmt: &'stmt mut Statement) -> Self {
-        Self { stmt }
+impl QueryResult {
+    fn from_statement(stmt: &mut Statement) -> &mut Self {
+        unsafe { &mut *(stmt as *mut Statement as *mut Self) }
     }
 
     /// Returns the number of columns in the result.
@@ -271,7 +318,7 @@ impl<'stmt> QueryResult<'stmt> {
     /// (statement, position) pair.
     unsafe fn col_unchecked(&self, index: usize) -> Column<'_> {
         debug_assert!(index < self.len(), "index out of bounds");
-        Column::new(self.stmt, index)
+        Column::new(&self.stmt, index)
     }
 
     /// Get the value in the requested column.
@@ -280,7 +327,7 @@ impl<'stmt> QueryResult<'stmt> {
     }
 }
 
-impl std::fmt::Debug for QueryResult<'_> {
+impl std::fmt::Debug for QueryResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dt = f.debug_tuple("QueryResult");
         for i in 0..self.len() {

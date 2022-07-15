@@ -5,4 +5,4 @@ error: lifetime may not live long enough
   |                                                         -- ^^^^^^^^^^^^ returning this value requires that `'1` must outlive `'2`
   |                                                         ||
   |                                                         |return type of closure is std::result::Result<sqlite3_ext::query::Column<'2>, sqlite3_ext::Error>
-  |                                                         has type `&'1 mut QueryResult<'_>`
+  |                                                         has type `&'1 mut QueryResult`

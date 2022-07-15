@@ -41,7 +41,7 @@ pub trait FallibleIteratorMut {
     /// Convert this iterator into a [FallibleIterator] by applying a function to each
     /// element.
     #[inline]
-    fn map<F, B>(self, f: F) -> Map<Self, F>
+    fn map<F, B>(&mut self, f: F) -> Map<Self, F>
     where
         Self: Sized,
         F: FnMut(&mut Self::Item) -> Result<B, Self::Error>,
@@ -50,12 +50,12 @@ pub trait FallibleIteratorMut {
     }
 }
 
-pub struct Map<I, F> {
-    it: I,
+pub struct Map<'a, I, F> {
+    it: &'a mut I,
     f: F,
 }
 
-impl<I, F, B> FallibleIterator for Map<I, F>
+impl<'a, I, F, B> FallibleIterator for Map<'a, I, F>
 where
     I: FallibleIteratorMut,
     F: FnMut(&mut I::Item) -> Result<B, I::Error>,

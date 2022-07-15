@@ -47,7 +47,7 @@ pub trait VTab<'vtab> {
     type Aux: 'vtab;
 
     /// Cursor implementation for this virtual table.
-    type Cursor: VTabCursor;
+    type Cursor: VTabCursor<'vtab>;
 
     /// Corresponds to xConnect.
     ///
@@ -62,7 +62,7 @@ pub trait VTab<'vtab> {
     /// The virtual table implementation will return an error if any of the arguments
     /// contain invalid UTF-8.
     fn connect(
-        db: &'vtab mut VTabConnection,
+        db: &'vtab VTabConnection,
         aux: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)>
@@ -83,7 +83,7 @@ pub trait VTab<'vtab> {
     fn best_index(&'vtab self, index_info: &mut IndexInfo) -> Result<()>;
 
     /// Create an uninitialized query.
-    fn open(&'vtab mut self) -> Result<Self::Cursor>;
+    fn open(&'vtab self) -> Result<Self::Cursor>;
 }
 
 /// A non-eponymous virtual table that supports CREATE VIRTUAL TABLE.
@@ -108,7 +108,7 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
     /// This method has the same requirements as [VTab::connect]; see that method
     /// for more details.
     fn create(
-        db: &'vtab mut VTabConnection,
+        db: &'vtab VTabConnection,
         aux: &'vtab Self::Aux,
         args: &[&str],
     ) -> Result<(String, Self)>
@@ -127,17 +127,22 @@ pub trait UpdateVTab<'vtab>: VTab<'vtab> {
     /// If the change is an INSERT for a table with rowids and the provided rowid was NULL,
     /// then the virtual table must generate and return a rowid for the inserted row. In
     /// all other cases, the returned Ok value of this method is ignored.
-    fn update(&mut self, info: &mut ChangeInfo) -> Result<i64>;
+    ///
+    /// It isn't possible to provide a mutable reference to the virtual table
+    /// implementation because there may be active cursors affecting the table or even the
+    /// row that is being updated. Use Rust's interior mutability types to properly
+    /// implement this method.
+    fn update(&'vtab self, info: &mut ChangeInfo) -> Result<i64>;
 }
 
 /// A virtual table that supports ROLLBACK.
 ///
 /// See [VTabTransaction] for details.
 pub trait TransactionVTab<'vtab>: UpdateVTab<'vtab> {
-    type Transaction: VTabTransaction;
+    type Transaction: VTabTransaction<'vtab>;
 
     /// Begin a transaction.
-    fn begin(&'vtab mut self) -> Result<Self::Transaction>;
+    fn begin(&'vtab self) -> Result<Self::Transaction>;
 }
 
 /// A virtual table that overloads some functions.
@@ -164,11 +169,11 @@ pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
 /// A virtual table that supports ALTER TABLE RENAME.
 pub trait RenameVTab<'vtab>: VTab<'vtab> {
     /// Corresponds to xRename, when ALTER TABLE RENAME is run on the virtual table.
-    fn rename(&mut self, name: &str) -> Result<()>;
+    fn rename(&'vtab self, name: &str) -> Result<()>;
 }
 
 /// Implementation of the cursor type for a virtual table.
-pub trait VTabCursor {
+pub trait VTabCursor<'vtab> {
     /// The type of all columns in this virtual table.
     type ColumnType: ToContextResult;
 
@@ -233,7 +238,7 @@ pub trait VTabCursor {
 /// ROLLBACK TO a;
 /// COMMIT;
 /// ```
-pub trait VTabTransaction {
+pub trait VTabTransaction<'vtab> {
     /// Start a two-phase commit.
     ///
     /// This method is only invoked prior to a commit or rollback. In order to implement
@@ -284,11 +289,14 @@ pub trait VTabTransaction {
 /// A wrapper around [Connection] that supports configuring virtual table implementations.
 #[repr(transparent)]
 pub struct VTabConnection {
-    #[allow(dead_code)]
     db: ffi::sqlite3,
 }
 
 impl VTabConnection {
+    unsafe fn from_ptr<'a>(db: *mut ffi::sqlite3) -> &'a Self {
+        &*(db as *mut Self)
+    }
+
     /// Indicate that this virtual table properly verifies constraints for updates.
     ///
     /// If this is enabled, then the virtual table guarantees that if the
@@ -301,7 +309,7 @@ impl VTabConnection {
     /// had been ABORT.
     ///
     /// Requires SQLite 3.7.7. On earlier versions of SQLite, this is a harmless no-op.
-    pub fn enable_constraints(&mut self) {
+    pub fn enable_constraints(&self) {
         sqlite3_match_version! {
             3_007_007 => unsafe {
                 let guard = self.lock();
@@ -322,7 +330,7 @@ impl VTabConnection {
     /// options mean.
     ///
     /// Requires SQLite 3.31.0. On earlier versions of SQLite, this is a harmless no-op.
-    pub fn set_risk(&mut self, level: super::RiskLevel) {
+    pub fn set_risk(&self, level: super::RiskLevel) {
         let _ = level;
         sqlite3_match_version! {
             3_031_000 => unsafe {
@@ -345,7 +353,7 @@ impl Deref for VTabConnection {
     type Target = Connection;
 
     fn deref(&self) -> &Connection {
-        unsafe { &*(self as *const VTabConnection as *const Connection) }
+        unsafe { Connection::from_ptr(&self.db as *const _ as _) }
     }
 }
 

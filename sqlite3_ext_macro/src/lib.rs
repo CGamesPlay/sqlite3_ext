@@ -350,22 +350,22 @@ pub fn sqlite3_ext_doctest_impl(item: TokenStream) -> TokenStream {
             type Aux = ();
             type Cursor = Cursor;
 
-            fn connect(_: &mut ::sqlite3_ext::vtab::VTabConnection, _: &Self::Aux, _: &[&str]) -> std::result::Result<(String, Self), ::sqlite3_ext::Error> { todo!() }
+            fn connect(_: &::sqlite3_ext::vtab::VTabConnection, _: &Self::Aux, _: &[&str]) -> std::result::Result<(String, Self), ::sqlite3_ext::Error> { todo!() }
             fn best_index(&self, _: &mut ::sqlite3_ext::vtab::IndexInfo) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
-            fn open(&mut self) -> std::result::Result<Self::Cursor, ::sqlite3_ext::Error> { todo!() }
+            fn open(&self) -> std::result::Result<Self::Cursor, ::sqlite3_ext::Error> { todo!() }
         }
 
         impl<'vtab> ::sqlite3_ext::vtab::CreateVTab<'vtab> for #item {
-            fn create(_: &mut ::sqlite3_ext::vtab::VTabConnection, _: &Self::Aux, _: &[&str]) -> std::result::Result<(String, Self), ::sqlite3_ext::Error> { todo!() }
+            fn create(_: &::sqlite3_ext::vtab::VTabConnection, _: &Self::Aux, _: &[&str]) -> std::result::Result<(String, Self), ::sqlite3_ext::Error> { todo!() }
             fn destroy(&mut self) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
         }
 
         impl<'vtab> ::sqlite3_ext::vtab::UpdateVTab<'vtab> for #item {
-            fn update(&mut self, _: &mut ::sqlite3_ext::vtab::ChangeInfo) -> ::sqlite3_ext::Result<i64> { todo!() }
+            fn update(&self, _: &mut ::sqlite3_ext::vtab::ChangeInfo) -> ::sqlite3_ext::Result<i64> { todo!() }
         }
 
         struct Cursor {}
-        impl ::sqlite3_ext::vtab::VTabCursor for Cursor {
+        impl ::sqlite3_ext::vtab::VTabCursor<'_> for Cursor {
             type ColumnType = ();
             fn filter(&mut self, _: i32, _: Option<&str>, _: &mut [&mut ValueRef]) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
             fn next(&mut self) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }

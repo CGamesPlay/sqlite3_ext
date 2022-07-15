@@ -4,7 +4,7 @@
 
 use sqlite3_ext::{vtab::*, *};
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     fmt::Arguments,
     io::{stderr, Write},
     rc::Rc,
@@ -62,8 +62,8 @@ struct VTabLog<O: Write + 'static> {
     db: Rc<DB<O>>,
     id: usize,
     num_rows: i64,
-    num_cursors: usize,
-    num_transactions: usize,
+    num_cursors: Cell<usize>,
+    num_transactions: Cell<usize>,
 }
 
 struct VTabLogCursor<'vtab, O: Write + 'static> {
@@ -112,8 +112,8 @@ impl<O: Write> VTabLog<O> {
             db: aux.clone(),
             id,
             num_rows,
-            num_cursors: 0,
-            num_transactions: 0,
+            num_cursors: Cell::new(0),
+            num_transactions: Cell::new(0),
         };
 
         writeln!(vtab, "{}(tab={}, args={:?})", method, id, args)?;
@@ -126,7 +126,7 @@ impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
     type Aux = Rc<DB<O>>;
     type Cursor = VTabLogCursor<'vtab, O>;
 
-    fn connect(_: &mut VTabConnection, db: &Self::Aux, args: &[&str]) -> Result<(String, Self)> {
+    fn connect(_: &VTabConnection, db: &Self::Aux, args: &[&str]) -> Result<(String, Self)> {
         Self::connect_create(db, args, "connect")
     }
 
@@ -145,11 +145,11 @@ impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
         Ok(())
     }
 
-    fn open(&'vtab mut self) -> Result<Self::Cursor> {
-        self.num_cursors += 1;
+    fn open(&'vtab self) -> Result<Self::Cursor> {
+        self.num_cursors.set(self.num_cursors.get() + 1);
         let ret = VTabLogCursor {
             vtab: self,
-            id: self.id + self.num_cursors,
+            id: self.id + self.num_cursors.get(),
             rowid: 0,
         };
         writeln!(self, "open(tab={}, cursor={})", self.id, ret.id)?;
@@ -160,7 +160,7 @@ impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
 impl<'vtab, O: Write + 'static> CreateVTab<'vtab> for VTabLog<O> {
     const SHADOW_NAMES: &'static [&'static str] = &["shadow"];
 
-    fn create(_: &mut VTabConnection, db: &Self::Aux, args: &[&str]) -> Result<(String, Self)> {
+    fn create(_: &VTabConnection, db: &Self::Aux, args: &[&str]) -> Result<(String, Self)> {
         Self::connect_create(db, args, "create")
     }
 
@@ -171,7 +171,7 @@ impl<'vtab, O: Write + 'static> CreateVTab<'vtab> for VTabLog<O> {
 }
 
 impl<'vtab, O: Write + 'static> UpdateVTab<'vtab> for VTabLog<O> {
-    fn update(&mut self, info: &mut ChangeInfo) -> Result<i64> {
+    fn update(&self, info: &mut ChangeInfo) -> Result<i64> {
         writeln!(self, "update(tab={}, args={:?})", self.id, info)?;
         sqlite3_match_version! {
             3_022_000 => {
@@ -194,11 +194,11 @@ impl<'vtab, O: Write + 'static> UpdateVTab<'vtab> for VTabLog<O> {
 impl<'vtab, O: Write + 'static> TransactionVTab<'vtab> for VTabLog<O> {
     type Transaction = VTabLogTransaction<'vtab, O>;
 
-    fn begin(&'vtab mut self) -> Result<Self::Transaction> {
-        self.num_transactions += 1;
+    fn begin(&'vtab self) -> Result<Self::Transaction> {
+        self.num_transactions.set(self.num_transactions.get() + 1);
         let ret = VTabLogTransaction {
             vtab: self,
-            id: self.id + self.num_transactions,
+            id: self.id + self.num_transactions.get(),
         };
         writeln!(self, "begin(tab={}, transaction={})", self.id, ret.id)?;
         Ok(ret)
@@ -206,7 +206,7 @@ impl<'vtab, O: Write + 'static> TransactionVTab<'vtab> for VTabLog<O> {
 }
 
 impl<'vtab, O: Write + 'static> RenameVTab<'vtab> for VTabLog<O> {
-    fn rename(&mut self, name: &str) -> Result<()> {
+    fn rename(&self, name: &str) -> Result<()> {
         writeln!(self, "rename(tab={}, name={:?})", self.id, name)?;
         Ok(())
     }
@@ -218,7 +218,7 @@ impl<O: Write> Drop for VTabLog<O> {
     }
 }
 
-impl<O: Write> VTabCursor for VTabLogCursor<'_, O> {
+impl<'vtab, O: Write> VTabCursor<'vtab> for VTabLogCursor<'vtab, O> {
     type ColumnType = Result<String>;
 
     fn filter(&mut self, _: i32, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
@@ -288,7 +288,7 @@ impl<O: Write> Drop for VTabLogCursor<'_, O> {
     }
 }
 
-impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
+impl<'vtab, O: Write> VTabTransaction<'vtab> for VTabLogTransaction<'vtab, O> {
     fn sync(&mut self) -> Result<()> {
         writeln!(
             self.vtab,

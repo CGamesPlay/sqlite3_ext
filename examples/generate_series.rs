@@ -15,11 +15,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
     type Aux = ();
     type Cursor = Cursor;
 
-    fn connect(
-        db: &mut VTabConnection,
-        _aux: &Self::Aux,
-        _args: &[&str],
-    ) -> Result<(String, Self)> {
+    fn connect(db: &VTabConnection, _aux: &Self::Aux, _args: &[&str]) -> Result<(String, Self)> {
         db.set_risk(RiskLevel::Innocuous);
         Ok((
             "CREATE TABLE x ( value, start HIDDEN, stop HIDDEN, step HIDDEN )".to_owned(),
@@ -108,7 +104,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
         Ok(())
     }
 
-    fn open(&mut self) -> Result<Self::Cursor> {
+    fn open(&self) -> Result<Self::Cursor> {
         Ok(Cursor::default())
     }
 }
@@ -123,7 +119,7 @@ struct Cursor {
     step: i64,
 }
 
-impl VTabCursor for Cursor {
+impl VTabCursor<'_> for Cursor {
     type ColumnType = i64;
 
     fn filter(

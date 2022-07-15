@@ -17,11 +17,7 @@ impl VTab<'_> for TestVTab {
     type Aux = ();
     type Cursor = TestCursor;
 
-    fn connect(
-        _db: &mut VTabConnection,
-        _aux: &Self::Aux,
-        _args: &[&str],
-    ) -> Result<(String, Self)> {
+    fn connect(_db: &VTabConnection, _aux: &Self::Aux, _args: &[&str]) -> Result<(String, Self)> {
         Self::connect_create()
     }
 
@@ -29,17 +25,13 @@ impl VTab<'_> for TestVTab {
         Ok(())
     }
 
-    fn open(&mut self) -> Result<Self::Cursor> {
+    fn open(&self) -> Result<Self::Cursor> {
         Ok(TestCursor)
     }
 }
 
 impl CreateVTab<'_> for TestVTab {
-    fn create(
-        _db: &mut VTabConnection,
-        _aux: &Self::Aux,
-        _args: &[&str],
-    ) -> Result<(String, Self)> {
+    fn create(_db: &VTabConnection, _aux: &Self::Aux, _args: &[&str]) -> Result<(String, Self)> {
         Self::connect_create()
     }
 
@@ -48,7 +40,7 @@ impl CreateVTab<'_> for TestVTab {
     }
 }
 
-impl VTabCursor for TestCursor {
+impl VTabCursor<'_> for TestCursor {
     type ColumnType = ();
 
     fn filter(

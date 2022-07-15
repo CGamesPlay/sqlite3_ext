@@ -58,19 +58,15 @@ impl<'vtab, Hooks: TestHooks + 'vtab> VTab<'vtab> for TestVTab<'vtab, Hooks> {
     type Aux = &'vtab Hooks;
     type Cursor = TestVTabCursor<'vtab, Hooks>;
 
-    fn connect(
-        _: &mut VTabConnection,
-        aux: &'vtab Self::Aux,
-        _: &[&str],
-    ) -> Result<(String, Self)> {
+    fn connect(_: &VTabConnection, aux: &'vtab Self::Aux, _: &[&str]) -> Result<(String, Self)> {
         Self::connect_create(aux)
     }
 
-    fn best_index(&'vtab self, index_info: &mut IndexInfo) -> Result<()> {
+    fn best_index(&self, index_info: &mut IndexInfo) -> Result<()> {
         self.hooks.best_index(&self, index_info)
     }
 
-    fn open(&'vtab mut self) -> Result<Self::Cursor> {
+    fn open(&'vtab self) -> Result<Self::Cursor> {
         let ret = TestVTabCursor {
             vtab: self,
             rowid: 0,
@@ -80,7 +76,7 @@ impl<'vtab, Hooks: TestHooks + 'vtab> VTab<'vtab> for TestVTab<'vtab, Hooks> {
 }
 
 impl<'vtab, Hooks: TestHooks + 'vtab> CreateVTab<'vtab> for TestVTab<'vtab, Hooks> {
-    fn create(_: &mut VTabConnection, aux: &'vtab Self::Aux, _: &[&str]) -> Result<(String, Self)> {
+    fn create(_: &VTabConnection, aux: &'vtab Self::Aux, _: &[&str]) -> Result<(String, Self)> {
         Self::connect_create(aux)
     }
 
@@ -95,7 +91,7 @@ impl<'vtab, Hooks: TestHooks + 'vtab> FindFunctionVTab<'vtab> for TestVTab<'vtab
     }
 }
 
-impl<'vtab, Hooks: TestHooks + 'vtab> VTabCursor for TestVTabCursor<'vtab, Hooks> {
+impl<'vtab, Hooks: TestHooks + 'vtab> VTabCursor<'vtab> for TestVTabCursor<'vtab, Hooks> {
     type ColumnType = Result<String>;
 
     fn filter(&mut self, _: i32, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {

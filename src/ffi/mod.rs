@@ -150,6 +150,8 @@ macro_rules! sqlite3_match_version {
 /// This macro is particularly useful when interacting with ffi methods, since these may be
 /// missing on older versions of SQLite, which would cause a compilation error.
 ///
+/// If no expression is provided, it defaults to `Ok(())`.
+///
 /// # Examples
 ///
 /// ```no_run
@@ -165,6 +167,10 @@ macro_rules! sqlite3_match_version {
 /// ```
 #[macro_export]
 macro_rules! sqlite3_require_version {
+    ($version:literal) => {
+        $crate::sqlite3_require_version!($version, Ok(()))
+    };
+
     ($version:literal, $expr:expr) => {
         $crate::sqlite3_match_version! {
             $version => {

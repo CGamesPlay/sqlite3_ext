@@ -9,7 +9,7 @@ members = [ "sqlite3_ext_macro" ]
 [features]
 static = [ "dep:libsqlite3-sys" ]
 static_modern = [ "static", "libsqlite3-sys?/bundled_bindings" ]
-rusqlite = [ "dep:rusqlite", "static" ]
+with_rusqlite = [ "dep:rusqlite", "static" ]
 
 [dependencies]
 bigdecimal = { version = "0.3.0", optional = true }
@@ -45,7 +45,7 @@ required-features = [ "static_modern" ]
 
 [[test]]
 name = "with_rusqlite"
-required-features = [ "rusqlite" ]
+required-features = [ "with_rusqlite" ]
 
 [[example]]
 name = "generate_series"

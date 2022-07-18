@@ -18,7 +18,7 @@ impl TestHelpers {
         TestHelpers { db }
     }
 
-    pub fn with_value<T: ToContextResult, F: Fn(&mut ValueRef) -> Result<()>>(
+    pub fn with_value<T: ToContextResult + 'static, F: Fn(&mut ValueRef) -> Result<()>>(
         &self,
         input: T,
         func: F,

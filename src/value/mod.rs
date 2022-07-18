@@ -70,6 +70,10 @@ pub trait FromValue {
 
     /// Clone the value, returning a [Value].
     fn to_owned(&self) -> Result<Value>;
+
+    /// Convert the value to an UnprotectedValue, suitable for passing to other SQLite
+    /// interfaces.
+    fn get_unprotected_value(&mut self) -> UnprotectedValue;
 }
 
 /// A protected SQL value.
@@ -246,6 +250,10 @@ impl FromValue for ValueRef {
             ValueType::Blob => unsafe { Ok(Value::from(Blob::from(self.get_blob_unchecked()))) },
             ValueType::Null => Ok(Value::Null),
         }
+    }
+
+    fn get_unprotected_value(&mut self) -> UnprotectedValue {
+        unsafe { UnprotectedValue::from_ptr(self.as_ptr()) }
     }
 }
 

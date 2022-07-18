@@ -393,12 +393,6 @@ impl Column {
         Self { stmt, position }
     }
 
-    pub fn get_unprotected_value(&self) -> UnprotectedValue {
-        UnprotectedValue::from_ptr(unsafe {
-            ffi::sqlite3_column_value(self.stmt, self.position as _)
-        })
-    }
-
     /// Get the bytes of this BLOB value.
     ///
     /// # Safety
@@ -534,6 +528,12 @@ impl FromValue for Column {
             ValueType::Blob => unsafe { Ok(Value::from(Blob::from(self.get_blob_unchecked()))) },
             ValueType::Null => Ok(Value::Null),
         }
+    }
+
+    fn get_unprotected_value(&mut self) -> UnprotectedValue {
+        UnprotectedValue::from_ptr(unsafe {
+            ffi::sqlite3_column_value(self.stmt, self.position as _)
+        })
     }
 }
 

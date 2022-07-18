@@ -144,7 +144,7 @@ impl Context {
 /// - For types known only at run-time, [Value] provides an implementation.
 /// - For arbitrary Rust objects, [PassedRef] provides an implementation.
 #[sealed]
-pub trait ToContextResult: 'static {
+pub trait ToContextResult {
     #[doc(hidden)]
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context);
 }
@@ -191,6 +191,13 @@ to_context_result! {
             _ => ffi::sqlite3_result_text(ctx, cstring, len as _, Some(ffi::drop_cstring)),
         }
     },
+    match Blob as (ctx, val) => {
+        let len = val.len();
+        sqlite3_match_version! {
+            3_008_007 => ffi::sqlite3_result_blob64(ctx, val.into_raw(), len as _, Some(ffi::drop_blob),),
+            _ => ffi::sqlite3_result_blob(ctx, val.into_raw(), len as _, Some(ffi::drop_blob)),
+        }
+    },
     /// Sets the context error to this error.
     match Error as (ctx, err) => {
         match err {
@@ -206,21 +213,6 @@ to_context_result! {
                 let len = msg.len();
                 ffi::sqlite3_result_error(ctx, msg.as_ptr() as _, len as _);
             }
-        }
-    }
-}
-
-#[sealed]
-impl<T: 'static> ToContextResult for T
-where
-    Blob: From<T>,
-{
-    unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
-        let blob = Blob::from(self);
-        let len = blob.len();
-        sqlite3_match_version! {
-            3_008_007 => ffi::sqlite3_result_blob64(context, blob.into_raw(), len as _, Some(ffi::drop_blob),),
-            _ => ffi::sqlite3_result_blob(context, blob.into_raw(), len as _, Some(ffi::drop_blob)),
         }
     }
 }

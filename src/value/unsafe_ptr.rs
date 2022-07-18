@@ -177,7 +177,7 @@ mod test {
     #[test]
     fn get_ptr_invalid() {
         let h = TestHelpers::new();
-        h.with_value([1, 2, 3], |val| {
+        h.with_value(Blob::from([1, 2, 3]), |val| {
             assert_eq!(val.value_type(), ValueType::Blob);
             UnsafePtr::<()>::from_value_ref(val, SUBTYPE).expect_err("incorrect length");
             Ok(())

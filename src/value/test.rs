@@ -30,7 +30,7 @@ fn get_f64() {
 fn get_blob() {
     let h = TestHelpers::new();
     let bytes = b"my string";
-    h.with_value(bytes, |val| {
+    h.with_value(Blob::from(bytes), |val| {
         assert_eq!(val.value_type(), ValueType::Blob);
         assert_eq!(val.get_blob()?, Some(b"my string".as_slice()));
         assert_eq!(

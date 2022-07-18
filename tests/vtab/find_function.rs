@@ -15,6 +15,9 @@ fn find_function() -> Result<()> {
                 self.was_called.set(true);
                 true
             });
+
+            vtab.functions
+                .add(1, "passthrough", None, |_, a| a[0].get_unprotected_value());
         }
     }
 

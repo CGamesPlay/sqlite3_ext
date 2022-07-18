@@ -35,6 +35,20 @@ impl AggregateFunction<&'static str> for Agg {
 }
 
 #[test]
+fn passthrough_arg() -> Result<()> {
+    let h = TestHelpers::new();
+    let opts = FunctionOptions::default()
+        .set_deterministic(true)
+        .set_risk_level(RiskLevel::Innocuous)
+        .set_n_args(1);
+    h.db.create_scalar_function("passthrough", &opts, |_, a| a[0].get_unprotected_value())?;
+    let ret =
+        h.db.query_row("SELECT passthrough(?)", [1], |r| r[0].to_owned())?;
+    assert_eq!(ret, Value::Integer(1));
+    Ok(())
+}
+
+#[test]
 fn user_data_scalar() -> Result<()> {
     let h = TestHelpers::new();
     let opts = FunctionOptions::default()

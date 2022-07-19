@@ -22,7 +22,7 @@ impl AggregateFunction<&'static str> for Agg {
         Ok(())
     }
 
-    fn value(&self, c: &Context) {
+    fn value(&self, c: &Context) -> Result<()> {
         c.set_result(self.acc.join(self.sep))
     }
 

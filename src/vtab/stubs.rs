@@ -208,7 +208,9 @@ pub unsafe extern "C" fn vtab_column<'vtab, T: VTab<'vtab> + 'vtab>(
 ) -> c_int {
     let cursor = &mut *(cursor as *mut VTabCursorHandle<T>);
     let context = ColumnContext::from_ptr(context);
-    cursor.cursor.column(i as _, &context);
+    if let Err(e) = cursor.cursor.column(i as _, &context) {
+        context.set_result(e).unwrap();
+    }
     ffi::SQLITE_OK
 }
 

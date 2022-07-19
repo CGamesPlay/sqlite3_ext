@@ -195,10 +195,12 @@ pub trait VTabCursor<'vtab> {
     /// Check if the cursor currently points beyond the end of the valid results.
     fn eof(&self) -> bool;
 
-    /// Fetch the column numbered idx for the current row. The indexes correspond to the
-    /// order the columns were declared by [VTab::connect]. The output value must be assigned to
-    /// the context using [ColumnContext::set_result].
-    fn column(&self, idx: usize, context: &ColumnContext);
+    /// Fetch the column numbered idx for the current row. The indexes correspond to the order the
+    /// columns were declared by [VTab::connect]. The output value must be assigned to the context
+    /// using [ColumnContext::set_result]. If no result is set, SQL NULL is returned. If this
+    /// method returns an Err value, the SQL statement will fail, even if a result had been set
+    /// before the failure.
+    fn column(&self, idx: usize, context: &ColumnContext) -> Result<()>;
 
     /// Fetch the rowid for the current row.
     fn rowid(&self) -> Result<i64>;
@@ -532,7 +534,9 @@ impl ColumnContext {
         }
     }
 
-    pub fn set_result(&self, val: impl ToContextResult) {
+    /// Assign the given value to the column. This function always returns Ok.
+    pub fn set_result(&self, val: impl ToContextResult) -> Result<()> {
         unsafe { val.assign_to(self.as_ptr()) };
+        Ok(())
     }
 }

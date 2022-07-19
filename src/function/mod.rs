@@ -32,7 +32,7 @@ pub trait LegacyAggregateFunction<UserData>: FromUserData<UserData> {
     /// This method is called when the aggregate function is invoked over an empty set of
     /// rows. The default implementation is equivalent to
     /// `Self::from_user_data(user_data).value(context)`.
-    fn default_value(user_data: &UserData, context: &Context)
+    fn default_value(user_data: &UserData, context: &Context) -> Result<()>
     where
         Self: Sized,
     {
@@ -43,8 +43,10 @@ pub trait LegacyAggregateFunction<UserData>: FromUserData<UserData> {
     fn step(&mut self, context: &Context, args: &mut [&mut ValueRef]) -> Result<()>;
 
     /// Assign the current value of the aggregate function to the context using
-    /// [Context::set_result].
-    fn value(&self, context: &Context);
+    /// [Context::set_result]. If no result is set, SQL NULL is returned. If the function returns
+    /// an Err value, the SQL statement will fail, even if a result had been set before the
+    /// failure.
+    fn value(&self, context: &Context) -> Result<()>;
 }
 
 /// Implement an application-defined aggregate window function.
@@ -58,7 +60,7 @@ pub trait AggregateFunction<UserData>: FromUserData<UserData> {
     /// This method is called when the aggregate function is invoked over an empty set of
     /// rows. The default implementation is equivalent to
     /// `Self::from_user_data(user_data).value(context)`.
-    fn default_value(user_data: &UserData, context: &Context)
+    fn default_value(user_data: &UserData, context: &Context) -> Result<()>
     where
         Self: Sized,
     {
@@ -69,8 +71,10 @@ pub trait AggregateFunction<UserData>: FromUserData<UserData> {
     fn step(&mut self, context: &Context, args: &mut [&mut ValueRef]) -> Result<()>;
 
     /// Assign the current value of the aggregate function to the context using
-    /// [Context::set_result].
-    fn value(&self, context: &Context);
+    /// [Context::set_result]. If no result is set, SQL NULL is returned. If the function returns
+    /// an Err value, the SQL statement will fail, even if a result had been set before the
+    /// failure.
+    fn value(&self, context: &Context) -> Result<()>;
 
     /// Remove the oldest presently aggregated row.
     ///
@@ -86,7 +90,7 @@ impl<U, F: Default> FromUserData<U> for F {
 }
 
 impl<U, T: AggregateFunction<U>> LegacyAggregateFunction<U> for T {
-    fn default_value(user_data: &U, context: &Context) {
+    fn default_value(user_data: &U, context: &Context) -> Result<()> {
         <T as AggregateFunction<U>>::default_value(user_data, context)
     }
 
@@ -94,7 +98,7 @@ impl<U, T: AggregateFunction<U>> LegacyAggregateFunction<U> for T {
         <T as AggregateFunction<U>>::step(self, context, args)
     }
 
-    fn value(&self, context: &Context) {
+    fn value(&self, context: &Context) -> Result<()> {
         <T as AggregateFunction<U>>::value(self, context)
     }
 }
@@ -107,14 +111,18 @@ pub struct FunctionOptions {
 
 impl Default for FunctionOptions {
     fn default() -> Self {
+        FunctionOptions::default()
+    }
+}
+
+impl FunctionOptions {
+    pub const fn default() -> Self {
         FunctionOptions {
             n_args: -1,
             flags: 0,
         }
     }
-}
 
-impl FunctionOptions {
     /// Set the number of parameters accepted by this function. Multiple functions may be
     /// provided under the same name with different n_args values; the implementation will
     /// be chosen by SQLite based on the number of parameters at the call site. The value
@@ -126,8 +134,8 @@ impl FunctionOptions {
     ///
     /// This function panics if n_args is outside the range -1..128. This limitation is
     /// imposed by SQLite.
-    pub fn set_n_args(mut self, n_args: i32) -> Self {
-        assert!((-1..128).contains(&n_args), "n_args invalid");
+    pub const fn set_n_args(mut self, n_args: i32) -> Self {
+        assert!(n_args >= -1 && n_args < 128, "n_args invalid");
         self.n_args = n_args;
         self
     }
@@ -138,7 +146,7 @@ impl FunctionOptions {
     ///
     /// The SQLite query planner is able to perform additional optimizations on
     /// deterministic functions, so use of this flag is recommended where possible.
-    pub fn set_deterministic(mut self, val: bool) -> Self {
+    pub const fn set_deterministic(mut self, val: bool) -> Self {
         if val {
             self.flags |= ffi::SQLITE_DETERMINISTIC;
         } else {
@@ -151,23 +159,21 @@ impl FunctionOptions {
     /// what the individual options mean.
     ///
     /// Requires SQLite 3.31.0. On earlier versions of SQLite, this function is a harmless no-op.
-    pub fn set_risk_level(
+    pub const fn set_risk_level(
         #[cfg_attr(not(modern_sqlite), allow(unused_mut))] mut self,
         level: RiskLevel,
     ) -> Self {
         let _ = level;
-        sqlite3_match_version! {
-            3_031_000 => {
-                self.flags |= match level {
-                    RiskLevel::Innocuous => ffi::SQLITE_INNOCUOUS,
-                    RiskLevel::DirectOnly => ffi::SQLITE_DIRECTONLY,
-                };
-                self.flags &= match level {
-                    RiskLevel::Innocuous => !ffi::SQLITE_DIRECTONLY,
-                    RiskLevel::DirectOnly => !ffi::SQLITE_INNOCUOUS,
-                };
-            }
-            _ => (),
+        #[cfg(modern_sqlite)]
+        {
+            self.flags |= match level {
+                RiskLevel::Innocuous => ffi::SQLITE_INNOCUOUS,
+                RiskLevel::DirectOnly => ffi::SQLITE_DIRECTONLY,
+            };
+            self.flags &= match level {
+                RiskLevel::Innocuous => !ffi::SQLITE_DIRECTONLY,
+                RiskLevel::DirectOnly => !ffi::SQLITE_INNOCUOUS,
+            };
         }
         self
     }
@@ -197,7 +203,8 @@ impl Connection {
 
     /// Create a new scalar function. The function will be invoked with a [Context] and an array of
     /// [ValueRef] objects. The function is required to set its output using [Context::set_result].
-    /// If no result is set, SQL NULL is returned.
+    /// If no result is set, SQL NULL is returned. If the function returns an Err value, the SQL
+    /// statement will fail, even if a result had been set before the failure.
     ///
     /// # Compatibility
     ///
@@ -211,7 +218,7 @@ impl Connection {
         func: F,
     ) -> Result<()>
     where
-        F: Fn(&Context, &mut [&mut ValueRef]),
+        F: FnMut(&Context, &mut [&mut ValueRef]) -> Result<()>,
     {
         let guard = self.lock();
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };

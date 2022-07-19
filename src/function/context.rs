@@ -38,8 +38,11 @@ impl InternalContext {
         &self.base as *const ffi::sqlite3_context as _
     }
 
-    pub unsafe fn user_data<U>(&self) -> &U {
-        &*(ffi::sqlite3_user_data(self.as_ptr()) as *const U)
+    /// # Safety
+    ///
+    /// The called must verify that Rust pointer aliasing rules are followed.
+    pub unsafe fn user_data<U>(&self) -> &mut U {
+        &mut *(ffi::sqlite3_user_data(self.as_ptr()) as *mut U)
     }
 
     /// Get the aggregate context, returning a mutable reference to it.
@@ -130,8 +133,10 @@ impl Context {
         };
     }
 
-    pub fn set_result(&self, val: impl ToContextResult) {
+    /// Assign the given value to the result of the function. This function always returns Ok.
+    pub fn set_result(&self, val: impl ToContextResult) -> Result<()> {
         unsafe { val.assign_to(self.as_ptr()) };
+        Ok(())
     }
 }
 

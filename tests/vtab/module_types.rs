@@ -58,7 +58,7 @@ impl VTabCursor<'_> for TestCursor {
         true
     }
 
-    fn column(&self, _: usize, _: &ColumnContext) {
+    fn column(&self, _: usize, _: &ColumnContext) -> Result<()> {
         unreachable!()
     }
 

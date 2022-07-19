@@ -106,7 +106,7 @@ impl<'vtab, Hooks: TestHooks + 'vtab> VTabCursor<'vtab> for TestVTabCursor<'vtab
         self.rowid >= self.vtab.num_rows
     }
 
-    fn column(&self, idx: usize, ctx: &ColumnContext) {
+    fn column(&self, idx: usize, ctx: &ColumnContext) -> Result<()> {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
         let ret = match () {
             _ if ctx.nochange() => Err(Error::NoChange),
@@ -115,7 +115,7 @@ impl<'vtab, Hooks: TestHooks + 'vtab> VTabCursor<'vtab> for TestVTabCursor<'vtab
                 .map(|l| format!("{}{}", *l as char, self.rowid))
                 .unwrap_or_else(|| format!("{{{}}}{}", idx, self.rowid))),
         };
-        ctx.set_result(ret);
+        ctx.set_result(ret)
     }
 
     fn rowid(&self) -> Result<i64> {

@@ -189,14 +189,14 @@ impl VTabCursor<'_> for Cursor {
         }
     }
 
-    fn column(&self, idx: usize, c: &ColumnContext) {
+    fn column(&self, idx: usize, c: &ColumnContext) -> Result<()> {
         let ret = match idx as _ {
             COLUMN_START => self.min_value,
             COLUMN_STOP => self.max_value,
             COLUMN_STEP => self.step,
             _ => self.value,
         };
-        c.set_result(ret);
+        c.set_result(ret)
     }
 
     fn rowid(&self) -> Result<i64> {

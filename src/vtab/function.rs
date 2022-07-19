@@ -2,6 +2,7 @@ use super::{
     super::{
         ffi,
         function::{Context, InternalContext},
+        types::*,
         value::*,
     },
     ConstraintOp, VTab,
@@ -67,7 +68,7 @@ impl<'vtab, T: VTab<'vtab> + 'vtab> VTabFunctionList<'vtab, T> {
         constraint: Option<ConstraintOp>,
         func: F,
     ) where
-        F: Fn(&Context, &mut [&mut ValueRef]) + 'vtab,
+        F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'vtab,
     {
         let func = wrap_fn(func);
         self._add(n_args, name, constraint, func);
@@ -84,7 +85,7 @@ impl<'vtab, T: VTab<'vtab> + 'vtab> VTabFunctionList<'vtab, T> {
         constraint: Option<ConstraintOp>,
         func: F,
     ) where
-        F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) + 'vtab,
+        F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) -> Result<()> + 'vtab,
     {
         let func = wrap_method(func);
         self._add(n_args, name, constraint, func);
@@ -114,12 +115,14 @@ fn wrap_fn<'vtab, T, F>(
 ) -> Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>
 where
     T: VTab<'vtab>,
-    F: Fn(&Context, &mut [&mut ValueRef]) + 'vtab,
+    F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'vtab,
 {
     Box::new(
         move |_: &T, ic: &InternalContext, a: &mut [&mut ValueRef]| {
             let ctx = unsafe { Context::from_ptr(ic.as_ptr()) };
-            func(ctx, a);
+            if let Err(e) = func(ctx, a) {
+                ctx.set_result(e).unwrap();
+            }
         },
     )
 }
@@ -129,12 +132,14 @@ fn wrap_method<'vtab, T, F>(
 ) -> Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>
 where
     T: VTab<'vtab>,
-    F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) + 'vtab,
+    F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) -> Result<()> + 'vtab,
 {
     Box::new(
         move |t: &T, ic: &InternalContext, a: &mut [&mut ValueRef]| {
             let ctx = unsafe { Context::from_ptr(ic.as_ptr()) };
-            func(t, ctx, a);
+            if let Err(e) = func(t, ctx, a) {
+                ctx.set_result(e).unwrap();
+            }
         },
     )
 }

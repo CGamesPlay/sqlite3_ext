@@ -253,7 +253,7 @@ impl<'vtab, O: Write> VTabCursor<'vtab> for VTabLogCursor<'vtab, O> {
         ret
     }
 
-    fn column(&self, idx: usize, context: &ColumnContext) {
+    fn column(&self, idx: usize, context: &ColumnContext) -> Result<()> {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
         let mut ret = match () {
             _ if context.nochange() => Err(Error::NoChange),

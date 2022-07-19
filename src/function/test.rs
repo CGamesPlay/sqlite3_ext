@@ -16,16 +16,14 @@ impl FromUserData<&'static str> for Agg {
 }
 
 impl AggregateFunction<&'static str> for Agg {
-    type Output = String;
-
     fn step(&mut self, _: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
         let a: &mut ValueRef = args[0];
         self.acc.push((a).get_str()?.unwrap_or("").to_owned());
         Ok(())
     }
 
-    fn value(&self, _: &Context) -> Self::Output {
-        self.acc.join(self.sep)
+    fn value(&self, c: &Context) {
+        c.set_result(self.acc.join(self.sep))
     }
 
     fn inverse(&mut self, _: &Context, _: &mut [&mut ValueRef]) -> Result<()> {
@@ -41,7 +39,7 @@ fn passthrough_arg() -> Result<()> {
         .set_deterministic(true)
         .set_risk_level(RiskLevel::Innocuous)
         .set_n_args(1);
-    h.db.create_scalar_function("passthrough", &opts, |_, a| a[0].get_unprotected_value())?;
+    h.db.create_scalar_function("passthrough", &opts, |c, a| c.set_result(&*a[0]))?;
     let ret =
         h.db.query_row("SELECT passthrough(?)", [1], |r| r[0].to_owned())?;
     assert_eq!(ret, Value::Integer(1));
@@ -56,7 +54,7 @@ fn user_data_scalar() -> Result<()> {
         .set_risk_level(RiskLevel::Innocuous)
         .set_n_args(0);
     let user_data = "foo";
-    h.db.create_scalar_function("user_data", &opts, move |_, _| user_data)?;
+    h.db.create_scalar_function("user_data", &opts, move |c, _| c.set_result(user_data))?;
 
     let ret =
         h.db.query_row("SELECT user_data()", (), |r| r[0].to_owned())?;
@@ -92,15 +90,15 @@ fn aux_data() -> Result<()> {
         .set_risk_level(RiskLevel::Innocuous)
         .set_n_args(2);
     // Returns the number of times that the first argument has been passed to the function.
-    h.db.create_scalar_function("aux_data", &opts, |context, _| -> i64 {
+    h.db.create_scalar_function("aux_data", &opts, |context, _| {
         match context.aux_data::<i64>(0) {
             Some(x) => {
                 *x += 1;
-                *x
+                context.set_result(*x)
             }
             None => {
                 context.set_aux_data(0, 1i64);
-                1
+                context.set_result(1)
             }
         }
     })?;

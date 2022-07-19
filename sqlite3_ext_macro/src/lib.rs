@@ -366,11 +366,10 @@ pub fn sqlite3_ext_doctest_impl(item: TokenStream) -> TokenStream {
 
         struct Cursor {}
         impl ::sqlite3_ext::vtab::VTabCursor<'_> for Cursor {
-            type ColumnType = ();
             fn filter(&mut self, _: i32, _: Option<&str>, _: &mut [&mut ValueRef]) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
             fn next(&mut self) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
             fn eof(&self) -> bool { todo!() }
-            fn column(&self, _: usize, _: &::sqlite3_ext::vtab::ColumnContext) { todo!() }
+            fn column(&self, _: usize, _: &::sqlite3_ext::vtab::ColumnContext) { }
             fn rowid(&self) -> std::result::Result<i64, ::sqlite3_ext::Error> { todo!() }
         }
     };

@@ -26,15 +26,13 @@ pub trait FromUserData<T> {
 /// In general, there is no reason to implement this trait instead of [AggregateFunction],
 /// because the latter provides a blanket implementation of the former.
 pub trait LegacyAggregateFunction<UserData>: FromUserData<UserData> {
-    /// The output type of the function.
-    type Output: ToContextResult;
-
-    /// Return the default value of the aggregate function.
+    /// Assign the default value of the aggregate function to the context using
+    /// [Context::set_result].
     ///
     /// This method is called when the aggregate function is invoked over an empty set of
     /// rows. The default implementation is equivalent to
     /// `Self::from_user_data(user_data).value(context)`.
-    fn default_value(user_data: &UserData, context: &Context) -> Self::Output
+    fn default_value(user_data: &UserData, context: &Context)
     where
         Self: Sized,
     {
@@ -44,8 +42,9 @@ pub trait LegacyAggregateFunction<UserData>: FromUserData<UserData> {
     /// Add a new row to the aggregate.
     fn step(&mut self, context: &Context, args: &mut [&mut ValueRef]) -> Result<()>;
 
-    /// Return the current value of the aggregate function.
-    fn value(&self, context: &Context) -> Self::Output;
+    /// Assign the current value of the aggregate function to the context using
+    /// [Context::set_result].
+    fn value(&self, context: &Context);
 }
 
 /// Implement an application-defined aggregate window function.
@@ -53,15 +52,13 @@ pub trait LegacyAggregateFunction<UserData>: FromUserData<UserData> {
 /// The function can be registered with a database connection using
 /// [Connection::create_aggregate_function].
 pub trait AggregateFunction<UserData>: FromUserData<UserData> {
-    /// The output type of the function.
-    type Output: ToContextResult;
-
-    /// Return the default value of the aggregate function.
+    /// Assign the default value of the aggregate function to the context using
+    /// [Context::set_result].
     ///
     /// This method is called when the aggregate function is invoked over an empty set of
     /// rows. The default implementation is equivalent to
     /// `Self::from_user_data(user_data).value(context)`.
-    fn default_value(user_data: &UserData, context: &Context) -> Self::Output
+    fn default_value(user_data: &UserData, context: &Context)
     where
         Self: Sized,
     {
@@ -71,8 +68,9 @@ pub trait AggregateFunction<UserData>: FromUserData<UserData> {
     /// Add a new row to the aggregate.
     fn step(&mut self, context: &Context, args: &mut [&mut ValueRef]) -> Result<()>;
 
-    /// Return the current value of the aggregate function.
-    fn value(&self, context: &Context) -> Self::Output;
+    /// Assign the current value of the aggregate function to the context using
+    /// [Context::set_result].
+    fn value(&self, context: &Context);
 
     /// Remove the oldest presently aggregated row.
     ///
@@ -88,9 +86,7 @@ impl<U, F: Default> FromUserData<U> for F {
 }
 
 impl<U, T: AggregateFunction<U>> LegacyAggregateFunction<U> for T {
-    type Output = T::Output;
-
-    fn default_value(user_data: &U, context: &Context) -> Self::Output {
+    fn default_value(user_data: &U, context: &Context) {
         <T as AggregateFunction<U>>::default_value(user_data, context)
     }
 
@@ -98,7 +94,7 @@ impl<U, T: AggregateFunction<U>> LegacyAggregateFunction<U> for T {
         <T as AggregateFunction<U>>::step(self, context, args)
     }
 
-    fn value(&self, context: &Context) -> Self::Output {
+    fn value(&self, context: &Context) {
         <T as AggregateFunction<U>>::value(self, context)
     }
 }
@@ -199,22 +195,24 @@ impl Connection {
         }
     }
 
-    /// Create a new scalar function.
+    /// Create a new scalar function. The function will be invoked with a [Context] and an array of
+    /// [ValueRef] objects. The function is required to set its output using [Context::set_result].
+    /// If no result is set, SQL NULL is returned.
     ///
     /// # Compatibility
     ///
     /// On versions of SQLite earlier than 3.7.3, this function will leak the function and
     /// all bound variables. This is because these versions of SQLite did not provide the
     /// ability to specify a destructor function.
-    pub fn create_scalar_function<
-        R: ToContextResult,
-        F: Fn(&Context, &mut [&mut ValueRef]) -> R + 'static,
-    >(
+    pub fn create_scalar_function<F>(
         &self,
         name: &str,
         opts: &FunctionOptions,
         func: F,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        F: Fn(&Context, &mut [&mut ValueRef]),
+    {
         let guard = self.lock();
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
         let func = Box::new(func);
@@ -227,7 +225,7 @@ impl Connection {
                         opts.n_args,
                         opts.flags,
                         Box::into_raw(func) as _,
-                        Some(stubs::call_scalar::<R, F>),
+                        Some(stubs::call_scalar::<F>),
                         None,
                         None,
                         Some(ffi::drop_boxed::<F>),
@@ -238,7 +236,7 @@ impl Connection {
                         opts.n_args,
                         opts.flags,
                         Box::into_raw(func) as _,
-                        Some(stubs::call_scalar::<R, F>),
+                        Some(stubs::call_scalar::<F>),
                         None,
                         None,
                     ),

@@ -120,8 +120,6 @@ struct Cursor {
 }
 
 impl VTabCursor<'_> for Cursor {
-    type ColumnType = i64;
-
     fn filter(
         &mut self,
         query_plan: i32,
@@ -191,13 +189,14 @@ impl VTabCursor<'_> for Cursor {
         }
     }
 
-    fn column(&self, idx: usize, _: &ColumnContext) -> i64 {
-        match idx as _ {
+    fn column(&self, idx: usize, c: &ColumnContext) {
+        let ret = match idx as _ {
             COLUMN_START => self.min_value,
             COLUMN_STOP => self.max_value,
             COLUMN_STEP => self.step,
             _ => self.value,
-        }
+        };
+        c.set_result(ret);
     }
 
     fn rowid(&self) -> Result<i64> {

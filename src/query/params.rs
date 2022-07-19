@@ -158,7 +158,6 @@ to_param!(bool as (stmt, pos, val) => ffi::sqlite3_bind_int(stmt, pos, val as i3
 to_param!(i64 as (stmt, pos, val) => ffi::sqlite3_bind_int64(stmt, pos, val));
 to_param!(f64 as (stmt, pos, val) => ffi::sqlite3_bind_double(stmt, pos, val));
 to_param!(&mut ValueRef as (stmt, pos, val) => ffi::sqlite3_bind_value(stmt, pos, val.as_ptr()));
-to_param!(UnprotectedValue as (stmt, pos, val) => ffi::sqlite3_bind_value(stmt, pos, val.as_ptr()));
 to_param!(&'static str as (stmt, pos, val) => {
     let val = val.as_bytes();
     let len = val.len();
@@ -176,6 +175,13 @@ to_param!(String as (stmt, pos, val) => {
         _ => ffi::sqlite3_bind_text(stmt, pos, cstring, len as _, Some(ffi::drop_cstring)),
     }
 });
+
+#[sealed]
+impl<'a> ToParam for &'a ValueRef {
+    fn bind_param(self, stmt: &mut Statement, pos: i32) -> Result<()> {
+        unsafe { Error::from_sqlite(ffi::sqlite3_bind_value(stmt.base, pos, self.as_ptr())) }
+    }
+}
 
 /// Sets the parameter to a dynamically typed [Value].
 #[sealed]

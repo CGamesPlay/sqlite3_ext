@@ -29,10 +29,14 @@ impl TestHelpers {
         // Safe because we remove the function inside this function.
         let func: Box<dyn 'static + Fn(&mut ValueRef) -> Result<()>> = unsafe { transmute(func) };
         self.db
-            .create_scalar_function("produce", &opts, move |_, _| input.replace(None).unwrap())
+            .create_scalar_function("produce", &opts, move |c, _| {
+                c.set_result(input.replace(None).unwrap())
+            })
             .unwrap();
         self.db
-            .create_scalar_function("with_value", &opts, move |_, args| func(args[0]))
+            .create_scalar_function("with_value", &opts, move |c, args| {
+                c.set_result(func(args[0]))
+            })
             .unwrap();
         self.db
             .query_row("SELECT with_value(produce())", (), |_| Ok(()))
@@ -47,7 +51,9 @@ impl TestHelpers {
         // Safe because we remove the function inside this function.
         let func: Box<dyn 'static + Fn(&mut ValueRef) -> Result<()>> = unsafe { transmute(func) };
         self.db
-            .create_scalar_function("with_value", &opts, move |_, args| func(args[0]))
+            .create_scalar_function("with_value", &opts, move |c, args| {
+                c.set_result(func(args[0]))
+            })
             .unwrap();
         self.db
             .query_row(&format!("SELECT with_value({})", sql), (), |_| Ok(()))

@@ -41,8 +41,6 @@ impl CreateVTab<'_> for TestVTab {
 }
 
 impl VTabCursor<'_> for TestCursor {
-    type ColumnType = ();
-
     fn filter(
         &mut self,
         _index_num: i32,

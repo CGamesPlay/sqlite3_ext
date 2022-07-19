@@ -5,6 +5,7 @@
 use super::{ffi, iterator::*, sqlite3_match_version, types::*, value::*, Connection};
 pub use params::*;
 use std::{
+    convert::{AsMut, AsRef},
     ffi::{CStr, CString},
     mem::MaybeUninit,
     num::NonZeroI32,
@@ -122,12 +123,11 @@ impl Connection {
 
     /// Convenience method for `self.prepare(sql)?.query_row(params, f)`. See
     /// [Statement::query_row].
-    pub fn query_row<P: Params, R, F: FnOnce(&mut QueryResult) -> Result<R>>(
-        &self,
-        sql: &str,
-        params: P,
-        f: F,
-    ) -> Result<R> {
+    pub fn query_row<P, R, F>(&self, sql: &str, params: P, f: F) -> Result<R>
+    where
+        P: Params,
+        F: FnOnce(&mut QueryResult) -> Result<R>,
+    {
         self.prepare(sql)?.query_row(params, f)
     }
 
@@ -172,24 +172,22 @@ impl Statement {
 
     /// Execute a query which is expected to return only a single row.
     ///
-    /// This method will fail with [SQLITE_MISUSE] if the query returns more than a single
-    /// row. It will fail with [SQLITE_EMPTY] if the query does not return any rows.
+    /// This method will fail with [SQLITE_EMPTY] if the query does not return any rows. If
+    /// the query has multiple rows, only the first will be returned.
     ///
     /// If you are not storing this Statement for later reuse, [Connection::query_row] is a
     /// shortcut for this method.
-    pub fn query_row<P: Params, R, F: FnOnce(&mut QueryResult) -> Result<R>>(
-        &mut self,
-        params: P,
-        f: F,
-    ) -> Result<R> {
+    pub fn query_row<'a, P, R, F>(&'a mut self, params: P, f: F) -> Result<R>
+    where
+        P: Params,
+        R: 'a,
+        F: FnOnce(&'a mut QueryResult) -> Result<R>,
+    {
         let rs = self.query(params)?;
         let ret = match rs.next()? {
             None => return Err(SQLITE_EMPTY),
             Some(r) => f(r)?,
         };
-        if let Some(_) = rs.next()? {
-            return Err(SQLITE_MISUSE);
-        }
         Ok(ret)
     }
 
@@ -393,28 +391,6 @@ impl Column {
         Self { stmt, position }
     }
 
-    /// Get the bytes of this BLOB value.
-    ///
-    /// # Safety
-    ///
-    /// If the type of this value is not BLOB, the behavior of this function is undefined.
-    pub unsafe fn get_blob_unchecked(&self) -> &[u8] {
-        let len = ffi::sqlite3_column_bytes(self.stmt, self.position as _);
-        let data = ffi::sqlite3_column_blob(self.stmt, self.position as _);
-        slice::from_raw_parts(data as _, len as _)
-    }
-
-    /// Get the underlying TEXT value.
-    ///
-    /// This method will fail if the value has invalid UTF-8.
-    ///
-    /// # Safety
-    ///
-    /// If the type of this value is not TEXT, the behavior of this function is undefined.
-    pub unsafe fn get_str_unchecked(&self) -> Result<&str> {
-        Ok(str::from_utf8(self.get_blob_unchecked())?)
-    }
-
     /// Returns the value of the AS clause for this column, if one was specified. If no AS
     /// clause was specified, the name of the column is unspecified and may change from one
     /// release of SQLite to the next.
@@ -483,6 +459,18 @@ impl Column {
     }
 }
 
+impl AsRef<ValueRef> for Column {
+    fn as_ref(&self) -> &ValueRef {
+        unsafe { ValueRef::from_ptr(ffi::sqlite3_column_value(self.stmt, self.position as _)) }
+    }
+}
+
+impl AsMut<ValueRef> for Column {
+    fn as_mut(&mut self) -> &mut ValueRef {
+        unsafe { ValueRef::from_ptr(ffi::sqlite3_column_value(self.stmt, self.position as _)) }
+    }
+}
+
 impl FromValue for Column {
     fn value_type(&self) -> ValueType {
         unsafe { ValueType::from_sqlite(ffi::sqlite3_column_type(self.stmt, self.position as _)) }
@@ -500,6 +488,12 @@ impl FromValue for Column {
         unsafe { ffi::sqlite3_column_double(self.stmt, self.position as _) }
     }
 
+    unsafe fn get_blob_unchecked(&self) -> &[u8] {
+        let len = ffi::sqlite3_column_bytes(self.stmt, self.position as _);
+        let data = ffi::sqlite3_column_blob(self.stmt, self.position as _);
+        slice::from_raw_parts(data as _, len as _)
+    }
+
     fn get_blob(&mut self) -> Result<Option<&[u8]>> {
         unsafe {
             let data = ffi::sqlite3_column_blob(self.stmt, self.position as _);
@@ -514,26 +508,6 @@ impl FromValue for Column {
                 Ok(Some(slice::from_raw_parts(data as _, len as _)))
             }
         }
-    }
-
-    fn get_str(&mut self) -> Result<Option<&str>> {
-        Ok(self.get_blob()?.map(|b| str::from_utf8(b)).transpose()?)
-    }
-
-    fn to_owned(&self) -> Result<Value> {
-        match self.value_type() {
-            ValueType::Integer => Ok(Value::from(self.get_i64())),
-            ValueType::Float => Ok(Value::from(self.get_f64())),
-            ValueType::Text => unsafe { Ok(Value::from(self.get_str_unchecked()?.to_owned())) },
-            ValueType::Blob => unsafe { Ok(Value::from(Blob::from(self.get_blob_unchecked()))) },
-            ValueType::Null => Ok(Value::Null),
-        }
-    }
-
-    fn get_unprotected_value(&mut self) -> UnprotectedValue {
-        UnprotectedValue::from_ptr(unsafe {
-            ffi::sqlite3_column_value(self.stmt, self.position as _)
-        })
     }
 }
 

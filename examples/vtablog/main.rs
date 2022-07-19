@@ -219,8 +219,6 @@ impl<O: Write> Drop for VTabLog<O> {
 }
 
 impl<'vtab, O: Write> VTabCursor<'vtab> for VTabLogCursor<'vtab, O> {
-    type ColumnType = Result<String>;
-
     fn filter(&mut self, _: i32, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
         writeln!(
             self.vtab,
@@ -255,21 +253,23 @@ impl<'vtab, O: Write> VTabCursor<'vtab> for VTabLogCursor<'vtab, O> {
         ret
     }
 
-    fn column(&self, idx: usize, context: &ColumnContext) -> Self::ColumnType {
+    fn column(&self, idx: usize, context: &ColumnContext) {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
-        let ret = match () {
+        let mut ret = match () {
             _ if context.nochange() => Err(Error::NoChange),
             _ => Ok(ALPHABET
                 .get(idx)
                 .map(|l| format!("{}{}", *l as char, self.rowid))
                 .unwrap_or_else(|| format!("{{{}}}{}", idx, self.rowid))),
         };
-        writeln!(
+        if let Err(e) = writeln!(
             self.vtab,
             "column(tab={}, cursor={}, idx={}) -> {:?}",
             self.vtab.id, self.id, idx, ret
-        )?;
-        ret
+        ) {
+            ret = Err(e.into())
+        }
+        context.set_result(ret)
     }
 
     fn rowid(&self) -> Result<i64> {

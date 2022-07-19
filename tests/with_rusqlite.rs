@@ -4,7 +4,9 @@ fn init(conn: &sqlite3_ext::Connection) -> sqlite3_ext::Result<()> {
         .set_deterministic(true)
         .set_risk_level(sqlite3_ext::RiskLevel::Innocuous)
         .set_n_args(0);
-    conn.create_scalar_function("user_function", &opts, |_, _| "user defined function")?;
+    conn.create_scalar_function("user_function", &opts, |c, _| {
+        c.set_result("user defined function")
+    })?;
     Ok(())
 }
 

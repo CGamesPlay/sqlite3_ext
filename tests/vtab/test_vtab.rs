@@ -92,8 +92,6 @@ impl<'vtab, Hooks: TestHooks + 'vtab> FindFunctionVTab<'vtab> for TestVTab<'vtab
 }
 
 impl<'vtab, Hooks: TestHooks + 'vtab> VTabCursor<'vtab> for TestVTabCursor<'vtab, Hooks> {
-    type ColumnType = Result<String>;
-
     fn filter(&mut self, _: i32, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
         self.rowid = 0;
         self.vtab.hooks.filter(self, args)
@@ -108,15 +106,16 @@ impl<'vtab, Hooks: TestHooks + 'vtab> VTabCursor<'vtab> for TestVTabCursor<'vtab
         self.rowid >= self.vtab.num_rows
     }
 
-    fn column(&self, idx: usize, context: &ColumnContext) -> Self::ColumnType {
+    fn column(&self, idx: usize, ctx: &ColumnContext) {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
-        match () {
-            _ if context.nochange() => Err(Error::NoChange),
+        let ret = match () {
+            _ if ctx.nochange() => Err(Error::NoChange),
             _ => Ok(ALPHABET
                 .get(idx)
                 .map(|l| format!("{}{}", *l as char, self.rowid))
                 .unwrap_or_else(|| format!("{{{}}}{}", idx, self.rowid))),
-        }
+        };
+        ctx.set_result(ret);
     }
 
     fn rowid(&self) -> Result<i64> {

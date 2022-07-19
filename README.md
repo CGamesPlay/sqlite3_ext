@@ -104,7 +104,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_column_text | sqlite3_stmt | :white_check_mark: | Column::get_str |
 | sqlite3_column_text16 | sqlite3_stmt | :grey_exclamation: | Use UTF-8 equivalent |
 | sqlite3_column_type | sqlite3_stmt | :white_check_mark: | Column::value_type |
-| sqlite3_column_value | sqlite3_stmt | :white_check_mark: | Column::get_unprotected_value |
+| sqlite3_column_value | sqlite3_stmt | :white_check_mark: | Column::as_ref |
 | sqlite3_commit_hook | sqlite3 | | |
 | sqlite3_compileoption_get |  | | |
 | sqlite3_compileoption_used |  | | |

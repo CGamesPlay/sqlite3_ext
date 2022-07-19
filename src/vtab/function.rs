@@ -1,7 +1,7 @@
 use super::{
     super::{
         ffi,
-        function::{Context, InternalContext, ToContextResult},
+        function::{Context, InternalContext},
         value::*,
     },
     ConstraintOp, VTab,
@@ -9,7 +9,6 @@ use super::{
 use std::{
     borrow::Cow,
     cell::{Cell, RefCell},
-    marker::PhantomData,
     os::raw::c_int,
     pin::Pin,
     slice,
@@ -22,14 +21,7 @@ type CFunc = unsafe extern "C" fn(*mut ffi::sqlite3_context, c_int, *mut *mut ff
 /// This object is responsible for storing the data associated with overloaded functions. All
 /// functions stored in the list must last for the entire lifetime of the virtual table.
 pub struct VTabFunctionList<'vtab, T: VTab<'vtab> + ?Sized> {
-    list: RefCell<Vec<Pin<Box<dyn VTabFunction<'vtab, T> + 'vtab>>>>,
-}
-
-pub(crate) trait VTabFunction<'vtab, T: VTab<'vtab>> {
-    fn n_args(&self) -> i32;
-    fn name(&self) -> &Cow<'vtab, str>;
-    fn constraint(&self) -> Option<ConstraintOp>;
-    fn bind(&self, vtab: &'vtab T) -> (CFunc, *mut ::std::os::raw::c_void);
+    list: RefCell<Vec<Pin<Box<VTabFunction<'vtab, T>>>>>,
 }
 
 impl<'vtab, T: VTab<'vtab> + ?Sized> Default for VTabFunctionList<'vtab, T> {
@@ -41,6 +33,22 @@ impl<'vtab, T: VTab<'vtab> + ?Sized> Default for VTabFunctionList<'vtab, T> {
 }
 
 impl<'vtab, T: VTab<'vtab> + 'vtab> VTabFunctionList<'vtab, T> {
+    fn _add(
+        &self,
+        n_args: i32,
+        name: impl Into<Cow<'vtab, str>>,
+        constraint: Option<ConstraintOp>,
+        func: Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>,
+    ) {
+        assert!((-1..128).contains(&n_args), "n_args invalid");
+        if let Some(c) = &constraint {
+            c.assert_valid_function_constraint();
+        }
+        self.list
+            .borrow_mut()
+            .push(VTabFunction::new(n_args, name, constraint, func));
+    }
+
     /// Add a scalar function to the list.
     ///
     /// This method adds a function with the given name and n_args to the list of
@@ -52,35 +60,34 @@ impl<'vtab, T: VTab<'vtab> + 'vtab> VTabFunctionList<'vtab, T> {
     ///
     /// The function and all closed variables must live for the duration of the virtual
     /// table.
-    pub fn add<R: ToContextResult + 'vtab, F: Fn(&Context, &mut [&mut ValueRef]) -> R + 'vtab>(
+    pub fn add<F>(
         &self,
         n_args: i32,
         name: impl Into<Cow<'vtab, str>>,
         constraint: Option<ConstraintOp>,
         func: F,
-    ) {
-        self.list
-            .borrow_mut()
-            .push(VTabFunctionFree::new(n_args, name, constraint, func));
+    ) where
+        F: Fn(&Context, &mut [&mut ValueRef]) + 'vtab,
+    {
+        let func = wrap_fn(func);
+        self._add(n_args, name, constraint, func);
     }
 
     /// Add a method to the list.
     ///
     /// This function works similarly to [add](VTabFunctionList::add), except the function
     /// will receive the virtual table as the first parameter.
-    pub fn add_method<
-        R: ToContextResult + 'vtab,
-        F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) -> R + 'vtab,
-    >(
+    pub fn add_method<F>(
         &self,
         n_args: i32,
         name: impl Into<Cow<'vtab, str>>,
         constraint: Option<ConstraintOp>,
         func: F,
-    ) {
-        self.list
-            .borrow_mut()
-            .push(VTabFunctionMethod::new(n_args, name, constraint, func));
+    ) where
+        F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) + 'vtab,
+    {
+        let func = wrap_method(func);
+        self._add(n_args, name, constraint, func);
     }
 
     /// Find the best overridden implementation of a function in this list. Prefer a
@@ -95,127 +102,86 @@ impl<'vtab, T: VTab<'vtab> + 'vtab> VTabFunctionList<'vtab, T> {
         name: &str,
     ) -> Option<((CFunc, *mut ::std::os::raw::c_void), Option<ConstraintOp>)> {
         let list = self.list.borrow();
-        let found = [n_args, -1].into_iter().find_map(|n_args| {
-            list.iter()
-                .find(|f| f.n_args() == n_args && f.name() == name)
-        });
-        found.map(|r| (r.bind(vtab), r.constraint()))
+        let found = [n_args, -1]
+            .into_iter()
+            .find_map(|n_args| list.iter().find(|f| f.n_args == n_args && f.name == name));
+        found.map(|r| (r.bind(vtab), r.constraint))
     }
 }
 
-macro_rules! declare_vtab_function {
-    (
-        $name:ident,
-        ( $t:ident, $($ty:tt)* ),
-        { $($field_name:ident: $field_type:ty),* },
-        { $($field_init:ident: $field_ctor:expr)* },
-        | $self:tt, $vtab:tt | $expr:expr,
-        $func:ident
-     ) => {
-        struct $name<'vtab, $t: VTab<'vtab>, R: ToContextResult, F: $($ty)*> {
-            n_args: i32,
-            name: Cow<'vtab, str>,
-            constraint: Option<ConstraintOp>,
-            func: F,
-            $($field_name: $field_type),*
-        }
-
-        impl<'vtab, $t: VTab<'vtab> + 'vtab, R: ToContextResult + 'vtab, F: $($ty)* + 'vtab>
-            $name<'vtab, $t, R, F>
-        {
-            pub fn new(
-                n_args: i32,
-                name: impl Into<Cow<'vtab, str>>,
-                constraint: Option<ConstraintOp>,
-                func: F,
-            ) -> Pin<Box<dyn VTabFunction<'vtab, $t> + 'vtab>> {
-                assert!((-1..128).contains(&n_args), "n_args invalid");
-                if let Some(c) = &constraint {
-                    c.assert_valid_function_constraint();
-                }
-                Box::pin($name {
-                    n_args,
-                    name: name.into(),
-                    constraint,
-                    func,
-                    $($field_init: $field_ctor),*
-                })
-            }
-        }
-
-        impl<'vtab, $t: VTab<'vtab>, R: ToContextResult, F: $($ty)*> VTabFunction<'vtab, $t>
-            for $name<'vtab, $t, R, F>
-        {
-            fn n_args(&self) -> i32 {
-                self.n_args
-            }
-
-            fn name(&self) -> &Cow<'vtab, str> {
-                &self.name
-            }
-
-            fn constraint(&self) -> Option<ConstraintOp> {
-                self.constraint
-            }
-
-            fn bind(&self, $vtab: &'vtab $t) -> (CFunc, *mut ::std::os::raw::c_void) {
-                let $self = self;
-                $expr;
-                ($func::<$t, R, F>, self as *const _ as _)
-            }
-        }
-    };
+fn wrap_fn<'vtab, T, F>(
+    func: F,
+) -> Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>
+where
+    T: VTab<'vtab>,
+    F: Fn(&Context, &mut [&mut ValueRef]) + 'vtab,
+{
+    Box::new(
+        move |_: &T, ic: &InternalContext, a: &mut [&mut ValueRef]| {
+            let ctx = unsafe { Context::from_ptr(ic.as_ptr()) };
+            func(ctx, a);
+        },
+    )
 }
 
-declare_vtab_function!(
-    VTabFunctionFree,
-    (T, Fn(&Context, &mut [&mut ValueRef]) -> R),
-    { phantom: PhantomData<T> },
-    { phantom: PhantomData },
-    |_, _| (),
-    call_vtab_free
-);
-declare_vtab_function!(
-    VTabFunctionMethod,
-    (T, Fn(&'vtab T, &Context, &mut [&mut ValueRef]) -> R),
-    { vtab: Cell<Option<&'vtab T>> },
-    { vtab: Cell::new(None) },
-    |s, vtab| s.vtab.set(Some(vtab)),
-    call_vtab_method
-);
+fn wrap_method<'vtab, T, F>(
+    func: F,
+) -> Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>
+where
+    T: VTab<'vtab>,
+    F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) + 'vtab,
+{
+    Box::new(
+        move |t: &T, ic: &InternalContext, a: &mut [&mut ValueRef]| {
+            let ctx = unsafe { Context::from_ptr(ic.as_ptr()) };
+            func(t, ctx, a);
+        },
+    )
+}
 
-unsafe extern "C" fn call_vtab_free<
-    'vtab,
-    T: VTab<'vtab> + 'vtab,
-    R: ToContextResult,
-    F: Fn(&Context, &mut [&mut ValueRef]) -> R,
->(
+struct VTabFunction<'vtab, T: VTab<'vtab> + ?Sized> {
+    n_args: i32,
+    name: Cow<'vtab, str>,
+    constraint: Option<ConstraintOp>,
+    vtab: Cell<Option<&'vtab T>>,
+    func: Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>,
+}
+
+impl<'vtab, T: VTab<'vtab>> VTabFunction<'vtab, T> {
+    pub fn new(
+        n_args: i32,
+        name: impl Into<Cow<'vtab, str>>,
+        constraint: Option<ConstraintOp>,
+        func: Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>,
+    ) -> Pin<Box<Self>> {
+        Box::pin(Self {
+            n_args,
+            name: name.into(),
+            constraint,
+            vtab: Cell::new(None),
+            func,
+        })
+    }
+
+    pub fn bind(&self, vtab: &'vtab T) -> (CFunc, *mut ::std::os::raw::c_void) {
+        self.vtab.set(Some(vtab));
+        (call_vtab_method::<T>, self as *const Self as *mut Self as _)
+    }
+
+    pub fn invoke(&self, ic: &InternalContext, a: &mut [&mut ValueRef]) {
+        (*self.func)(self.vtab.get().unwrap(), ic, a);
+    }
+}
+
+unsafe extern "C" fn call_vtab_method<'vtab, T>(
     context: *mut ffi::sqlite3_context,
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
-) {
-    let ic = InternalContext::from_ptr(context);
-    let vtab_function = ic.user_data::<VTabFunctionFree<'vtab, T, R, F>>();
-    let ctx = Context::from_ptr(context);
-    let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
-    let ret = (vtab_function.func)(ctx, args);
-    ic.set_result(ret);
-}
-
-unsafe extern "C" fn call_vtab_method<
-    'vtab,
+) where
     T: VTab<'vtab> + 'vtab,
-    R: ToContextResult,
-    F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) -> R,
->(
-    context: *mut ffi::sqlite3_context,
-    argc: i32,
-    argv: *mut *mut ffi::sqlite3_value,
-) {
+{
     let ic = InternalContext::from_ptr(context);
-    let vtab_function = ic.user_data::<VTabFunctionMethod<'vtab, T, R, F>>();
-    let ctx = Context::from_ptr(context);
+    let vtab_function = ic.user_data::<VTabFunction<'vtab, T>>();
     let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
-    let ret = (vtab_function.func)(vtab_function.vtab.get().unwrap(), ctx, args);
-    ic.set_result(ret);
+    vtab_function.invoke(ic, args);
 }

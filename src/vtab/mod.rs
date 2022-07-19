@@ -174,9 +174,6 @@ pub trait RenameVTab<'vtab>: VTab<'vtab> {
 
 /// Implementation of the cursor type for a virtual table.
 pub trait VTabCursor<'vtab> {
-    /// The type of all columns in this virtual table.
-    type ColumnType: ToContextResult;
-
     /// Begin a search of the virtual table. This method is always invoked after creating
     /// the cursor, before any other methods of this trait. After calling this method, the
     /// cursor should point to the first row of results (or [eof](VTabCursor::eof) should
@@ -199,8 +196,9 @@ pub trait VTabCursor<'vtab> {
     fn eof(&self) -> bool;
 
     /// Fetch the column numbered idx for the current row. The indexes correspond to the
-    /// order the columns were declared by [VTab::connect].
-    fn column(&self, idx: usize, context: &ColumnContext) -> Self::ColumnType;
+    /// order the columns were declared by [VTab::connect]. The output value must be assigned to
+    /// the context using [ColumnContext::set_result].
+    fn column(&self, idx: usize, context: &ColumnContext);
 
     /// Fetch the rowid for the current row.
     fn rowid(&self) -> Result<i64>;
@@ -532,5 +530,9 @@ impl ColumnContext {
             3_022_000 => (unsafe { ffi::sqlite3_vtab_nochange(self.as_ptr()) } != 0),
             _ => false,
         }
+    }
+
+    pub fn set_result(&self, val: impl ToContextResult) {
+        unsafe { val.assign_to(self.as_ptr()) };
     }
 }

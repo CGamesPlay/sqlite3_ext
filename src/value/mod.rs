@@ -2,14 +2,12 @@ use super::{ffi, sqlite3_match_version, types::*};
 pub use blob::*;
 pub use passed_ref::*;
 use std::{marker::PhantomData, ptr, slice, str};
-pub use unprotected::*;
 pub use unsafe_ptr::*;
 pub use value_list::*;
 
 mod blob;
 mod passed_ref;
 mod test;
-mod unprotected;
 mod unsafe_ptr;
 mod value_list;
 
@@ -36,6 +34,10 @@ impl ValueType {
 }
 
 /// Allows access to an underlying SQLite value.
+// This trait isn't really useful as a trait bound anywhere, and only serves to ensure that
+// ValueRef and Column provide a similar interface. Column could Deref to Value, but this
+// actually involves an internal conversion of the held value (the MEM_Static flag becomes
+// MEM_Ephem), and I'm not sure what kind of performance penalty that would bring.
 pub trait FromValue {
     /// Returns the data type of the ValueRef. Note that calling get methods on the
     /// ValueRef may cause a conversion to a different data type, but this is not
@@ -56,8 +58,26 @@ pub trait FromValue {
     /// Interpret this value as f64.
     fn get_f64(&self) -> f64;
 
+    /// Get the bytes of this BLOB value.
+    ///
+    /// # Safety
+    ///
+    /// If the type of this value is not BLOB, the behavior of this function is undefined.
+    unsafe fn get_blob_unchecked(&self) -> &[u8];
+
     /// Interpret this value as a BLOB.
     fn get_blob(&mut self) -> Result<Option<&[u8]>>;
+
+    /// Get the underlying TEXT value.
+    ///
+    /// This method will fail if the value has invalid UTF-8.
+    ///
+    /// # Safety
+    ///
+    /// If the type of this value is not TEXT, the behavior of this function is undefined.
+    unsafe fn get_str_unchecked(&self) -> Result<&str> {
+        Ok(str::from_utf8(self.get_blob_unchecked())?)
+    }
 
     /// Interpret the value as `Option<&str>`.
     ///
@@ -69,11 +89,15 @@ pub trait FromValue {
     }
 
     /// Clone the value, returning a [Value].
-    fn to_owned(&self) -> Result<Value>;
-
-    /// Convert the value to an UnprotectedValue, suitable for passing to other SQLite
-    /// interfaces.
-    fn get_unprotected_value(&mut self) -> UnprotectedValue;
+    fn to_owned(&self) -> Result<Value> {
+        match self.value_type() {
+            ValueType::Integer => Ok(Value::from(self.get_i64())),
+            ValueType::Float => Ok(Value::from(self.get_f64())),
+            ValueType::Text => unsafe { Ok(Value::from(self.get_str_unchecked()?.to_owned())) },
+            ValueType::Blob => unsafe { Ok(Value::from(Blob::from(self.get_blob_unchecked()))) },
+            ValueType::Null => Ok(Value::Null),
+        }
+    }
 }
 
 /// A protected SQL value.
@@ -148,28 +172,6 @@ impl ValueRef {
         }
     }
 
-    /// Get the bytes of this BLOB value.
-    ///
-    /// # Safety
-    ///
-    /// If the type of this value is not BLOB, the behavior of this function is undefined.
-    pub unsafe fn get_blob_unchecked(&self) -> &[u8] {
-        let len = ffi::sqlite3_value_bytes(self.as_ptr());
-        let data = ffi::sqlite3_value_blob(self.as_ptr());
-        slice::from_raw_parts(data as _, len as _)
-    }
-
-    /// Get the underlying TEXT value.
-    ///
-    /// This method will fail if the value has invalid UTF-8.
-    ///
-    /// # Safety
-    ///
-    /// If the type of this value is not TEXT, the behavior of this function is undefined.
-    pub unsafe fn get_str_unchecked(&self) -> Result<&str> {
-        Ok(str::from_utf8(self.get_blob_unchecked())?)
-    }
-
     // Caller is responsible for enforcing Rust pointer aliasing rules.
     unsafe fn get_ref_internal<T: 'static>(&self) -> Option<&mut PassedRef<T>> {
         sqlite3_match_version! {
@@ -222,6 +224,12 @@ impl FromValue for ValueRef {
         unsafe { ffi::sqlite3_value_double(self.as_ptr()) }
     }
 
+    unsafe fn get_blob_unchecked(&self) -> &[u8] {
+        let len = ffi::sqlite3_value_bytes(self.as_ptr());
+        let data = ffi::sqlite3_value_blob(self.as_ptr());
+        slice::from_raw_parts(data as _, len as _)
+    }
+
     fn get_blob(&mut self) -> Result<Option<&[u8]>> {
         unsafe {
             let data = ffi::sqlite3_value_blob(self.as_ptr());
@@ -236,24 +244,6 @@ impl FromValue for ValueRef {
                 Ok(Some(slice::from_raw_parts(data as _, len as _)))
             }
         }
-    }
-
-    fn get_str(&mut self) -> Result<Option<&str>> {
-        Ok(self.get_blob()?.map(|b| str::from_utf8(b)).transpose()?)
-    }
-
-    fn to_owned(&self) -> Result<Value> {
-        match self.value_type() {
-            ValueType::Integer => Ok(Value::from(self.get_i64())),
-            ValueType::Float => Ok(Value::from(self.get_f64())),
-            ValueType::Text => unsafe { Ok(Value::from(self.get_str_unchecked()?.to_owned())) },
-            ValueType::Blob => unsafe { Ok(Value::from(Blob::from(self.get_blob_unchecked()))) },
-            ValueType::Null => Ok(Value::Null),
-        }
-    }
-
-    fn get_unprotected_value(&mut self) -> UnprotectedValue {
-        unsafe { UnprotectedValue::from_ptr(self.as_ptr()) }
     }
 }
 

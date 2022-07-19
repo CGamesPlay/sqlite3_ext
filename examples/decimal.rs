@@ -16,14 +16,15 @@ fn process_args(args: &mut [&mut ValueRef]) -> Result<Vec<Option<BigDecimal>>> {
 
 macro_rules! scalar_method {
     ($name:ident as ( $a:ident, $b:ident ) -> $ty:ty => $ret:expr) => {
-        fn $name(_: &Context, args: &mut [&mut ValueRef]) -> Result<Option<$ty>> {
-            let mut args = process_args(args)?.into_iter();
+        fn $name(ctx: &Context, args: &mut [&mut ValueRef]) {
+            let mut args = match process_args(args) {
+                Ok(x) => x.into_iter(),
+                Err(e) => return ctx.set_result(e),
+            };
             let a = args.next().unwrap_or(None);
             let b = args.next().unwrap_or(None);
             if let (Some($a), Some($b)) = (a, b) {
-                Ok(Some($ret))
-            } else {
-                Ok(None)
+                ctx.set_result($ret);
             }
         }
     };
@@ -46,10 +47,8 @@ struct Sum {
 }
 
 impl AggregateFunction<()> for Sum {
-    type Output = Option<String>;
-
-    fn default_value(_: &(), _: &Context) -> Self::Output {
-        None
+    fn default_value(_: &(), ctx: &Context) {
+        ctx.set_result(());
     }
 
     fn step(&mut self, _: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
@@ -59,8 +58,8 @@ impl AggregateFunction<()> for Sum {
         Ok(())
     }
 
-    fn value(&self, _: &Context) -> Self::Output {
-        Some(format!("{}", self.cur.normalized()))
+    fn value(&self, ctx: &Context) {
+        ctx.set_result(format!("{}", self.cur.normalized()));
     }
 
     fn inverse(&mut self, _: &Context, args: &mut [&mut ValueRef]) -> Result<()> {

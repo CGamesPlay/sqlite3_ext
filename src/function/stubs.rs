@@ -9,20 +9,18 @@ use std::{
     str::from_utf8_unchecked,
 };
 
-pub unsafe extern "C" fn call_scalar<
-    R: ToContextResult,
-    F: Fn(&Context, &mut [&mut ValueRef]) -> R,
->(
+pub unsafe extern "C" fn call_scalar<F>(
     context: *mut ffi::sqlite3_context,
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
-) {
+) where
+    F: Fn(&Context, &mut [&mut ValueRef]),
+{
     let ic = InternalContext::from_ptr(context);
     let func = ic.user_data::<F>();
     let ctx = Context::from_ptr(context);
     let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
-    let ret = func(ctx, args);
-    ic.set_result(ret);
+    func(ctx, args);
 }
 
 pub unsafe extern "C" fn aggregate_step<U, F: LegacyAggregateFunction<U>>(
@@ -35,7 +33,7 @@ pub unsafe extern "C" fn aggregate_step<U, F: LegacyAggregateFunction<U>>(
     let agg = ic.aggregate_context::<U, F>().unwrap();
     let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
     if let Err(e) = agg.step(ctx, args) {
-        ic.set_result(e);
+        ctx.set_result(e);
     }
 }
 
@@ -45,8 +43,8 @@ pub unsafe extern "C" fn aggregate_final<U, F: LegacyAggregateFunction<U>>(
     let ic = InternalContext::from_ptr(context);
     let ctx = Context::from_ptr(context);
     match ic.try_aggregate_context::<U, F>() {
-        Some(agg) => ic.set_result(agg.value(ctx)),
-        None => ic.set_result(F::default_value(ic.user_data(), ctx)),
+        Some(agg) => agg.value(ctx),
+        None => F::default_value(ic.user_data(), ctx),
     };
 }
 
@@ -57,8 +55,7 @@ pub unsafe extern "C" fn aggregate_value<U, F: AggregateFunction<U>>(
     let ic = InternalContext::from_ptr(context);
     let ctx = Context::from_ptr(context);
     let agg = ic.aggregate_context::<U, F>().unwrap();
-    let ret = agg.value(ctx);
-    ic.set_result(ret);
+    agg.value(ctx);
 }
 
 #[cfg(modern_sqlite)]
@@ -72,7 +69,7 @@ pub unsafe extern "C" fn aggregate_inverse<U, F: AggregateFunction<U>>(
     let agg = ic.aggregate_context::<U, F>().unwrap();
     let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
     if let Err(e) = agg.inverse(ctx, args) {
-        ic.set_result(e);
+        ctx.set_result(e);
     }
 }
 

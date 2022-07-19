@@ -1,4 +1,4 @@
-use super::super::{ffi, function::InternalContext, value::*, vtab::*, Connection};
+use super::super::{ffi, value::*, vtab::*, Connection};
 use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
@@ -207,9 +207,8 @@ pub unsafe extern "C" fn vtab_column<'vtab, T: VTab<'vtab> + 'vtab>(
     i: i32,
 ) -> c_int {
     let cursor = &mut *(cursor as *mut VTabCursorHandle<T>);
-    let ic = InternalContext::from_ptr(context);
     let context = ColumnContext::from_ptr(context);
-    ic.set_result(cursor.cursor.column(i as _, &context));
+    cursor.cursor.column(i as _, &context);
     ffi::SQLITE_OK
 }
 

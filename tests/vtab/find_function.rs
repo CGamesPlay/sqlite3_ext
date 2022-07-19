@@ -11,13 +11,18 @@ fn find_function() -> Result<()> {
 
     impl TestHooks for Hooks {
         fn connect_create<'a>(&'a self, vtab: &mut TestVTab<'a, Self>) {
-            vtab.functions.add(1, "overloaded_func", None, |_, _| {
+            vtab.functions.add(1, "overloaded_func", None, |c, _| {
                 self.was_called.set(true);
-                true
+                c.set_result(true)
             });
 
             vtab.functions
-                .add(1, "passthrough", None, |_, a| a[0].get_unprotected_value());
+                .add(1, "passthrough", None, |c, a| c.set_result(&*a[0]));
+
+            vtab.functions
+                .add_method(1, "passthrough_method", None, |_, c, a| {
+                    c.set_result(&*a[0])
+                });
         }
     }
 

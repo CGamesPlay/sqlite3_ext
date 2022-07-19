@@ -38,10 +38,6 @@ impl InternalContext {
         &self.base as *const ffi::sqlite3_context as _
     }
 
-    pub fn set_result(&mut self, val: impl ToContextResult) {
-        unsafe { val.assign_to(self.as_ptr()) };
-    }
-
     pub unsafe fn user_data<U>(&self) -> &U {
         &*(ffi::sqlite3_user_data(self.as_ptr()) as *const U)
     }
@@ -133,6 +129,10 @@ impl Context {
             )
         };
     }
+
+    pub fn set_result(&self, val: impl ToContextResult) {
+        unsafe { val.assign_to(self.as_ptr()) };
+    }
 }
 
 /// A value that can be returned from an SQL function.
@@ -171,7 +171,6 @@ to_context_result! {
     match i32 as (ctx, val) => ffi::sqlite3_result_int(ctx, val),
     match i64 as (ctx, val) => ffi::sqlite3_result_int64(ctx, val),
     match f64 as (ctx, val) => ffi::sqlite3_result_double(ctx, val),
-    match UnprotectedValue as (ctx, val) => ffi::sqlite3_result_value(ctx, val.as_ptr()),
     /// Assign a static string to the context result.
     match &'static str as (ctx, val) => {
         let val = val.as_bytes();
@@ -214,6 +213,22 @@ to_context_result! {
                 ffi::sqlite3_result_error(ctx, msg.as_ptr() as _, len as _);
             }
         }
+    }
+}
+
+/// Sets the context result to the contained value.
+#[sealed]
+impl<'a> ToContextResult for &'a ValueRef {
+    unsafe fn assign_to(self, ctx: *mut ffi::sqlite3_context) {
+        ffi::sqlite3_result_value(ctx, self.as_ptr())
+    }
+}
+
+/// Sets the context result to the contained value.
+#[sealed]
+impl<'a> ToContextResult for &'a mut ValueRef {
+    unsafe fn assign_to(self, ctx: *mut ffi::sqlite3_context) {
+        ffi::sqlite3_result_value(ctx, self.as_ptr())
     }
 }
 

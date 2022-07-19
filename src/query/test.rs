@@ -166,7 +166,7 @@ fn passed_ref() -> Result<()> {
     h.db.create_scalar_function(
         "extract",
         &FunctionOptions::default().set_n_args(1),
-        |_, args| args[0].get_ref::<MyStruct>().unwrap().s.to_owned(),
+        |c, args| c.set_result(args[0].get_ref::<MyStruct>().unwrap().s.to_owned()),
     )?;
     let s = MyStruct {
         s: "string from passed ref".to_owned(),
@@ -182,9 +182,8 @@ fn passed_ref() -> Result<()> {
 #[test]
 fn unprotected_value() -> Result<()> {
     let h = TestHelpers::new();
-    let ret = h.db.query_row("SELECT zeroblob(1024)", (), |r| {
-        Ok(r[0].get_unprotected_value())
-    })?;
+    let mut stmt = h.db.prepare("SELECT zeroblob(1024)")?;
+    let ret = stmt.query_row((), |r| Ok(r[0].as_ref()))?;
     let ret: i64 =
         h.db.query_row("SELECT length(?)", [ret], |r| Ok(r[0].get_i64()))?;
     assert_eq!(ret, 1024);

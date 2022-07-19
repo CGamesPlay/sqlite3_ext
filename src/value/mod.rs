@@ -195,16 +195,6 @@ impl ValueRef {
             .map(|x| PassedRef::get(x))
             .unwrap_or(None)
     }
-
-    /// Mutable version of [get_ref](ValueRef::get_ref).
-    ///
-    /// Requires SQLite 3.20.0. On earlier versions of SQLite, this function will always
-    /// return None.
-    pub fn get_mut_ref<T: 'static>(&mut self) -> Option<&mut T> {
-        unsafe { self.get_ref_internal::<T>() }
-            .map(PassedRef::get_mut)
-            .unwrap_or(None)
-    }
 }
 
 impl FromValue for ValueRef {

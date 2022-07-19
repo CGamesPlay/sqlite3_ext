@@ -52,14 +52,6 @@ impl<T: 'static> PassedRef<T> {
             None
         }
     }
-
-    pub(crate) fn get_mut(&mut self) -> Option<&mut T> {
-        if TypeId::of::<T>() == self.type_id {
-            Some(&mut self.value)
-        } else {
-            None
-        }
-    }
 }
 
 impl<T: 'static> std::fmt::Debug for PassedRef<T> {
@@ -100,12 +92,27 @@ mod test {
     }
 
     #[test]
-    fn get_ref_invalid() {
+    fn invalid_get_ref() {
         let h = TestHelpers::new();
         h.with_value(PassedRef::new(0i32), |val| {
             assert_eq!(val.value_type(), ValueType::Null);
             assert_eq!(val.get_ref::<String>(), None);
             Ok(())
         });
+    }
+
+    #[test]
+    fn get_mut_ref() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+
+        let h = TestHelpers::new();
+        let r = Rc::new(Cell::new(0i32));
+        h.with_value(PassedRef::new(r.clone()), |val| {
+            let r = val.get_ref::<Rc<Cell<i32>>>().unwrap();
+            r.set(2);
+            Ok(())
+        });
+        assert_eq!(r.get(), 2);
     }
 }

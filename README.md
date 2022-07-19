@@ -202,7 +202,7 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_preupdate_old |  | | |
 | sqlite3_profile |  | | |
 | sqlite3_progress_handler |  | | |
-| sqlite3_randomness |  | :grey_exclamation: | Available via ffi |
+| sqlite3_randomness |  | :white_check_mark: | sqlite3_randomness |
 | sqlite3_realloc |  | :grey_exclamation: | Available via ffi |
 | sqlite3_realloc64 |  | :grey_exclamation: | Available via ffi |
 | sqlite3_release_memory |  | | |

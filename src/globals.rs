@@ -102,6 +102,12 @@ pub fn sqlite3_strlike(
     })
 }
 
+pub fn sqlite3_randomness(n: usize) -> Vec<u8> {
+    let mut ret = vec![0; n];
+    unsafe { ffi::sqlite3_randomness(n as _, ret.as_mut_ptr() as _) };
+    ret
+}
+
 #[cfg(all(test, feature = "static"))]
 mod test {
     use super::*;
@@ -135,5 +141,12 @@ mod test {
             _ => (),
         }
         Ok(())
+    }
+
+    #[test]
+    fn randomness() {
+        let ret = sqlite3_randomness(32);
+        assert_eq!(ret.len(), 32);
+        assert_ne!(ret, vec![0; 32]);
     }
 }

@@ -344,7 +344,7 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[doc(hidden)]
 #[proc_macro]
 pub fn sqlite3_ext_doctest_impl(item: TokenStream) -> TokenStream {
-    let item = parse_macro_input!(item as Ident);
+    let item = parse_macro_input!(item as Type);
     let expanded = quote! {
         impl<'vtab> ::sqlite3_ext::vtab::VTab<'vtab> for #item {
             type Aux = ();

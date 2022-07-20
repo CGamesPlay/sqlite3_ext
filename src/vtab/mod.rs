@@ -161,6 +161,39 @@ pub trait TransactionVTab<'vtab>: UpdateVTab<'vtab> {
 /// to [VTab::best_index]. This feature additionally requires SQLite 3.25.0.
 ///
 /// For more details, see [the SQLite documentation](https://www.sqlite.org/vtab.html#the_xfindfunction_method).
+///
+/// # Example
+///
+/// Here is a brief summary of how to use this trait:
+///
+/// ```no_run
+/// # use sqlite3_ext_macro::*;
+/// use sqlite3_ext::{function::*, vtab::*, *};
+///
+/// #[sqlite3_ext_vtab(StandardModule)]
+/// struct MyVTab<'vtab> {
+///     /// Used to store the overloaded functions
+///     functions: VTabFunctionList<'vtab, Self>
+/// }
+/// # sqlite3_ext_doctest_impl!(MyVTab<'vtab>);
+///
+/// impl<'vtab> MyVTab<'vtab> {
+///     /// Register the overloaded functions. Should be called from connect/create.
+///     fn init_functions(&mut self) {
+///         self.functions.add_method(1, "my_func", None, |vtab, ctx, args| {
+///             println!("my_func was called");
+///             ctx.set_result(&*args[0])
+///         });
+///     }
+/// }
+///
+/// /// Return the owned functions list.
+/// impl<'vtab> FindFunctionVTab<'vtab> for MyVTab<'vtab> {
+///     fn functions(&self) -> &VTabFunctionList<'vtab, Self> {
+///         &self.functions
+///     }
+/// }
+/// ```
 pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
     /// Retrieve a reference to the [VTabFunctionList] associated with this virtual table.
     fn functions(&'vtab self) -> &'vtab VTabFunctionList<'vtab, Self>;

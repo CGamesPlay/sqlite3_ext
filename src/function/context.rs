@@ -146,8 +146,10 @@ impl Context {
 ///
 /// - For nullable values, Option\<ToContextResult\> provides an implementation.
 /// - For fallible functions, [Result]\<ToContextResult\> provides an implementation.
-/// - For types known only at run-time, [Value] provides an implementation.
 /// - For arbitrary Rust objects, [PassedRef] provides an implementation.
+/// - For borrowed SQLite values, &[ValueRef] provides an implementation. Note that you have to
+///   reborrow as immutable in most cases: `&*value_ref`.
+/// - For owned types known only at run-time, [Value] provides an implementation.
 #[sealed]
 pub trait ToContextResult {
     #[doc(hidden)]

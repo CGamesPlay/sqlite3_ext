@@ -186,8 +186,6 @@ impl ValueRef {
     /// requires SQLite 3.20.0 to work. On older versions of SQLite, this function will
     /// always return None.
     ///
-    /// The mutable version is [get_mut_ref](Self::get_mut_ref).
-    ///
     /// Requires SQLite 3.20.0. On earlier versions of SQLite, this function will always
     /// return None.
     pub fn get_ref<T: 'static>(&self) -> Option<&T> {

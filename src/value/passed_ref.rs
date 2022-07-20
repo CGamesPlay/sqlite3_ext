@@ -4,17 +4,24 @@ pub(crate) const POINTER_TAG: *const i8 = b"sqlite3_ext:PassedRef\0".as_ptr() as
 
 /// Pass arbitrary values through SQLite.
 ///
-/// Values of this type can be returned by SQL functions, and later retrieved using
-/// [ValueRef::get_ref](super::ValueRef::get_ref).
+/// Values of this type can be passed into SQL queries and returned by SQL functions, and later retrieved using
+/// [ValueRef::get_ref](super::ValueRef::get_ref). SQLite takes ownership of the stored value,
+/// and does not provide any mechanism for getting a PassedRef from a query result, so this
+/// feature is primarily useful for passing values into SQL, or between application-defined
+/// functions.
 ///
 /// This mechanism relies on [std::any::Any] to ensure type safety, which requires that values
-/// are `'static`.
+/// are `'static`. If you want to transfer a reference through a PassedRef, use a shared
+/// pointer like [std::rc::Rc].
 ///
 /// This feature requires SQLite 3.20.0. On earlier versions of SQLite, returning a PassedRef
 /// object from an application-defined function has no effect. If supporting older versions of
 /// SQLite is required, [UnsafePtr](super::UnsafePtr) can be used instead.
 ///
 /// # Examples
+///
+/// This example shows `produce_ref` returning a PassedRef which is later consumed by
+/// `consume_ref`.
 ///
 /// ```no_run
 /// use sqlite3_ext::{PassedRef, function::Context, Result, ValueRef};

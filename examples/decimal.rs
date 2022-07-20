@@ -16,6 +16,7 @@ fn process_args(args: &mut [&mut ValueRef]) -> Result<Vec<Option<BigDecimal>>> {
 
 macro_rules! scalar_method {
     ($name:ident as ( $a:ident, $b:ident ) -> $ty:ty => $ret:expr) => {
+        #[sqlite3_ext_fn(n_args=2, risk_level=Innocuous, deterministic)]
         fn $name(ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
             let mut args = process_args(args)?.into_iter();
             let a = args.next().unwrap_or(None);
@@ -40,6 +41,7 @@ scalar_method!(decimal_cmp as (a, b) -> i32 => {
 });
 
 #[derive(Default)]
+#[sqlite3_ext_fn(n_args=1, risk_level=Innocuous, deterministic)]
 struct Sum {
     cur: BigDecimal,
 }
@@ -76,16 +78,11 @@ fn decimal_collation(a: &str, b: &str) -> Ordering {
 
 #[sqlite3_ext_main]
 fn init(db: &Connection) -> Result<()> {
-    let opts = FunctionOptions::default()
-        .set_risk_level(RiskLevel::Innocuous)
-        .set_deterministic(true)
-        .set_n_args(2);
-    db.create_scalar_function("decimal_add", &opts, decimal_add)?;
-    db.create_scalar_function("decimal_sub", &opts, decimal_sub)?;
-    db.create_scalar_function("decimal_mul", &opts, decimal_mul)?;
-    db.create_scalar_function("decimal_cmp", &opts, decimal_cmp)?;
-    let opts = opts.set_n_args(1);
-    db.create_aggregate_function::<_, Sum>("decimal_sum", &opts, ())?;
+    db.create_scalar_function("decimal_add", &DECIMAL_ADD_OPTS, decimal_add)?;
+    db.create_scalar_function("decimal_sub", &DECIMAL_SUB_OPTS, decimal_sub)?;
+    db.create_scalar_function("decimal_mul", &DECIMAL_MUL_OPTS, decimal_mul)?;
+    db.create_scalar_function("decimal_cmp", &DECIMAL_CMP_OPTS, decimal_cmp)?;
+    db.create_aggregate_function::<_, Sum>("decimal_sum", &SUM_OPTS, ())?;
     db.create_collation("decimal", decimal_collation)?;
     Ok(())
 }

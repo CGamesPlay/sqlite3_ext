@@ -1,5 +1,8 @@
+use convert_case::{Case, Casing};
 use ext_attr::*;
+use fn_attr::*;
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use quote::{format_ident, quote, ToTokens};
 use regex::Regex;
 use std::mem::replace;
@@ -7,18 +10,24 @@ use syn::{punctuated::Punctuated, *};
 use vtab_attr::*;
 
 mod ext_attr;
+mod fn_attr;
 mod vtab_attr;
 
 mod kw {
-    syn::custom_keyword!(export);
-    syn::custom_keyword!(persistent);
-    syn::custom_keyword!(StandardModule);
+    syn::custom_keyword!(DirectOnly);
     syn::custom_keyword!(EponymousModule);
     syn::custom_keyword!(EponymousOnlyModule);
-    syn::custom_keyword!(UpdateVTab);
-    syn::custom_keyword!(TransactionVTab);
     syn::custom_keyword!(FindFunctionVTab);
+    syn::custom_keyword!(Innocuous);
     syn::custom_keyword!(RenameVTab);
+    syn::custom_keyword!(StandardModule);
+    syn::custom_keyword!(TransactionVTab);
+    syn::custom_keyword!(UpdateVTab);
+    syn::custom_keyword!(deterministic);
+    syn::custom_keyword!(export);
+    syn::custom_keyword!(n_args);
+    syn::custom_keyword!(persistent);
+    syn::custom_keyword!(risk_level);
 }
 
 /// Declare the primary extension entry point for the crate.
@@ -337,6 +346,76 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #expr
             }
         }
+    };
+    TokenStream::from(expanded)
+}
+
+/// Create a FunctionOptions for an application-defined function.
+///
+/// This macro declares a FunctionOptions constant with the provided values. The constant will
+/// take on a name based on the function, so for example applying this attribute to a function
+/// named "count_horses" or a trait named "CountHorses" will create a constant named
+/// "COUNT_HORSES_OPTS".
+///
+/// # Syntax
+///
+/// Arguments passed to the macro are comma-separated. The following are supported:
+///
+/// - `n_args=N` corresponds to set_n_args.
+/// - `risk_level=X` corresponds to set_risk_level.
+/// - `deterministic` corresponds to set_desterministic with true.
+///
+/// # Example
+///
+/// ```no_run
+/// use sqlite3_ext::{function::*, *};
+///
+/// #[sqlite3_ext_fn(n_args=0, risk_level=Innocuous)]
+/// pub fn random_number(ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+///     ctx.set_result(4) // chosen by fair dice roll.
+/// }
+///
+/// pub fn init(db: &Connection) -> Result<()> {
+///     db.create_scalar_function("random_number", &RANDOM_NUMBER_OPTS, random_number)
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn sqlite3_ext_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let directives =
+        parse_macro_input!(attr with Punctuated::<FnAttr, Token![,]>::parse_terminated);
+    let item = parse_macro_input!(item as Item);
+    let (ident, vis) = match &item {
+        Item::Fn(item) => (&item.sig.ident, &item.vis),
+        Item::Struct(item) => (&item.ident, &item.vis),
+        _ => {
+            return TokenStream::from(
+                Error::new(Span::call_site(), "only applies to fn or struct").into_compile_error(),
+            )
+        }
+    };
+    let opts_name = Ident::new(
+        &format!("{}_opts", ident).to_case(Case::UpperSnake),
+        Span::call_site(),
+    );
+    let mut opts = quote! {
+        #[automatically_derived]
+        #vis const #opts_name: ::sqlite3_ext::function::FunctionOptions = ::sqlite3_ext::function::FunctionOptions::default()
+    };
+    for d in directives {
+        match d {
+            FnAttr::NumArgs(x) => opts.extend(quote!(.set_n_args(#x))),
+            FnAttr::RiskLevel(FnAttrRiskLevel::Innocuous) => {
+                opts.extend(quote!(.set_risk_level(::sqlite3_ext::RiskLevel::Innocuous)))
+            }
+            FnAttr::RiskLevel(FnAttrRiskLevel::DirectOnly) => {
+                opts.extend(quote!(.set_risk_level(::sqlite3_ext::RiskLevel::DirectOnly)))
+            }
+            FnAttr::Deterministic => opts.extend(quote!(.set_deterministic(true))),
+        }
+    }
+    let expanded = quote! {
+        #opts;
+        #item
     };
     TokenStream::from(expanded)
 }

@@ -218,7 +218,7 @@ impl Connection {
         func: F,
     ) -> Result<()>
     where
-        F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()>,
+        F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'static,
     {
         let guard = self.lock();
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };

@@ -1,0 +1,17 @@
+error[E0373]: closure may outlive the current function, but it borrows `cell`, which is owned by the current function
+ --> tests/ui/scalar_function.rs:9:52
+  |
+9 |     db.create_scalar_function("drop_check", &opts, |c, _| c.set_result(cell.get()))?;
+  |                                                    ^^^^^^              ---- `cell` is borrowed here
+  |                                                    |
+  |                                                    may outlive borrowed value `cell`
+  |
+note: function requires argument type to outlive `'static`
+ --> tests/ui/scalar_function.rs:9:5
+  |
+9 |     db.create_scalar_function("drop_check", &opts, |c, _| c.set_result(cell.get()))?;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: to force the closure to take ownership of `cell` (and any other referenced variables), use the `move` keyword
+  |
+9 |     db.create_scalar_function("drop_check", &opts, move |c, _| c.set_result(cell.get()))?;
+  |                                                    ++++

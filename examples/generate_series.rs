@@ -16,7 +16,7 @@ impl<'vtab> VTab<'vtab> for GenerateSeries {
     type Cursor = Cursor;
 
     fn connect(db: &VTabConnection, _aux: &Self::Aux, _args: &[&str]) -> Result<(String, Self)> {
-        db.set_risk(RiskLevel::Innocuous);
+        db.set_risk_level(RiskLevel::Innocuous);
         Ok((
             "CREATE TABLE x ( value, start HIDDEN, stop HIDDEN, step HIDDEN )".to_owned(),
             GenerateSeries {},

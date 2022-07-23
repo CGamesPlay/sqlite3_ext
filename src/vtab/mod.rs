@@ -363,7 +363,7 @@ impl VTabConnection {
     /// options mean.
     ///
     /// Requires SQLite 3.31.0. On earlier versions of SQLite, this is a harmless no-op.
-    pub fn set_risk(&self, level: super::RiskLevel) {
+    pub fn set_risk_level(&self, level: super::RiskLevel) {
         let _ = level;
         sqlite3_match_version! {
             3_031_000 => unsafe {

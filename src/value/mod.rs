@@ -235,6 +235,24 @@ impl FromValue for ValueRef {
     }
 }
 
+impl PartialEq for ValueRef {
+    /// Compare the underlying values of two ValueRefs. This function follows SQL equality
+    /// semantics, meaning that NULL != NULL.
+    fn eq(&self, other: &Self) -> bool {
+        if self.value_type() != other.value_type() {
+            return false;
+        }
+        match self.value_type() {
+            ValueType::Integer => self.get_i64() == other.get_i64(),
+            ValueType::Float => self.get_f64() == other.get_f64(),
+            ValueType::Text | ValueType::Blob => unsafe {
+                self.get_blob_unchecked() == other.get_blob_unchecked()
+            },
+            ValueType::Null => false,
+        }
+    }
+}
+
 impl std::fmt::Debug for ValueRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self.value_type() {

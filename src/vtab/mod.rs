@@ -57,7 +57,7 @@ pub trait VTab<'vtab> {
     ///
     /// This method must return a valid CREATE TABLE statement as a [String], along with a
     /// configured table instance. Additionally, all virtual tables are recommended to set
-    /// a risk level using [VTabConnection::set_risk].
+    /// a risk level using [VTabConnection::set_risk_level].
     ///
     /// The virtual table implementation will return an error if any of the arguments
     /// contain invalid UTF-8.

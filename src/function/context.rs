@@ -239,6 +239,36 @@ impl<'a> ToContextResult for &'a mut ValueRef {
     }
 }
 
+/// Sets the context result to the given BLOB.
+#[sealed]
+impl<'a> ToContextResult for &'a [u8] {
+    unsafe fn assign_to(self, ctx: *mut ffi::sqlite3_context) {
+        let len = self.len();
+        sqlite3_match_version! {
+            3_008_007 => ffi::sqlite3_result_blob64(
+                ctx,
+                self.as_ptr() as _,
+                len as _,
+                ffi::sqlite_transient(),
+            ),
+            _ => ffi::sqlite3_result_blob(
+                ctx,
+                self.as_ptr() as _,
+                len as _,
+                ffi::sqlite_transient(),
+            ),
+        }
+    }
+}
+
+/// Sets the context result to the given BLOB.
+#[sealed]
+impl<'a, const N: usize> ToContextResult for &'a [u8; N] {
+    unsafe fn assign_to(self, ctx: *mut ffi::sqlite3_context) {
+        self.as_slice().assign_to(ctx);
+    }
+}
+
 /// Sets the context result to the contained value or NULL.
 #[sealed]
 impl<T: ToContextResult> ToContextResult for Option<T> {
@@ -280,12 +310,12 @@ impl ToContextResult for Value {
 impl<T: 'static + ?Sized> ToContextResult for UnsafePtr<T> {
     unsafe fn assign_to(self, context: *mut ffi::sqlite3_context) {
         sqlite3_match_version! {
-            3_009_000 => {
-                let subtype = self.subtype;
-                self.into_blob().assign_to(context);
-                ffi::sqlite3_result_subtype(context, subtype as _);
-            },
-            _ => self.into_blob().assign_to(context),
+        3_009_000 => {
+            let subtype = self.subtype;
+            self.to_bytes().assign_to(context);
+            ffi::sqlite3_result_subtype(context, subtype as _);
+        },
+        _ => self.to_bytes().assign_to(context),
         }
     }
 }

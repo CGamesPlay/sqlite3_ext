@@ -182,6 +182,15 @@ macro_rules! sqlite3_require_version {
     };
 }
 
+/// Create the special marker value SQLITE_TRANSIENT.
+///
+/// # Safety
+///
+/// Per rustc, "it is undefined behavior to use this value". `¯\_(ツ)_/¯`
+pub const unsafe fn sqlite_transient() -> Option<unsafe extern "C" fn(arg1: *mut c_void)> {
+    std::mem::transmute(-1 as isize as usize)
+}
+
 pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
     let len: usize = val.len().checked_add(1).ok_or(crate::types::SQLITE_NOMEM)?;
     unsafe {

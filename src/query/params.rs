@@ -157,6 +157,14 @@ to_param!(() as (stmt, pos, _val) => ffi::sqlite3_bind_null(stmt, pos));
 to_param!(bool as (stmt, pos, val) => ffi::sqlite3_bind_int(stmt, pos, val as i32));
 to_param!(i64 as (stmt, pos, val) => ffi::sqlite3_bind_int64(stmt, pos, val));
 to_param!(f64 as (stmt, pos, val) => ffi::sqlite3_bind_double(stmt, pos, val));
+to_param!(Blob as (stmt, pos, val) => {
+    let len = val.len();
+    let rc = sqlite3_match_version! {
+        3_008_007 => ffi::sqlite3_bind_blob64(stmt, pos, val.into_raw(), len as _, Some(ffi::drop_blob)),
+        _ => ffi::sqlite3_bind_blob(stmt, pos, val.into_raw(), len as _, Some(ffi::drop_blob)),
+    };
+    rc
+});
 to_param!(&mut ValueRef as (stmt, pos, val) => ffi::sqlite3_bind_value(stmt, pos, val.as_ptr()));
 to_param!(&'static str as (stmt, pos, val) => {
     let val = val.as_bytes();
@@ -183,6 +191,38 @@ impl<'a> ToParam for &'a ValueRef {
     }
 }
 
+#[sealed]
+impl<'a> ToParam for &'a [u8] {
+    fn bind_param(self, stmt: &mut Statement, pos: i32) -> Result<()> {
+        let len = self.len();
+        unsafe {
+            Error::from_sqlite(sqlite3_match_version! {
+                3_008_007 => ffi::sqlite3_bind_blob64(
+                    stmt.base,
+                    pos,
+                    self.as_ptr() as _,
+                    len as _,
+                    ffi::sqlite_transient(),
+                ),
+                _ => ffi::sqlite3_bind_blob(
+                    stmt.base,
+                    pos,
+                    self.as_ptr() as _,
+                    len as _,
+                    ffi::sqlite_transient(),
+                ),
+            })
+        }
+    }
+}
+
+#[sealed]
+impl<'a, const N: usize> ToParam for &'a [u8; N] {
+    fn bind_param(self, stmt: &mut Statement, pos: i32) -> Result<()> {
+        self.as_slice().bind_param(stmt, pos)
+    }
+}
+
 /// Sets the parameter to a dynamically typed [Value].
 #[sealed]
 impl ToParam for Value {
@@ -194,21 +234,6 @@ impl ToParam for Value {
             Value::Blob(x) => x.bind_param(stmt, pos),
             Value::Null => ().bind_param(stmt, pos),
         }
-    }
-}
-
-#[sealed]
-impl<T: Into<Blob> + 'static> ToParam for T {
-    fn bind_param(self, stmt: &mut Statement, pos: i32) -> Result<()> {
-        let blob = self.into();
-        let len = blob.len();
-        let rc = unsafe {
-            sqlite3_match_version! {
-                3_008_007 => ffi::sqlite3_bind_blob64(stmt.base, pos, blob.into_raw(), len as _, Some(ffi::drop_blob),),
-                _ => ffi::sqlite3_bind_blob(stmt.base, pos, blob.into_raw(), len as _, Some(ffi::drop_blob)),
-            }
-        };
-        Error::from_sqlite(rc)
     }
 }
 

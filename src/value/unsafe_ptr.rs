@@ -110,15 +110,15 @@ impl<T: ?Sized> UnsafePtr<T> {
         self.ptr as _
     }
 
-    pub(crate) fn into_blob(self) -> Blob {
+    pub(crate) fn to_bytes(self) -> Vec<u8> {
         let len = size_of::<&T>();
         let mut vec: Vec<u8> = Vec::with_capacity(len);
         unsafe {
-            vec.set_len(len);
             let ret_bytes = vec.as_mut_ptr() as *mut *const T;
             write_unaligned(ret_bytes, self.ptr);
+            vec.set_len(len);
         }
-        Blob::from(vec.as_slice())
+        vec
     }
 }
 
@@ -177,7 +177,7 @@ mod test {
     #[test]
     fn get_ptr_invalid() {
         let h = TestHelpers::new();
-        h.with_value(Blob::from([1, 2, 3]), |val| {
+        h.with_value(&[1, 2, 3], |val| {
             assert_eq!(val.value_type(), ValueType::Blob);
             UnsafePtr::<()>::from_value_ref(val, SUBTYPE).expect_err("incorrect length");
             Ok(())

@@ -16,7 +16,7 @@ use std::{
 mod params;
 mod test;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum QueryState {
     Ready,
     Active,
@@ -323,6 +323,14 @@ impl FallibleIteratorMut for Statement {
             },
             QueryState::Finished => Ok(None),
         }
+    }
+}
+
+impl std::fmt::Debug for Statement {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Statement")
+            .field("state", &self.state)
+            .finish_non_exhaustive()
     }
 }
 

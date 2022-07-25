@@ -115,6 +115,12 @@ impl Connection {
     }
 }
 
+impl std::fmt::Debug for Connection {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Connection").finish_non_exhaustive()
+    }
+}
+
 /// Represents an owned connection to an SQLite database.
 ///
 /// This struct is an owned version of [Connection]. When this struct is dropped, it will close
@@ -142,6 +148,12 @@ impl Database {
                 Err(e)
             }
         }
+    }
+}
+
+impl std::fmt::Debug for Database {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Database").finish_non_exhaustive()
     }
 }
 

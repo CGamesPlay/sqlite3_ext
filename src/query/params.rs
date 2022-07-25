@@ -1,7 +1,6 @@
 use super::Statement;
 use crate::{ffi, sqlite3_match_version, sqlite3_require_version, types::*, value::*};
 use sealed::sealed;
-use std::ffi::CString;
 
 /// Create a [Params] with values of mixed types.
 ///
@@ -166,23 +165,20 @@ to_param!(Blob as (stmt, pos, val) => {
     rc
 });
 to_param!(&mut ValueRef as (stmt, pos, val) => ffi::sqlite3_bind_value(stmt, pos, val.as_ptr()));
-to_param!(&'static str as (stmt, pos, val) => {
-    let val = val.as_bytes();
-    let len = val.len();
-    sqlite3_match_version! {
-        3_008_007 => ffi::sqlite3_bind_text64(stmt, pos, val.as_ptr() as _, len as _, None, ffi::SQLITE_UTF8 as _),
-        _ => ffi::sqlite3_bind_text(stmt, pos, val.as_ptr() as _, len as _, None),
+
+#[sealed]
+impl<'a> ToParam for &'a str {
+    fn bind_param(self, stmt: &mut Statement, pos: i32) -> Result<()> {
+        let val = self.as_bytes();
+        let len = val.len();
+        Error::from_sqlite(unsafe {
+            sqlite3_match_version! {
+                3_008_007 => ffi::sqlite3_bind_text64(stmt.base, pos, val.as_ptr() as _, len as _, ffi::sqlite_transient(), ffi::SQLITE_UTF8 as _),
+                _ => ffi::sqlite3_bind_text(stmt.base, pos, val.as_ptr() as _, len as _, ffi::sqlite_transient()),
+            }
+        })
     }
-});
-to_param!(String as (stmt, pos, val) => {
-    let val = val.as_bytes();
-    let len = val.len();
-    let cstring = CString::new(val).unwrap().into_raw();
-    sqlite3_match_version! {
-        3_008_007 => ffi::sqlite3_bind_text64(stmt, pos, cstring, len as _, Some(ffi::drop_cstring), ffi::SQLITE_UTF8 as _),
-        _ => ffi::sqlite3_bind_text(stmt, pos, cstring, len as _, Some(ffi::drop_cstring)),
-    }
-});
+}
 
 #[sealed]
 impl<'a> ToParam for &'a ValueRef {

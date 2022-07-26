@@ -32,7 +32,7 @@ fn get_blob() {
     let bytes = b"my string";
     h.with_value(bytes, |val| {
         assert_eq!(val.value_type(), ValueType::Blob);
-        assert_eq!(val.get_blob()?, Some(b"my string".as_slice()));
+        assert_eq!(val.get_blob()?, b"my string".as_slice());
         assert_eq!(
             format!("{:?}", val),
             "Blob([109, 121, 32, 115, 116, 114, 105, 110, 103])"
@@ -47,7 +47,7 @@ fn get_blob_null() {
     let null: Option<i64> = None;
     h.with_value(null, |val| {
         assert_eq!(val.value_type(), ValueType::Null);
-        assert_eq!(val.get_blob()?, None);
+        assert_eq!(val.get_blob()?, &[]);
         assert_eq!(format!("{:?}", val), "Null");
         Ok(())
     });
@@ -59,8 +59,20 @@ fn get_str() {
     let string = "my string";
     h.with_value(string, |val| {
         assert_eq!(val.value_type(), ValueType::Text);
-        assert_eq!(val.get_str()?, Some("my string"));
+        assert_eq!(val.get_str()?, "my string");
         assert_eq!(format!("{:?}", val), "Text(Ok(\"my string\"))");
+        Ok(())
+    });
+}
+
+#[test]
+fn get_str_empty() {
+    let h = TestHelpers::new();
+    let string = "";
+    h.with_value(string, |val| {
+        assert_eq!(val.value_type(), ValueType::Text);
+        assert_eq!(val.get_str()?, "");
+        assert_eq!(format!("{:?}", val), "Text(Ok(\"\"))");
         Ok(())
     });
 }
@@ -71,7 +83,7 @@ fn get_str_null() {
     let null: Option<i64> = None;
     h.with_value(null, |val| {
         assert_eq!(val.value_type(), ValueType::Null);
-        assert_eq!(val.get_str()?, None);
+        assert_eq!(val.get_str()?, "");
         assert_eq!(format!("{:?}", val), "Null");
         Ok(())
     });

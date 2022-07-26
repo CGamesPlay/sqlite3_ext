@@ -41,14 +41,14 @@ enum QueryState {
 /// ```no_run
 /// use sqlite3_ext::*;
 ///
-/// fn pages_imperative(conn: &Connection, user_id: i64) -> Result<Vec<(i64, Option<String>)>> {
+/// fn pages_imperative(conn: &Connection, user_id: i64) -> Result<Vec<(i64, String)>> {
 ///     let mut stmt = conn.prepare("SELECT id, name FROM pages WHERE owner_id = ?")?;
 ///     stmt.query([user_id])?;
 ///     let mut results = Vec::new();
 ///     while let Some(row) = stmt.next()? {
 ///         results.push((
 ///             row[0].get_i64(),
-///             row[1].get_str()?.map(String::from),
+///             row[1].get_str()?.to_owned(),
 ///         ));
 ///     }
 ///     Ok(results)
@@ -60,14 +60,14 @@ enum QueryState {
 /// ```no_run
 /// use sqlite3_ext::*;
 ///
-/// fn pages_functional(conn: &Connection, user_id: i64) -> Result<Vec<(i64, Option<String>)>> {
-///     let results: Vec<(i64, Option<String>)> = conn
+/// fn pages_functional(conn: &Connection, user_id: i64) -> Result<Vec<(i64, String)>> {
+///     let results: Vec<(i64, String)> = conn
 ///         .prepare("SELECT id, name FROM pages WHERE owner_id = ?")?
 ///         .query([user_id])?
 ///         .map(|row| {
 ///             Ok((
 ///                 row[0].get_i64(),
-///                 row[1].get_str()?.map(String::from),
+///                 row[1].get_str()?.to_owned(),
 ///             ))
 ///         })
 ///         .collect()?;
@@ -498,22 +498,24 @@ impl FromValue for Column {
 
     unsafe fn get_blob_unchecked(&self) -> &[u8] {
         let len = ffi::sqlite3_column_bytes(self.stmt, self.position as _);
+        if len == 0 {
+            return &[];
+        }
         let data = ffi::sqlite3_column_blob(self.stmt, self.position as _);
         slice::from_raw_parts(data as _, len as _)
     }
 
-    fn get_blob(&mut self) -> Result<Option<&[u8]>> {
+    fn get_blob(&mut self) -> Result<&[u8]> {
         unsafe {
-            let data = ffi::sqlite3_column_blob(self.stmt, self.position as _);
             let len = ffi::sqlite3_column_bytes(self.stmt, self.position as _);
+            if len == 0 {
+                return Ok(&[]);
+            }
+            let data = ffi::sqlite3_column_blob(self.stmt, self.position as _);
             if data.is_null() {
-                if self.value_type() == ValueType::Null {
-                    return Ok(None);
-                } else {
-                    return Err(SQLITE_NOMEM);
-                }
+                return Err(SQLITE_NOMEM);
             } else {
-                Ok(Some(slice::from_raw_parts(data as _, len as _)))
+                Ok(slice::from_raw_parts(data as _, len as _))
             }
         }
     }

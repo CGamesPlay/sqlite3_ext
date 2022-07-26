@@ -6,8 +6,12 @@ use std::{cmp::Ordering, str::FromStr};
 // Valid BigDecimal maps to Some(x)
 // Otherwise Some(0)
 fn process_value(a: &mut ValueRef) -> Result<Option<BigDecimal>> {
-    Ok(a.get_str()?
-        .map(|a| BigDecimal::from_str(a).unwrap_or_else(|_| BigDecimal::default())))
+    match a.value_type() {
+        ValueType::Null => Ok(None),
+        _ => Ok(Some(
+            BigDecimal::from_str(a.get_str()?).unwrap_or_else(|_| BigDecimal::default()),
+        )),
+    }
 }
 
 fn process_args(args: &mut [&mut ValueRef]) -> Result<Vec<Option<BigDecimal>>> {
@@ -235,7 +239,7 @@ mod test {
             .prepare(
                 "SELECT column1 FROM ( VALUES (('1')), (('0100')), (('.1')) ) ORDER BY column1 COLLATE decimal",
             )?
-            .query(())?.map(|row| Ok(row[0].get_str()?.unwrap().to_owned()))
+            .query(())?.map(|row| Ok(row[0].get_str()?.to_owned()))
             .collect()?;
         assert_eq!(
             ret,

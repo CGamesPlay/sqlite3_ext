@@ -66,7 +66,7 @@ pub trait FromValue {
     unsafe fn get_blob_unchecked(&self) -> &[u8];
 
     /// Interpret this value as a BLOB.
-    fn get_blob(&mut self) -> Result<Option<&[u8]>>;
+    fn get_blob(&mut self) -> Result<&[u8]>;
 
     /// Get the underlying TEXT value.
     ///
@@ -84,8 +84,8 @@ pub trait FromValue {
     /// This method will fail if SQLite runs out of memory while converting the value, or
     /// if the value has invalid UTF-8. The returned value is `None` if the underlying
     /// value is SQL NULL.
-    fn get_str(&mut self) -> Result<Option<&str>> {
-        Ok(self.get_blob()?.map(|b| str::from_utf8(b)).transpose()?)
+    fn get_str(&mut self) -> Result<&str> {
+        Ok(str::from_utf8(self.get_blob()?)?)
     }
 
     /// Clone the value, returning a [Value].
@@ -214,22 +214,24 @@ impl FromValue for ValueRef {
 
     unsafe fn get_blob_unchecked(&self) -> &[u8] {
         let len = ffi::sqlite3_value_bytes(self.as_ptr());
+        if len == 0 {
+            return &[];
+        }
         let data = ffi::sqlite3_value_blob(self.as_ptr());
         slice::from_raw_parts(data as _, len as _)
     }
 
-    fn get_blob(&mut self) -> Result<Option<&[u8]>> {
+    fn get_blob(&mut self) -> Result<&[u8]> {
         unsafe {
-            let data = ffi::sqlite3_value_blob(self.as_ptr());
             let len = ffi::sqlite3_value_bytes(self.as_ptr());
+            if len == 0 {
+                return Ok(&[]);
+            }
+            let data = ffi::sqlite3_value_blob(self.as_ptr());
             if data.is_null() {
-                if self.value_type() == ValueType::Null {
-                    return Ok(None);
-                } else {
-                    return Err(SQLITE_NOMEM);
-                }
+                return Err(SQLITE_NOMEM);
             } else {
-                Ok(Some(slice::from_raw_parts(data as _, len as _)))
+                Ok(slice::from_raw_parts(data as _, len as _))
             }
         }
     }

@@ -40,9 +40,9 @@ fn read() -> Result<()> {
         .query(())?
         .map(|row| {
             Ok(vec![
-                row[0].get_str()?.unwrap().to_owned(),
-                row[1].get_str()?.unwrap().to_owned(),
-                row[2].get_str()?.unwrap().to_owned(),
+                row[0].get_str()?.to_owned(),
+                row[1].get_str()?.to_owned(),
+                row[2].get_str()?.to_owned(),
             ])
         })
         .collect()?;

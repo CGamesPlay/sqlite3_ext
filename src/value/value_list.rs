@@ -31,8 +31,8 @@ use std::ptr;
 /// use sqlite3_ext::*;
 ///
 /// fn filter_list(list: &mut ValueRef) -> Result<()> {
-///     let list: Vec<Option<String>> = ValueList::from_value_ref(list)?
-///         .map(|x| Ok(x.get_str()?.map(String::from)))
+///     let list: Vec<String> = ValueList::from_value_ref(list)?
+///         .map(|x| Ok(x.get_str()?.to_owned()))
 ///         .collect()?;
 ///     println!("values are {:?}", list);
 ///     Ok(())

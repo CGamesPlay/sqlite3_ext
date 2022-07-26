@@ -18,7 +18,7 @@ impl FromUserData<&'static str> for Agg {
 impl AggregateFunction<&'static str> for Agg {
     fn step(&mut self, _: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
         let a: &mut ValueRef = args[0];
-        self.acc.push((a).get_str()?.unwrap_or("").to_owned());
+        self.acc.push((a).get_str()?.to_owned());
         Ok(())
     }
 
@@ -134,7 +134,7 @@ fn collation() -> Result<()> {
     let ret: Vec<String> =
         h.db.prepare(sql)?
             .query(())?
-            .map(|row| Ok(row[0].get_str()?.unwrap().to_owned()))
+            .map(|row| Ok(row[0].get_str()?.to_owned()))
             .collect()?;
     assert_eq!(
         ret,

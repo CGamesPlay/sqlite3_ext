@@ -67,7 +67,7 @@ fn with_value() {
     let h = TestHelpers::new();
     let did_run = Cell::new(false);
     h.with_value("input string", |val| {
-        assert_eq!(val.get_str()?.unwrap(), "input string");
+        assert_eq!(val.get_str()?, "input string");
         did_run.set(true);
         Ok(())
     });

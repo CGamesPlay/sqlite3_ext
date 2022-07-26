@@ -7,7 +7,7 @@ use crate::test_helpers::prelude::*;
 fn basic() -> Result<()> {
     #[derive(Debug, PartialEq)]
     struct Row {
-        value: Option<String>,
+        value: String,
         name: String,
         database_name: Option<String>,
         table_name: Option<String>,
@@ -22,7 +22,7 @@ fn basic() -> Result<()> {
             .query(())?
             .map(|r| {
                 Ok(Row {
-                    value: r[0].get_str()?.map(String::from),
+                    value: r[0].get_str()?.to_owned(),
                     name: r[0].name()?.to_owned(),
                     database_name: r[0].database_name()?.map(String::from),
                     table_name: r[0].table_name()?.map(String::from),
@@ -34,7 +34,7 @@ fn basic() -> Result<()> {
     assert_eq!(
         ret,
         vec![Row {
-            value: Some("a1".to_owned()),
+            value: "a1".to_owned(),
             name: "a_alias".to_owned(),
             database_name: Some("main".to_owned()),
             table_name: Some("tbl".to_owned()),
@@ -173,7 +173,7 @@ fn passed_ref() -> Result<()> {
     };
     let ret: String =
         h.db.query_row("SELECT extract(?)", params!(PassedRef::new(s)), |r| {
-            Ok(r[0].get_str()?.unwrap().to_owned())
+            Ok(r[0].get_str()?.to_owned())
         })?;
     assert_eq!(ret, "string from passed ref".to_owned());
     Ok(())

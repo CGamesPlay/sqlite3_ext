@@ -1,9 +1,9 @@
 error[E0499]: cannot borrow `*val` as mutable more than once at a time
  --> tests/ui/valueref.rs:5:21
   |
-4 |     let ref_str = val.get_str()?.unwrap();
+4 |     let ref_str = val.get_str()?;
   |                   ------------- first mutable borrow occurs here
-5 |     let ref_str_2 = val.get_str()?.unwrap();
+5 |     let ref_str_2 = val.get_str()?;
   |                     ^^^^^^^^^^^^^ second mutable borrow occurs here
 6 |     println!("{}, {}", ref_str, ref_str_2);
   |                        ------- first borrow later used here

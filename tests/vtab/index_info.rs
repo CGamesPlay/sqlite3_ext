@@ -57,7 +57,7 @@ fn best_index_in() -> Result<()> {
         ) -> Result<()> {
             self.num_filter.set(self.num_filter.get() + 1);
             let vals: Vec<String> = ValueList::from_value_ref(args[0])?
-                .map(|x| Ok(x.get_str()?.unwrap().to_owned()))
+                .map(|x| Ok(x.get_str()?.to_owned()))
                 .collect()?;
             assert_eq!(vals, vec!("a1", "b2"));
             Ok(())

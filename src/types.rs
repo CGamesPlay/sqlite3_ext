@@ -6,6 +6,8 @@ use std::{
 
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_NOMEM]\).
 pub const SQLITE_NOMEM: Error = Error::Sqlite(ffi::SQLITE_NOMEM, None);
+/// Alias for [Error::Sqlite]\([ffi::SQLITE_READONLY]\).
+pub const SQLITE_READONLY: Error = Error::Sqlite(ffi::SQLITE_READONLY, None);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_NOTFOUND]\).
 pub const SQLITE_NOTFOUND: Error = Error::Sqlite(ffi::SQLITE_NOTFOUND, None);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_EMPTY]\).

@@ -121,6 +121,17 @@ impl Connection {
         })
     }
 
+    /// Convenience method to prepare a query and bind it with values. See
+    /// [Statement::query].
+    pub fn query<P>(&self, sql: &str, params: P) -> Result<Statement>
+    where
+        P: Params,
+    {
+        let mut stmt = self.prepare(sql)?;
+        stmt.query(params)?;
+        Ok(stmt)
+    }
+
     /// Convenience method for `self.prepare(sql)?.query_row(params, f)`. See
     /// [Statement::query_row].
     pub fn query_row<P, R, F>(&self, sql: &str, params: P, f: F) -> Result<R>

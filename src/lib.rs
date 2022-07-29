@@ -3,6 +3,7 @@ pub use extension::Extension;
 pub use globals::*;
 pub use iterator::*;
 pub use sqlite3_ext_macro::*;
+pub use transaction::*;
 pub use types::*;
 pub use value::*;
 
@@ -15,6 +16,7 @@ mod iterator;
 mod mutex;
 pub mod query;
 mod test_helpers;
+mod transaction;
 mod types;
 mod value;
 pub mod vtab;

@@ -46,6 +46,13 @@ fn basic() -> Result<()> {
 }
 
 #[test]
+fn empty_statement() {
+    let h = TestHelpers::new();
+    let err = h.db.prepare("").unwrap_err();
+    assert_eq!(err, SQLITE_EMPTY);
+}
+
+#[test]
 fn invalid_execute() {
     let h = TestHelpers::new();
     let err = h.db.execute("SELECT 1", ());

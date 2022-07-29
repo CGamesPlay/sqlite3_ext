@@ -86,6 +86,9 @@ pub struct Statement {
 impl Connection {
     /// Prepare some SQL for execution.
     pub fn prepare(&self, sql: &str) -> Result<Statement> {
+        if sql.len() == 0 {
+            return Err(SQLITE_EMPTY);
+        }
         const FLAGS: u32 = 0;
         let guard = self.lock();
         let mut ret = MaybeUninit::uninit();
@@ -112,6 +115,7 @@ impl Connection {
             guard,
         )?;
         let stmt = unsafe { ret.assume_init() };
+        assert!(!stmt.is_null());
         let len = unsafe { ffi::sqlite3_column_count(stmt) as usize };
         let columns = (0..len).map(|i| Column::new(stmt, i)).collect();
         Ok(Statement {

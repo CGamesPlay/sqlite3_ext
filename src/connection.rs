@@ -113,6 +113,22 @@ impl Connection {
             _ => Ok(()),
         }
     }
+
+    /// Prints the text of all currently prepared statements to stderr. Intended for
+    /// debugging.
+    pub fn dump_prepared_statements(&self) {
+        unsafe {
+            let mut stmt = ffi::sqlite3_next_stmt(self.as_mut_ptr(), std::ptr::null_mut());
+            while !stmt.is_null() {
+                let cstr = CStr::from_ptr(ffi::sqlite3_sql(stmt)).to_str();
+                match cstr {
+                    Ok(cstr) => eprintln!("{}", cstr),
+                    Err(e) => eprintln!("{:?}: invalid SQL: {}", stmt, e),
+                }
+                stmt = ffi::sqlite3_next_stmt(self.as_mut_ptr(), stmt);
+            }
+        }
+    }
 }
 
 impl std::fmt::Debug for Connection {

@@ -169,17 +169,13 @@ impl Statement {
     }
 
     /// Bind the provided parameters to the query. If the query was previously used, it is reset
-    /// and existing paramters are cleared.
+    /// and existing parameters are cleared.
     ///
     /// This method is not necessary to call on the first execution of a query where there are no
     /// parameters to bind (e.g. on a single-use hard-coded query).
     pub fn query<P: Params>(&mut self, params: P) -> Result<&mut Self> {
         if self.state != QueryState::Ready {
-            unsafe {
-                ffi::sqlite3_reset(self.base);
-                Error::from_sqlite(ffi::sqlite3_clear_bindings(self.base))?;
-            }
-            self.state = QueryState::Ready;
+            self.reset()?;
         }
         params.bind_params(self)?;
         Ok(self)
@@ -192,17 +188,17 @@ impl Statement {
     ///
     /// If you are not storing this Statement for later reuse, [Connection::query_row] is a
     /// shortcut for this method.
-    pub fn query_row<'a, P, R, F>(&'a mut self, params: P, f: F) -> Result<R>
+    pub fn query_row<P, R, F>(&mut self, params: P, f: F) -> Result<R>
     where
         P: Params,
-        R: 'a,
-        F: FnOnce(&'a mut QueryResult) -> Result<R>,
+        F: FnOnce(&mut QueryResult) -> Result<R>,
     {
-        let rs = self.query(params)?;
-        let ret = match rs.next()? {
+        self.query(params)?;
+        let ret = match self.next()? {
             None => return Err(SQLITE_EMPTY),
             Some(r) => f(r)?,
         };
+        self.reset()?;
         Ok(ret)
     }
 
@@ -216,7 +212,7 @@ impl Statement {
     /// for this method.
     pub fn execute<P: Params>(&mut self, params: P) -> Result<i64> {
         let db = unsafe { self.db() }.lock();
-        if let Some(_) = self.query(params)?.next()? {
+        let ret = if let Some(_) = self.query(params)?.next()? {
             // Query returned rows!
             Err(SQLITE_MISUSE)
         } else {
@@ -226,7 +222,9 @@ impl Statement {
                     _ => ffi::sqlite3_changes(db.as_mut_ptr()) as _,
                 }
             })
-        }
+        };
+        self.reset()?;
+        ret
     }
 
     /// Execute a query that is expected to be an INSERT, then return the inserted rowid.
@@ -236,12 +234,14 @@ impl Statement {
     /// not an INSERT, the return value of this function is meaningless.
     pub fn insert<P: Params>(&mut self, params: P) -> Result<i64> {
         let db = unsafe { self.db() }.lock();
-        if let Some(_) = self.query(params)?.next()? {
+        let ret = if let Some(_) = self.query(params)?.next()? {
             // Query returned rows!
             Err(SQLITE_MISUSE)
         } else {
             Ok(unsafe { ffi::sqlite3_last_insert_rowid(db.as_mut_ptr()) })
-        }
+        };
+        self.reset()?;
+        ret
     }
 
     /// Returns the original text of the prepared statement.
@@ -311,6 +311,15 @@ impl Statement {
     /// improperly used.
     pub unsafe fn db<'a>(&self) -> &'a Connection {
         Connection::from_ptr(ffi::sqlite3_db_handle(self.base))
+    }
+
+    fn reset(&mut self) -> Result<()> {
+        unsafe {
+            ffi::sqlite3_reset(self.base);
+            Error::from_sqlite(ffi::sqlite3_clear_bindings(self.base))?;
+        }
+        self.state = QueryState::Ready;
+        Ok(())
     }
 }
 

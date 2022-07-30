@@ -190,7 +190,7 @@ fn passed_ref() -> Result<()> {
 fn unprotected_value() -> Result<()> {
     let h = TestHelpers::new();
     let mut stmt = h.db.prepare("SELECT zeroblob(1024)")?;
-    let ret = stmt.query_row((), |r| Ok(r[0].as_ref()))?;
+    let ret = stmt.next()?.map(|r| r[0].as_ref());
     let ret: i64 =
         h.db.query_row("SELECT length(?)", [ret], |r| Ok(r[0].get_i64()))?;
     assert_eq!(ret, 1024);

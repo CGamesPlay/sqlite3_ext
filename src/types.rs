@@ -4,6 +4,8 @@ use std::{
     os::raw::{c_char, c_int},
 };
 
+/// Alias for [Error::Sqlite]\([ffi::SQLITE_LOCKED]\).
+pub const SQLITE_LOCKED: Error = Error::Sqlite(ffi::SQLITE_LOCKED, None);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_NOMEM]\).
 pub const SQLITE_NOMEM: Error = Error::Sqlite(ffi::SQLITE_NOMEM, None);
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_READONLY]\).

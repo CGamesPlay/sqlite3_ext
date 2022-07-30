@@ -49,7 +49,7 @@ fn basic() -> Result<()> {
 fn empty_statement() {
     let h = TestHelpers::new();
     let err = h.db.prepare("").unwrap_err();
-    assert_eq!(err, SQLITE_EMPTY);
+    assert_eq!(err, SQLITE_MISUSE);
 }
 
 #[test]

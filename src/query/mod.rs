@@ -10,7 +10,7 @@ use std::{
     mem::MaybeUninit,
     num::NonZeroI32,
     ops::{Index, IndexMut},
-    ptr, slice, str,
+    slice, str,
 };
 
 mod params;
@@ -84,14 +84,14 @@ pub struct Statement {
 }
 
 impl Connection {
-    /// Prepare some SQL for execution.
-    pub fn prepare(&self, sql: &str) -> Result<Statement> {
-        if sql.len() == 0 {
-            return Err(SQLITE_EMPTY);
-        }
+    /// Prepare some SQL for execution. This method will return the prepared statement and
+    /// a slice containing the portion of the original input which was after the first SQL
+    /// statement.
+    pub fn prepare_first<'a>(&self, sql: &'a str) -> Result<(Option<Statement>, &'a str)> {
         const FLAGS: u32 = 0;
         let guard = self.lock();
         let mut ret = MaybeUninit::uninit();
+        let mut rest = MaybeUninit::uninit();
         Error::from_sqlite_desc(
             unsafe {
                 sqlite3_match_version! {
@@ -101,28 +101,43 @@ impl Connection {
                         sql.len() as _,
                         FLAGS,
                         ret.as_mut_ptr(),
-                        ptr::null_mut(),
+                        rest.as_mut_ptr(),
                     ),
                     _ => ffi::sqlite3_prepare_v2(
                         self.as_mut_ptr(),
                         sql.as_ptr() as _,
                         sql.len() as _,
                         ret.as_mut_ptr(),
-                        ptr::null_mut(),
+                        rest.as_mut_ptr(),
                     ),
                 }
             },
             guard,
         )?;
+
         let stmt = unsafe { ret.assume_init() };
-        assert!(!stmt.is_null());
-        let len = unsafe { ffi::sqlite3_column_count(stmt) as usize };
-        let columns = (0..len).map(|i| Column::new(stmt, i)).collect();
-        Ok(Statement {
-            base: stmt,
-            state: QueryState::Ready,
-            columns,
-        })
+        let stmt = if stmt.is_null() {
+            None
+        } else {
+            let len = unsafe { ffi::sqlite3_column_count(stmt) as usize };
+            let columns = (0..len).map(|i| Column::new(stmt, i)).collect();
+            Some(Statement {
+                base: stmt,
+                state: QueryState::Ready,
+                columns,
+            })
+        };
+
+        let rest = unsafe { rest.assume_init() };
+        let offset = rest as usize - sql.as_ptr() as usize;
+        let rest = unsafe { sql.get_unchecked(offset..) };
+        Ok((stmt, rest))
+    }
+
+    /// Prepare some SQL for execution. This method will return Err([SQLITE_MISUSE]) if the
+    /// input string does not contain any SQL statements.
+    pub fn prepare(&self, sql: &str) -> Result<Statement> {
+        self.prepare_first(sql)?.0.ok_or(SQLITE_MISUSE)
     }
 
     /// Convenience method to prepare a query and bind it with values. See

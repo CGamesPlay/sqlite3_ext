@@ -1,16 +1,17 @@
 #[cfg(modern_sqlite)]
 use crate::mutex::SQLiteMutexGuard;
 use crate::{ffi, sqlite3_match_version, sqlite3_require_version, types::*};
-#[cfg(modern_sqlite)]
 use std::{
-    ffi::{CStr, CString},
-    os::raw::c_int,
-    ptr::{null, NonNull},
-};
-use std::{
+    ffi::CStr,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
     thread::panicking,
+};
+#[cfg(modern_sqlite)]
+use std::{
+    ffi::CString,
+    os::raw::c_int,
+    ptr::{null, NonNull},
 };
 
 /// Represents a borrowed connection to an SQLite database.

@@ -68,6 +68,15 @@ pub trait FromValue {
     /// Interpret this value as a BLOB.
     fn get_blob(&mut self) -> Result<&[u8]>;
 
+    /// Attempt to interpret this value as a BLOB, without converting. If the underlying
+    /// data type is not a BLOB, this function will fail with Err([SQLITE_MISMATCH]).
+    fn try_get_blob(&self) -> Result<&[u8]> {
+        match self.value_type() {
+            ValueType::Blob => Ok(unsafe { self.get_blob_unchecked() }),
+            _ => Err(SQLITE_MISMATCH),
+        }
+    }
+
     /// Get the underlying TEXT value.
     ///
     /// This method will fail if the value has invalid UTF-8.
@@ -79,13 +88,22 @@ pub trait FromValue {
         Ok(str::from_utf8(self.get_blob_unchecked())?)
     }
 
-    /// Interpret the value as `Option<&str>`.
+    /// Interpret the value as TEXT.
     ///
     /// This method will fail if SQLite runs out of memory while converting the value, or
-    /// if the value has invalid UTF-8. The returned value is `None` if the underlying
-    /// value is SQL NULL.
+    /// if the value has invalid UTF-8.
     fn get_str(&mut self) -> Result<&str> {
         Ok(str::from_utf8(self.get_blob()?)?)
+    }
+
+    /// Attempt to interpret this value as TEXT, without converting. If the underlying data
+    /// type is not TEXT, this function will fail with Err([SQLITE_MISMATCH]). This
+    /// function can also fail if the string has invalid UTF-8.
+    fn try_get_str(&self) -> Result<&str> {
+        match self.value_type() {
+            ValueType::Text => unsafe { self.get_str_unchecked() },
+            _ => Err(SQLITE_MISMATCH),
+        }
     }
 
     /// Clone the value, returning a [Value].

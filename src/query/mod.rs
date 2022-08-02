@@ -208,13 +208,18 @@ impl Statement {
         P: Params,
         F: FnOnce(&mut QueryResult) -> Result<R>,
     {
-        self.query(params)?;
-        let ret = match self.next()? {
-            None => return Err(SQLITE_EMPTY),
-            Some(r) => f(r)?,
-        };
-        self.reset()?;
-        Ok(ret)
+        let res = self.query(params)?.next().map(|o| o.map(|row| f(row)));
+        // Always reset the query after using, although we prioritize a query failure
+        // in the return value.
+        let reset_res = self.reset();
+        match res {
+            Ok(None) => Err(SQLITE_EMPTY),
+            Ok(Some(r)) => {
+                reset_res?;
+                r
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Execute a query that is expected to return no results (such as an INSERT, UPDATE, or
@@ -227,19 +232,24 @@ impl Statement {
     /// for this method.
     pub fn execute<P: Params>(&mut self, params: P) -> Result<i64> {
         let db = unsafe { self.db() }.lock();
-        let ret = if let Some(_) = self.query(params)?.next()? {
-            // Query returned rows!
-            Err(SQLITE_MISUSE)
-        } else {
-            Ok(unsafe {
-                sqlite3_match_version! {
-                    3_037_000 => ffi::sqlite3_changes64(db.as_mut_ptr()),
-                    _ => ffi::sqlite3_changes(db.as_mut_ptr()) as _,
-                }
-            })
-        };
-        self.reset()?;
-        ret
+
+        let res = self.query(params)?.next().map(|r| r.is_some());
+        // Always reset the query after using, although we prioritize a query failure
+        // in the return value.
+        let reset_res = self.reset();
+        match res {
+            Ok(false) => {
+                reset_res?;
+                Ok(unsafe {
+                    sqlite3_match_version! {
+                        3_037_000 => ffi::sqlite3_changes64(db.as_mut_ptr()),
+                        _ => ffi::sqlite3_changes(db.as_mut_ptr()) as _,
+                    }
+                })
+            }
+            Ok(true) => Err(SQLITE_MISUSE), // Query returned rows!
+            Err(e) => Err(e),
+        }
     }
 
     /// Execute a query that is expected to be an INSERT, then return the inserted rowid.
@@ -249,14 +259,18 @@ impl Statement {
     /// not an INSERT, the return value of this function is meaningless.
     pub fn insert<P: Params>(&mut self, params: P) -> Result<i64> {
         let db = unsafe { self.db() }.lock();
-        let ret = if let Some(_) = self.query(params)?.next()? {
-            // Query returned rows!
-            Err(SQLITE_MISUSE)
-        } else {
-            Ok(unsafe { ffi::sqlite3_last_insert_rowid(db.as_mut_ptr()) })
-        };
-        self.reset()?;
-        ret
+        let res = self.query(params)?.next().map(|r| r.is_some());
+        // Always reset the query after using, although we prioritize a query failure
+        // in the return value.
+        let reset_res = self.reset();
+        match res {
+            Ok(false) => {
+                reset_res?;
+                Ok(unsafe { ffi::sqlite3_last_insert_rowid(db.as_mut_ptr()) })
+            }
+            Ok(true) => Err(SQLITE_MISUSE), // Query returned rows!
+            Err(e) => Err(e),
+        }
     }
 
     /// Returns the original text of the prepared statement.

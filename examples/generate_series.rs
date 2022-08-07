@@ -215,7 +215,7 @@ mod test {
     use super::*;
 
     fn setup() -> Result<Database> {
-        let conn = Database::open_in_memory()?;
+        let conn = Database::open(":memory:")?;
         init(&conn)?;
         Ok(conn)
     }

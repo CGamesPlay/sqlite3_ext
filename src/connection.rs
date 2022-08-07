@@ -1,18 +1,72 @@
 #[cfg(modern_sqlite)]
 use crate::mutex::SQLiteMutexGuard;
 use crate::{ffi, sqlite3_match_version, sqlite3_require_version, types::*};
+use bitflags::bitflags;
+#[cfg(modern_sqlite)]
+use std::ptr::{null, NonNull};
 use std::{
-    ffi::CStr,
+    ffi::{CStr, CString},
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
+    os::raw::c_int,
+    path::Path,
+    ptr::null_mut,
     thread::panicking,
 };
-#[cfg(modern_sqlite)]
-use std::{
-    ffi::CString,
-    os::raw::c_int,
-    ptr::{null, NonNull},
-};
+
+bitflags! {
+    /// These are the flags that can be passed to [Database::open_with_flags] and variants.
+    #[repr(transparent)]
+    pub struct OpenFlags: c_int {
+        /// The database is opened in read-only mode. If the database does not already exist, an error is returned.
+        const READONLY = ffi::SQLITE_OPEN_READONLY;
+        /// The database is opened for reading and writing if possible, or reading only
+        /// if the file is write protected by the operating system. In either case the
+        /// database must already exist, otherwise an error is returned (see
+        /// [Self::CREATE]).
+        const READWRITE = ffi::SQLITE_OPEN_READWRITE;
+        /// Create a new, empty database file when opening if it does not already
+        /// exist. This only applies to [Self::READWRITE].
+        const CREATE = ffi::SQLITE_OPEN_CREATE;
+        /// The database will be opened as an in-memory database. The database is named
+        /// by the "filename" argument for the purposes of cache-sharing, if shared
+        /// cache mode is enabled, but the "filename" is otherwise ignored.
+        const MEMORY = ffi::SQLITE_OPEN_MEMORY;
+        /// The new database connection will use the "multi-thread" threading mode.
+        /// This means that separate threads are allowed to use SQLite at the same
+        /// time, as long as each thread is using a different database connection.
+        ///
+        /// # Safety
+        ///
+        /// When using this flag, you assume responsibility for verifying that the
+        /// database connection will only be accessed from a single thread.
+        const UNSAFE_NOMUTEX = ffi::SQLITE_OPEN_NOMUTEX;
+        /// The new database connection will use the "serialized" threading mode. This
+        /// means the multiple threads can safely attempt to use the same database
+        /// connection at the same time. (Mutexes will block any actual concurrency,
+        /// but in this mode there is no harm in trying.)
+        const FULLMUTEX = ffi::SQLITE_OPEN_FULLMUTEX;
+        /// The database is opened shared cache enabled, overriding the default shared
+        /// cache setting provided by [ffi::sqlite3_enable_shared_cache].
+        const SHAREDCACHE = ffi::SQLITE_OPEN_SHAREDCACHE;
+        /// The database is opened shared cache disabled, overriding the default shared
+        /// cache setting provided by [ffi::sqlite3_enable_shared_cache].
+        const PRIVATECACHE = ffi::SQLITE_OPEN_PRIVATECACHE;
+        /// The database connection comes up in "extended result code mode". In other
+        /// words, the database behaves has if
+        /// [ffi::sqlite3_extended_result_codes](db,1) where called on the database
+        /// connection as soon as the connection is created. In addition to setting the
+        /// extended result code mode, this flag also causes the corresponding
+        /// [Database] open method to return an extended result code.
+        const EXRESCODE = ffi::SQLITE_OPEN_EXRESCODE;
+        /// The database filename is not allowed to be a symbolic link.
+        const NOFOLLOW = ffi::SQLITE_OPEN_NOFOLLOW;
+
+        /// This is the set of flags used when calling open methods that do not accept
+        /// flags.
+        const DEFAULT = ffi::SQLITE_OPEN_READWRITE | ffi::SQLITE_OPEN_CREATE;
+    }
+}
 
 /// Represents a borrowed connection to an SQLite database.
 #[repr(transparent)]
@@ -138,6 +192,12 @@ impl std::fmt::Debug for Connection {
     }
 }
 
+#[cfg(unix)]
+fn path_to_cstring(path: &Path) -> CString {
+    use std::os::unix::ffi::OsStrExt;
+    CString::new(path.as_os_str().as_bytes()).unwrap()
+}
+
 /// Represents an owned connection to an SQLite database.
 ///
 /// This struct is an owned version of [Connection]. When this struct is dropped, it will close
@@ -147,11 +207,25 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn open_in_memory() -> Result<Database> {
-        const FILENAME: &[u8] = b":memory:\0";
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Database> {
+        let filename = path_to_cstring(path.as_ref());
+        Database::_open(filename.as_c_str(), OpenFlags::DEFAULT)
+    }
+
+    pub fn open_with_flags<P: AsRef<Path>>(path: P, flags: OpenFlags) -> Result<Database> {
+        let filename = path_to_cstring(path.as_ref());
+        Database::_open(filename.as_c_str(), flags)
+    }
+
+    fn _open(filename: &CStr, flags: OpenFlags) -> Result<Database> {
         let mut db = MaybeUninit::uninit();
         let rc = Error::from_sqlite(unsafe {
-            ffi::sqlite3_open(FILENAME.as_ptr() as _, db.as_mut_ptr())
+            ffi::sqlite3_open_v2(
+                filename.as_ptr() as _,
+                db.as_mut_ptr(),
+                flags.bits,
+                null_mut(),
+            )
         });
         match rc {
             Ok(()) => Ok(Database {

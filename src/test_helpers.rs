@@ -14,7 +14,8 @@ pub struct TestHelpers {
 
 impl TestHelpers {
     pub fn new() -> TestHelpers {
-        let db = Database::open_in_memory().expect("failed to open database");
+        let db = Database::open_with_flags(":memory:", OpenFlags::DEFAULT | OpenFlags::EXRESCODE)
+            .expect("failed to open database");
         TestHelpers { db }
     }
 

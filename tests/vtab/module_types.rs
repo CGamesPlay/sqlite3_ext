@@ -70,7 +70,7 @@ impl VTabCursor<'_> for TestCursor {
 #[test]
 #[cfg(modern_sqlite)]
 fn eponymous_only() -> Result<()> {
-    let conn = Database::open_in_memory()?;
+    let conn = Database::open(":memory:")?;
     conn.create_module(
         "eponymous_only_vtab",
         EponymousOnlyModule::<TestVTab>::new().unwrap(),
@@ -86,7 +86,7 @@ fn eponymous_only() -> Result<()> {
 
 #[test]
 fn eponymous() -> Result<()> {
-    let conn = Database::open_in_memory()?;
+    let conn = Database::open(":memory:")?;
     conn.create_module("eponymous_vtab", EponymousModule::<TestVTab>::new(), ())?;
     conn.execute("CREATE VIRTUAL TABLE tbl USING eponymous_vtab()", ())?;
     conn.query_row("SELECT COUNT(*) FROM eponymous_vtab", (), |_| Ok(()))?;
@@ -96,7 +96,7 @@ fn eponymous() -> Result<()> {
 
 #[test]
 fn standard() -> Result<()> {
-    let conn = Database::open_in_memory()?;
+    let conn = Database::open(":memory:")?;
     conn.create_module("standard_vtab", StandardModule::<TestVTab>::new(), ())?;
     conn.execute("CREATE VIRTUAL TABLE tbl USING standard_vtab()", ())?;
     let err = conn

@@ -3,7 +3,7 @@ use sqlite3_ext::*;
 #[test]
 fn main() -> Result<()> {
     let dylib_path = test_cdylib::build_example("generate_series");
-    let conn = Database::open_in_memory()?;
+    let conn = Database::open(":memory:")?;
     conn.load_extension(&dylib_path.to_string_lossy(), None)?;
     let results: Vec<i64> = conn
         .prepare("SELECT value FROM generate_series(5, 100, 5)")?

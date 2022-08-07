@@ -12,7 +12,7 @@ fn init(conn: &sqlite3_ext::Connection) -> sqlite3_ext::Result<()> {
 
 #[test]
 fn main() -> rusqlite::Result<()> {
-    let conn = rusqlite::Connection::open_in_memory()?;
+    let conn = rusqlite::Connection::open(":memory:")?;
     init(sqlite3_ext::Connection::from_rusqlite(&conn))?;
     let ret = conn.query_row("SELECT user_function()", [], |r| r.get::<_, String>(0))?;
     assert_eq!(ret, "user defined function".to_owned());

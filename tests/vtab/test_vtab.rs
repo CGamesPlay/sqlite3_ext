@@ -21,7 +21,7 @@ pub trait TestHooks: Sized {
 }
 
 pub fn setup<Hooks: TestHooks>(hooks: &Hooks) -> Result<Database> {
-    let conn = Database::open_in_memory()?;
+    let conn = Database::open(":memory:")?;
     conn.create_module("vtab", TestVTab::module(), hooks)?;
     conn.execute(
         "CREATE VIRTUAL TABLE tbl USING vtab(schema='CREATE TABLE x(a,b,c)', rows=3)",

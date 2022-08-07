@@ -6,7 +6,7 @@ use regex::Regex;
 use std::str::from_utf8;
 
 fn setup() -> Result<(Database, Rc<RefCell<Vec<u8>>>)> {
-    let conn = Database::open_in_memory()?;
+    let conn = Database::open(":memory:")?;
     let out = Rc::new(RefCell::new(vec![]));
     init(&conn, out.clone())?;
     conn.execute(

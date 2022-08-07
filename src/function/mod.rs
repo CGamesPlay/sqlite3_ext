@@ -344,6 +344,7 @@ impl Connection {
     /// Remove an application-defined scalar or aggregate function. The name and n_args
     /// parameters must match the values used when the function was created.
     pub fn remove_function(&self, name: &str, n_args: i32) -> Result<()> {
+        let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };
         let guard = self.lock();
         unsafe {
             Error::from_sqlite_desc(

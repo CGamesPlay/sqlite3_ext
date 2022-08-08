@@ -9,6 +9,7 @@ members = [ "sqlite3_ext_macro" ]
 [features]
 static = [ "dep:libsqlite3-sys" ]
 static_modern = [ "static", "libsqlite3-sys?/bundled_bindings" ]
+bundled = [ "static_modern", "libsqlite3-sys?/bundled" ]
 with_rusqlite = [ "dep:rusqlite", "static" ]
 
 [dependencies]

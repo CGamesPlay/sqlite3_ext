@@ -23,12 +23,13 @@ sealed = "0.4.0"
 sqlite3_ext_macro = { path = "sqlite3_ext_macro" }
 
 [dev-dependencies]
+indoc = "1.0"
+lazy_static = "1.4.0"
 nom = "7.1.1"
 pretty_assertions = "1.2.1"
-indoc = "1.0"
 regex = "1.5.6"
-lazy_static = "1.4.0"
-test-cdylib = "1.1.0"
+serde_json = "1.0"
+subprocess = "0.2.9"
 trybuild = "1.0.63"
 
 [build-dependencies]

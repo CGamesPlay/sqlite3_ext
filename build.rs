@@ -137,7 +137,7 @@ fn generate_ffi(static_link: bool, modern_sqlite: bool) {
                 // an application with SQLITE_OMIT_LOAD_EXTENSION (so no
                 // worries).
                 if !api.is_null() && (*api).libversion_number.unwrap() != libsqlite3_sys::sqlite3_libversion_number {
-                    return Err(crate::types::Error::Module("this extension is statically linked to a different version of SQLite".to_owned()));
+                    return Err(crate::types::Error::Module("this extension is statically linked to SQLite and cannot be used as a loadable extension".to_owned()));
                 }
                 Ok(())
             }

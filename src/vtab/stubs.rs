@@ -148,9 +148,15 @@ pub unsafe extern "C" fn vtab_close<'vtab, T: VTab<'vtab> + 'vtab>(
 pub unsafe extern "C" fn vtab_disconnect<'vtab, T: VTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
 ) -> c_int {
-    let vtab: Box<VTabHandle<T>> = Box::from_raw(vtab as _);
-    std::mem::drop(vtab);
-    ffi::SQLITE_OK
+    let vtab = &mut *(vtab.cast::<VTabHandle<T>>());
+    match vtab.vtab.disconnect() {
+        Ok(_) => {
+            let vtab: Box<VTabHandle<T>> = Box::from_raw(vtab as _);
+            std::mem::drop(vtab);
+            ffi::SQLITE_OK
+        }
+        Err(e) => ffi::handle_error(e, &mut vtab.base.zErrMsg),
+    }
 }
 
 pub unsafe extern "C" fn vtab_destroy<'vtab, T: CreateVTab<'vtab> + 'vtab>(

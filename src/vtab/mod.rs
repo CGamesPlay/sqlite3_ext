@@ -84,6 +84,16 @@ pub trait VTab<'vtab> {
 
     /// Create an uninitialized query.
     fn open(&'vtab self) -> Result<Self::Cursor>;
+
+    /// Corresponds to xDisconnect. This method is called when the database connection is
+    /// being closed. The implementation should not remove the underlying data, but it
+    /// should release any resources associated with the virtual table implementation. This method is the inverse of [Self::connect].
+    ///
+    /// After invoking this method, the virtual table implementation is immediately
+    /// dropped. The default implementation of this method simply returns Ok.
+    fn disconnect(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// A non-eponymous virtual table that supports CREATE VIRTUAL TABLE.
@@ -115,7 +125,12 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
     where
         Self: Sized;
 
-    /// Corresponds to xDestroy, when DROP TABLE is run on the virtual table.
+    /// Corresponds to xDestroy, when DROP TABLE is run on the virtual table. The virtual
+    /// table implementation should destroy any underlying state that was created by
+    /// [Self::create].
+    ///
+    /// After invoking this method, the virtual table implementation is immediately
+    /// dropped.
     fn destroy(&mut self) -> Result<()>;
 }
 
@@ -201,7 +216,9 @@ pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
 
 /// A virtual table that supports ALTER TABLE RENAME.
 pub trait RenameVTab<'vtab>: VTab<'vtab> {
-    /// Corresponds to xRename, when ALTER TABLE RENAME is run on the virtual table.
+    /// Corresponds to xRename, when ALTER TABLE RENAME is run on the virtual table. If
+    /// this method returns Ok, then SQLite will disconnect this virtual table
+    /// implementation and connect to a new implementation with the updated name.
     fn rename(&'vtab self, name: &str) -> Result<()>;
 }
 

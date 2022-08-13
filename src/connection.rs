@@ -177,7 +177,7 @@ impl Connection {
             while !stmt.is_null() {
                 let cstr = CStr::from_ptr(ffi::sqlite3_sql(stmt)).to_str();
                 match cstr {
-                    Ok(cstr) => eprintln!("{}", cstr),
+                    Ok(cstr) => eprintln!("=> {}", cstr),
                     Err(e) => eprintln!("{:?}: invalid SQL: {}", stmt, e),
                 }
                 stmt = ffi::sqlite3_next_stmt(self.as_mut_ptr(), stmt);
@@ -240,6 +240,22 @@ impl Database {
             }
         }
     }
+
+    /// Gracefully close the database. This automatically happens when the Database is
+    /// dropped, but a failure in drop will result in a panic, while this method provides a
+    /// path for graceful error handling.
+    pub fn close(mut self) -> std::result::Result<(), (Error, Database)> {
+        match self._close() {
+            Ok(()) => Ok(()),
+            Err(e) => Err((e, self)),
+        }
+    }
+
+    fn _close(&mut self) -> Result<()> {
+        Error::from_sqlite(unsafe { ffi::sqlite3_close(self.db) })?;
+        self.db = null_mut();
+        Ok(())
+    }
 }
 
 impl std::fmt::Debug for Database {
@@ -250,8 +266,7 @@ impl std::fmt::Debug for Database {
 
 impl Drop for Database {
     fn drop(&mut self) {
-        let rc = Error::from_sqlite(unsafe { ffi::sqlite3_close(self.db) });
-        if let Err(e) = rc {
+        if let Err(e) = self._close() {
             if panicking() {
                 eprintln!("Error while closing SQLite connection: {:?}", e);
             } else {

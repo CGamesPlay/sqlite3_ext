@@ -100,6 +100,7 @@ fn read() -> Result<()> {
           rowid 2 -> 3
         eof(tab=100, cursor=101) -> true
         drop(tab=100, cursor=101)
+        disconnect(tab=100)
         drop(tab=100)
     "#}.to_owned());
     assert_eq!(out, expected);
@@ -124,6 +125,7 @@ fn insert() -> Result<()> {
         sync(tab=100, transaction=102)
         commit(tab=100, transaction=102)
         drop_transaction(tab=100, transaction=102)
+        disconnect(tab=100)
         drop(tab=100)
     "#};
     assert_eq!(out, expected);
@@ -174,6 +176,7 @@ fn update() -> Result<()> {
         sync(tab=100, transaction=102)
         commit(tab=100, transaction=102)
         drop_transaction(tab=100, transaction=102)
+        disconnect(tab=100)
         drop(tab=100)
     "#}.to_owned());
     assert_eq!(out, expected);
@@ -216,6 +219,7 @@ fn delete() -> Result<()> {
         sync(tab=100, transaction=102)
         commit(tab=100, transaction=102)
         drop_transaction(tab=100, transaction=102)
+        disconnect(tab=100)
         drop(tab=100)
     "#}.to_owned());
     assert_eq!(out, expected);
@@ -236,6 +240,7 @@ fn rename() -> Result<()> {
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
         rename(tab=100, name="newname")
+        disconnect(tab=100)
         drop(tab=100)
         connect(tab=200, args=["vtablog", "temp", "newname", "schema='CREATE TABLE x(a,b,c)'", "rows=3"])
         destroy(tab=200)
@@ -262,6 +267,7 @@ fn shadow_name() -> Result<()> {
         sync(tab=100, transaction=101)
         commit(tab=100, transaction=101)
         drop_transaction(tab=100, transaction=101)
+        disconnect(tab=100)
         drop(tab=100)
     "#};
     assert_eq!(out, expected);

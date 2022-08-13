@@ -254,6 +254,7 @@ impl<'vtab, T: VTab<'vtab>> EponymousOnlyModule<'vtab, T> {
                     xConnect: Some(stubs::vtab_connect::<T>),
                     xBestIndex: Some(stubs::vtab_best_index::<T>),
                     xDisconnect: Some(stubs::vtab_disconnect::<T>),
+                    xDestroy: Some(stubs::vtab_disconnect::<T>),
                     xOpen: Some(stubs::vtab_open::<T>),
                     xClose: Some(stubs::vtab_close::<T>),
                     xFilter: Some(stubs::vtab_filter::<T>),

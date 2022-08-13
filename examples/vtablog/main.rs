@@ -155,6 +155,11 @@ impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
         writeln!(self, "open(tab={}, cursor={})", self.id, ret.id)?;
         Ok(ret)
     }
+
+    fn disconnect(&mut self) -> Result<()> {
+        writeln!(self, "disconnect(tab={})", self.id)?;
+        Ok(())
+    }
 }
 
 impl<'vtab, O: Write + 'static> CreateVTab<'vtab> for VTabLog<O> {

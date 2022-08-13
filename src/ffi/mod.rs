@@ -191,7 +191,13 @@ pub const unsafe fn sqlite_transient() -> Option<unsafe extern "C" fn(arg1: *mut
     std::mem::transmute(-1 as isize as usize)
 }
 
+/// Clone the provided string into a nul-terminated string created by sqlite3_malloc. This
+/// function returns a NULL pointer if the input string is empty. SQLite interfaces generally
+/// understand this to mean "no string", but other consumers may expect a 0-length string.
 pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
+    if val.is_empty() {
+        return Ok(ptr::null_mut());
+    }
     let len: usize = val.len().checked_add(1).ok_or(crate::types::SQLITE_NOMEM)?;
     unsafe {
         let ptr: *mut c_char = sqlite3_match_version! {

@@ -1,28 +1,55 @@
 # sqlite3_ext
 
-Create SQLite loadable extensions in Rust. The design philosophy of the API is gradual enhancement: extensions written with this crate support versions of SQLite back to 3.6.8, unless they explicitly require newer features.
+[![Crates.io](https://img.shields.io/crates/v/sqlite3_ext)](https://crates.io/crates/sqlite3_ext) [![docs.rs](https://img.shields.io/docsrs/sqlite3_ext)](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/)
+
+Create SQLite loadable extensions in Rust. The design philosophy of the API is gradual enhancement: all use of SQLite features returns a Result, and an Err is returned when the host version of SQLite does not support the feature in question.
+
+## Early Version Warning
+
+This crate is pre-1.0 and the API is allowed to change freely. In particular, if a safe API is found to be unsafe, it will be changed. Once the crate reaches version 1.0, the API will be subject to semantic versioning.
+
+Being a pre-1.0, young crate, there may be bugs which have not yet been discovered. The crate comes with a modest test suite covering all of the features (over 100 tests currently).
+
+Crate documentation is moderately covered, and there are example extensions in the repository that can serve as a guide. Also look at the integration test in the "test" folder at the root.
+
+Multi-threading support is low-priority and untested. If your application-defined functions and virtual tables don't reference data outside of the database they are attached to, this will not cause issues because SQLite always does database operations in a single thread. However, the API needs to be evaluated through a multithreading lens to ensure that it is safe.
+
+## Features
+
+- A [querying interface](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/query/struct.Statement.html) similar to Rusqlite's.
+- Application-defined [scalar](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/struct.Connection.html#method.create_scalar_function) and [aggregate](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/struct.Connection.html#method.create_aggregate_function) functions, and [collating sequences](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/struct.Connection.html#method.create_collation).
+- A more comprehensive [virtual table implementation](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/vtab/index.html) than any other Rust crate currently published, supporting all SQLite virtual table methods.
+- Rust support for the most modern features of SQLite, up to version 3.38.5.
 
 ## Crate features
 
-- `static` - The consumer of this crate is not an SQLite loadable extension. The SQLite API will be provided by the linker. To avoid link errors, sqlite3_ext disables all APIs that are added after 3.6.8.
+- `static` - The consumer of this crate is a [statically linked run-time loadable extension](https://www.sqlite.org/loadext.html#statically_linking_a_run_time_loadable_extension). SQLite will be provided by the linker. To avoid link errors, sqlite3_ext disables all APIs that are added after 3.6.8.
 - `static_modern` - Same as `static`, but sqlite3_ext does not disable any APIs. This will cause link errors if the linked version of SQLite is older than the version supported by sqlite3_ext.
+- `bundled` - Same as `static_modern`, but also statically link a bundled version of SQLite from [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys). Please do not activate this feature from library crates, so that the consumer of your crate can decide for themselves to enable it.
+- `with_rusqlite` - Adds support for registering your statically linked extension to a Rusqlite Connection object.
 
-## Compilation Modes
+## How to use
 
-There are three supported compilation modes for sqlite3_ext:
-
-- As a loadable extension. Your crate is `crate-type = [ "cdylib" ]` and is loaded into another process as an SQLite loadable extension.
-  - SQLite methods are provided by SQLite at run-time.
-- As a statically linked extension. Your crate is `crate-type = [ "staticlib" ]` and is statically linked into another program.
-  - Linker provides the SQLite methods.
-- As a rust library. Your crate has any type and uses sqlite3_ext like any other crate.
-  - You are responsible for providing SQLite (e.g. via Rusqlite).
-
-## Crate configurations
-
-- By default, the crate is configured to be dynamically loaded by SQLite.
-- Using feature `static`, the crate is able to be linked into a Rust or C program statically. This is highly compatible, but disables many features of SQLite.
-- Using feature `static_modern`, the crate is able to be linked into a Rust or C program statically. This requires that the system's SQLite is at least the version supported by sqlite3_ext, or there will be link errors.
+- I want to create a **loadable extension** that can be used by any SQLite client, or from the sqlite3 shell.
+  - Your crate should be `crate-type = [ "cdylib" ]`.
+  - Use [`sqlite3_ext_main`](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/attr.sqlite3_ext_main.html) to register your enhancements.
+  - SQLite methods are provided by SQLite at run-time, and methods will return [`Error::VersionNotSatisfied`](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/enum.Error.html#variant.VersionNotSatisfied) if they are not available in the host SQLite.
+- I want to create a **Rust binary that uses features not supported by rusqlite**.
+  - Your crate can be of any type. Enable the `with_rusqlite` and `bundled` features of this crate.
+  - Use [`sqlite3_ext_init`](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/attr.sqlite3_ext_init.html) to create an initialization function. Call the function with the rusqlite Connection, as [shown here](https://github.com/CGamesPlay/sqlite3_ext/blob/main/tests/with_rusqlite.rs).
+  - SQLite methods will always be available, since the SQLite version is controlled by Rust.
+- I want to create a **statically linked extension** that can be used by a (potentially non-Rust) program.
+  - Your crate should be `crate-type = [ "staticlib" ]`. Enable the `static` feature of this crate. Use [`sqlite3_ext_main`](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/attr.sqlite3_ext_main.html) to register your enhancements.
+  - Call `sqlite3_mycrate_init` directly (the method name is derived from the crate name) as documented [here](https://www.sqlite.org/loadext.html#statically_linking_a_run_time_loadable_extension), or use [`sqlite3_auto_extension`](https://www.sqlite.org/c3ref/auto_extension.html).
+  - The host system provides SQLite. SQLite methods not available in version 3.6.8 will always return [`Error::VersionNotSatisfied`](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/enum.Error.html#variant.VersionNotSatisfied).
+- I want to create a **statically linked extension with modern SQLite features** that can be used by a (potentially non-Rust) program.
+  - This is the same as above, but using the `static_modern` feature.
+  - The version of SQLite being linked in must be the same or newer than the version supported by sqlite3_ext.
+- I want to create a **Rust program that does not use rusqlite**.
+  - Your crate can be of any type. Enable the `with_rusqlite` and `bundled` features of this crate.
+  - Use [`sqlite3_ext_init`](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/attr.sqlite3_ext_init.html) to create an initialization function. Use [`Database`](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/struct.Database.html#) to open a connection to a database. Pass the Database to the init function.
+  - SQLite methods will always be available, since the SQLite version is controlled by Rust.
+  - **Note:** if you are publishing a library crate, use `static_modern` instead of `bundled`, to avoid [corrupting the database](https://www.sqlite.org/howtocorrupt.html#multiple_copies_of_sqlite_linked_into_the_same_application) of your library's consumer.
 
 ### Test configurations
 
@@ -80,8 +107,8 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_changes |  | :white_check_mark: | Statement::execute |
 | sqlite3_changes64 |  | :white_check_mark: | Statement::execute |
 | sqlite3_clear_bindings | sqlite3_stmt | :grey_exclamation: | Unnecessary |
-| sqlite3_close |  | | |
-| sqlite3_close_v2 |  | | |
+| sqlite3_close |  | :white_check_mark: | Database::close |
+| sqlite3_close_v2 |  | :grey_exclamation: | Unnecessary |
 | sqlite3_collation_needed | sqlite3 | :white_check_mark: | Connection::set_collation_needed_func |
 | sqlite3_collation_needed16 | sqlite3 | :grey_exclamation: | Use UTF-8 equivalent |
 | sqlite3_column_blob | sqlite3_stmt | :white_check_mark: | Column::get_blob |

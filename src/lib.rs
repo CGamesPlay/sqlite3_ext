@@ -1,3 +1,4 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
 pub use connection::*;
 pub use extension::Extension;
 pub use globals::*;

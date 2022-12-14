@@ -1,6 +1,7 @@
 //! Helpers for when using sqltie3_ext extensions from within Rust programs that use
 //! [rusqlite].
 #![cfg(feature = "with_rusqlite")]
+#![cfg_attr(docsrs, doc(cfg(feature = "with_rusqlite")))]
 
 use super::*;
 

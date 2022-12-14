@@ -6,4 +6,4 @@ error: non-exhaustive patterns: missing a wildcard pattern
 6 | |     }
   | |_____^
   |
-  = note: this error originates in the macro `$crate::sqlite3_match_version` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this error originates in the macro `$crate::sqlite3_match_version` which comes from the expansion of the macro `sqlite3_match_version` (in Nightly builds, run with -Z macro-backtrace for more info)

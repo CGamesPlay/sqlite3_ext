@@ -9,4 +9,4 @@ error[E0080]: evaluation of constant value failed
 9 | |     }
   | |_____^ the evaluated program panicked at '308 is earlier than 3.6.8 (the minimum supported version of SQLite)', $DIR/tests/ui/sqlite3_version_required_invalid_version.rs:4:5
   |
-  = note: this error originates in the macro `$crate::panic::panic_2021` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this error originates in the macro `$crate::panic::panic_2021` which comes from the expansion of the macro `sqlite3_match_version` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -15,4 +15,4 @@ note: required by a bound in `StandardModule`
     | |     }
     | | });
     | |__^ required by this bound in `StandardModule`
-    = note: this error originates in the attribute macro `sqlite3_ext_vtab` (in Nightly builds, run with -Z macro-backtrace for more info)
+    = note: this error originates in the attribute macro `sqlite3_ext_vtab` which comes from the expansion of the macro `module_base` (in Nightly builds, run with -Z macro-backtrace for more info)

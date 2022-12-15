@@ -46,10 +46,10 @@ Multi-threading support is low-priority and untested. If your application-define
   - This is the same as above, but using the `static_modern` feature.
   - The version of SQLite being linked in must be the same or newer than the version supported by sqlite3_ext.
 - I want to create a **Rust program that does not use rusqlite**.
-  - Your crate can be of any type. Enable the `with_rusqlite` and `bundled` features of this crate.
+  - Your crate can be of any type. Enable the `bundled` feature of this crate.
   - Use [`sqlite3_ext_init`](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/attr.sqlite3_ext_init.html) to create an initialization function. Use [`Database`](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/struct.Database.html#) to open a connection to a database. Pass the Database to the init function.
   - SQLite methods will always be available, since the SQLite version is controlled by Rust.
-  - **Note:** if you are publishing a library crate, use `static_modern` instead of `bundled`, to avoid [corrupting the database](https://www.sqlite.org/howtocorrupt.html#multiple_copies_of_sqlite_linked_into_the_same_application) of your library's consumer.
+  - **Note:** if you are publishing a library crate, use `static_modern` instead of `bundled`, and expose a `bundled` feature in your own crate and have it enable the `sqlite3_ext/bundled` feature. This is to avoid [corrupting the database](https://www.sqlite.org/howtocorrupt.html#multiple_copies_of_sqlite_linked_into_the_same_application) of your library's consumer.
 
 ### Test configurations
 

@@ -447,9 +447,9 @@ pub fn sqlite3_ext_doctest_impl(item: TokenStream) -> TokenStream {
         impl ::sqlite3_ext::vtab::VTabCursor<'_> for Cursor {
             fn filter(&mut self, _: i32, _: Option<&str>, _: &mut [&mut ValueRef]) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
             fn next(&mut self) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
-            fn eof(&self) -> bool { todo!() }
-            fn column(&self, _: usize, _: &::sqlite3_ext::vtab::ColumnContext) -> Result<()> { todo!() }
-            fn rowid(&self) -> std::result::Result<i64, ::sqlite3_ext::Error> { todo!() }
+            fn eof(&mut self) -> bool { todo!() }
+            fn column(&mut self, _: usize, _: &::sqlite3_ext::vtab::ColumnContext) -> Result<()> { todo!() }
+            fn rowid(&mut self) -> std::result::Result<i64, ::sqlite3_ext::Error> { todo!() }
         }
     };
     TokenStream::from(expanded)

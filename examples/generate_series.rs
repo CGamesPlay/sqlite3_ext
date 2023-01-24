@@ -181,7 +181,7 @@ impl VTabCursor<'_> for Cursor {
         Ok(())
     }
 
-    fn eof(&self) -> bool {
+    fn eof(&mut self) -> bool {
         if self.desc {
             self.value < self.min_value
         } else {
@@ -189,7 +189,7 @@ impl VTabCursor<'_> for Cursor {
         }
     }
 
-    fn column(&self, idx: usize, c: &ColumnContext) -> Result<()> {
+    fn column(&mut self, idx: usize, c: &ColumnContext) -> Result<()> {
         let ret = match idx as _ {
             COLUMN_START => self.min_value,
             COLUMN_STOP => self.max_value,
@@ -199,7 +199,7 @@ impl VTabCursor<'_> for Cursor {
         c.set_result(ret)
     }
 
-    fn rowid(&self) -> Result<i64> {
+    fn rowid(&mut self) -> Result<i64> {
         Ok(self.rowid)
     }
 }

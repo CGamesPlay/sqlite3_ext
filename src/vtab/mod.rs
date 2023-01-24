@@ -15,6 +15,8 @@
 //! In addition to the base type of virtual table, there are several traits which can be
 //! implemented to add behavior.
 //!
+//! - [VTab] is required to be implemented by all virtual tables.
+//! - [CreateVTab] indicates that the table supports CREATE VIRTUAL TABLE.
 //! - [UpdateVTab] indicates that the table supports INSERT/UPDATE/DELETE.
 //! - [TransactionVTab] indicates that the table supports ROLLBACK.
 //! - [FindFunctionVTab] indicates that the table overrides certain SQL functions when they
@@ -243,17 +245,17 @@ pub trait VTabCursor<'vtab> {
     fn next(&mut self) -> Result<()>;
 
     /// Check if the cursor currently points beyond the end of the valid results.
-    fn eof(&self) -> bool;
+    fn eof(&mut self) -> bool;
 
     /// Fetch the column numbered idx for the current row. The indexes correspond to the order the
     /// columns were declared by [VTab::connect]. The output value must be assigned to the context
     /// using [ColumnContext::set_result]. If no result is set, SQL NULL is returned. If this
     /// method returns an Err value, the SQL statement will fail, even if a result had been set
     /// before the failure.
-    fn column(&self, idx: usize, context: &ColumnContext) -> Result<()>;
+    fn column(&mut self, idx: usize, context: &ColumnContext) -> Result<()>;
 
     /// Fetch the rowid for the current row.
-    fn rowid(&self) -> Result<i64>;
+    fn rowid(&mut self) -> Result<i64>;
 }
 
 /// Implementation of the transaction type for a virtual table.

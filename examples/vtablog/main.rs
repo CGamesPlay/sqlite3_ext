@@ -247,7 +247,7 @@ impl<'vtab, O: Write> VTabCursor<'vtab> for VTabLogCursor<'vtab, O> {
         Ok(())
     }
 
-    fn eof(&self) -> bool {
+    fn eof(&mut self) -> bool {
         let ret = self.rowid >= self.vtab.num_rows;
         writeln!(
             self.vtab,
@@ -258,7 +258,7 @@ impl<'vtab, O: Write> VTabCursor<'vtab> for VTabLogCursor<'vtab, O> {
         ret
     }
 
-    fn column(&self, idx: usize, context: &ColumnContext) -> Result<()> {
+    fn column(&mut self, idx: usize, context: &ColumnContext) -> Result<()> {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
         let mut ret = match () {
             _ if context.nochange() => Err(Error::NoChange),
@@ -277,7 +277,7 @@ impl<'vtab, O: Write> VTabCursor<'vtab> for VTabLogCursor<'vtab, O> {
         context.set_result(ret)
     }
 
-    fn rowid(&self) -> Result<i64> {
+    fn rowid(&mut self) -> Result<i64> {
         writeln!(
             self.vtab,
             "rowid(tab={}, cursor={}) -> {}",

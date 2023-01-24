@@ -102,11 +102,11 @@ impl<'vtab, Hooks: TestHooks + 'vtab> VTabCursor<'vtab> for TestVTabCursor<'vtab
         Ok(())
     }
 
-    fn eof(&self) -> bool {
+    fn eof(&mut self) -> bool {
         self.rowid >= self.vtab.num_rows
     }
 
-    fn column(&self, idx: usize, ctx: &ColumnContext) -> Result<()> {
+    fn column(&mut self, idx: usize, ctx: &ColumnContext) -> Result<()> {
         const ALPHABET: &[u8] = "abcdefghijklmnopqrstuvwxyz".as_bytes();
         let ret = match () {
             _ if ctx.nochange() => Err(Error::NoChange),
@@ -118,7 +118,7 @@ impl<'vtab, Hooks: TestHooks + 'vtab> VTabCursor<'vtab> for TestVTabCursor<'vtab
         ctx.set_result(ret)
     }
 
-    fn rowid(&self) -> Result<i64> {
+    fn rowid(&mut self) -> Result<i64> {
         Ok(self.rowid)
     }
 }

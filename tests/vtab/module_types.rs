@@ -54,15 +54,15 @@ impl VTabCursor<'_> for TestCursor {
         unreachable!()
     }
 
-    fn eof(&self) -> bool {
+    fn eof(&mut self) -> bool {
         true
     }
 
-    fn column(&self, _: usize, _: &ColumnContext) -> Result<()> {
+    fn column(&mut self, _: usize, _: &ColumnContext) -> Result<()> {
         unreachable!()
     }
 
-    fn rowid(&self) -> Result<i64> {
+    fn rowid(&mut self) -> Result<i64> {
         unreachable!()
     }
 }

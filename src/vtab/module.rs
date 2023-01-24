@@ -131,7 +131,8 @@ module_base!(
     /// Declare a virtual table.
     ///
     /// See [sqlite_ext_vtab](::sqlite3_ext_macro::sqlite3_ext_vtab) for details on how to
-    /// use this.
+    /// use this. The struct implementing the virtual table must implement [VTab] and
+    /// [CreateVTab] at a minimum.
     StandardModule<CreateVTab> {
     fn with_initial_transaction(&mut self)
     where
@@ -150,7 +151,8 @@ module_base!(
     /// parameters.
     ///
     /// See [sqlite_ext_vtab](::sqlite3_ext_macro::sqlite3_ext_vtab) for details on how to
-    /// use this.
+    /// use this. The struct implementing the virtual table must implement [VTab] at a
+    /// minimum. Any implementation of [CreateVTab] will be ignored.
     EponymousModule<VTab> {
     fn with_initial_transaction(&mut self)
     where
@@ -175,7 +177,8 @@ module_base!(
     /// the virtual table more than once.
     ///
     /// See [sqlite_ext_vtab](::sqlite3_ext_macro::sqlite3_ext_vtab) for details on how to
-    /// use this.
+    /// use this. The struct implementing the virtual table must implement [VTab] at a
+    /// minimum. Any implementation of [CreateVTab] will be ignored.
     EponymousOnlyModule<VTab> {
     fn with_initial_transaction(&mut self)
     where

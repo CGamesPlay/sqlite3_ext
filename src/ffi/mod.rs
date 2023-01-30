@@ -49,7 +49,7 @@ macro_rules! sqlite3_match_version_trampoline {
 /// missing on older versions of SQLite, which would cause a compilation error.
 ///
 /// A fallback arm is always required when using this macro. For cases where no fallback is
-/// possible, use [sqlite3_require_version].
+/// possible, use [sqlite3_require_version](crate::sqlite3_require_version).
 ///
 /// # Examples
 ///

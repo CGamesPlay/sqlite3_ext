@@ -111,6 +111,12 @@ impl From<String> for Error {
     }
 }
 
+impl From<&str> for Error {
+    fn from(msg: &str) -> Self {
+        Self::Module(msg.to_string())
+    }
+}
+
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

@@ -9,18 +9,18 @@ use std::{
     str::from_utf8_unchecked,
 };
 
-pub unsafe extern "C" fn call_scalar<F>(
+pub unsafe extern "C" fn call_scalar<'a, F>(
     context: *mut ffi::sqlite3_context,
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
 ) where
-    F: FnMut(&Context, &mut [&mut ValueRef]) -> Result<()>,
+    F: ScalarFunction<'a>,
 {
     let ic = InternalContext::from_ptr(context);
     let func = ic.user_data::<F>();
     let ctx = Context::from_ptr(context);
     let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
-    if let Err(e) = func(ctx, args) {
+    if let Err(e) = func.call(ctx, args) {
         ctx.set_result(e).unwrap();
     }
 }

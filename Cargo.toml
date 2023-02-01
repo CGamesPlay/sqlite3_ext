@@ -63,6 +63,11 @@ crate-type = [ "cdylib", "staticlib" ]
 test = true
 
 [[example]]
+name = "shared_context"
+crate-type = [ "cdylib", "staticlib" ]
+test = true
+
+[[example]]
 name = "vtablog"
 crate-type = [ "cdylib", "staticlib" ]
 test = true

@@ -20,6 +20,31 @@ pub trait FromUserData<T> {
     fn from_user_data(data: &T) -> Self;
 }
 
+/// Trait for scalar functions. This trait is used with
+/// [Connection::create_scalar_function_object] to implement scalar functions that have a
+/// lifetime smaller than `'static`. It is also possible to use closures and avoid implementing
+/// this trait, see [Connection::create_scalar_function] for details.
+pub trait ScalarFunction<'db> {
+    /// Perform a single invocation. The function will be invoked with a [Context] and an
+    /// array of [ValueRef] objects. The function is required to set its output using
+    /// [Context::set_result]. If no result is set, SQL NULL is returned. If the function
+    /// returns an Err value, the SQL statement will fail, even if a result had been set.
+    fn call(&self, context: &Context, args: &mut [&mut ValueRef]) -> Result<()>;
+}
+
+struct ScalarClosure<F>(F)
+where
+    F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'static;
+
+impl<F> ScalarFunction<'_> for ScalarClosure<F>
+where
+    F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'static,
+{
+    fn call(&self, ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+        self.0(ctx, args)
+    }
+}
+
 /// Implement an application-defined aggregate function which cannot be used as a window
 /// function.
 ///
@@ -204,7 +229,12 @@ impl Connection {
     /// Create a new scalar function. The function will be invoked with a [Context] and an array of
     /// [ValueRef] objects. The function is required to set its output using [Context::set_result].
     /// If no result is set, SQL NULL is returned. If the function returns an Err value, the SQL
-    /// statement will fail, even if a result had been set before the failure.
+    /// statement will fail, even if a result had been set.
+    ///
+    /// The passed function can be a closure, however the lifetime of the closure must be
+    /// `'static` due to limitations in the Rust borrow checker. The
+    /// [create_scalar_function_object] function is an alternative that allows using an
+    /// alternative lifetime.
     ///
     /// # Compatibility
     ///
@@ -219,6 +249,22 @@ impl Connection {
     ) -> Result<()>
     where
         F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'static,
+    {
+        self.create_scalar_function_object(name, &opts, ScalarClosure(func))
+    }
+
+    /// Create a new scalar function using a struct. This function is identical to
+    /// [create_scalar_function], but uses a trait object instead of a closure. This
+    /// enables creating scalar functions that maintain references with a lifetime smaller
+    /// than `'static`.
+    pub fn create_scalar_function_object<'db, F>(
+        &'db self,
+        name: &str,
+        opts: &FunctionOptions,
+        func: F,
+    ) -> Result<()>
+    where
+        F: ScalarFunction<'db>,
     {
         let guard = self.lock();
         let name = unsafe { CString::from_vec_unchecked(name.as_bytes().into()) };

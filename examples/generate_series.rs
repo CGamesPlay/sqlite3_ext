@@ -1,4 +1,4 @@
-//! Rust implementation of the generate_series table-valued function built into SQLite.
+//! Rust implementation of the generate_series table-valued function distributed with SQLite.
 //!
 //! For more information, consult [the SQLite documentation](https://www.sqlite.org/series.html).
 

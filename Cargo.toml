@@ -63,6 +63,11 @@ crate-type = [ "cdylib", "staticlib" ]
 test = true
 
 [[example]]
+name = "rarray"
+crate-type = [ "lib" ]
+test = true
+
+[[example]]
 name = "shared_context"
 crate-type = [ "cdylib", "staticlib" ]
 test = true

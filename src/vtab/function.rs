@@ -21,11 +21,11 @@ type CFunc = unsafe extern "C" fn(*mut ffi::sqlite3_context, c_int, *mut *mut ff
 ///
 /// This object is responsible for storing the data associated with overloaded functions. All
 /// functions stored in the list must last for the entire lifetime of the virtual table.
-pub struct VTabFunctionList<'vtab, T: VTab<'vtab> + ?Sized> {
+pub struct VTabFunctionList<'vtab, T: VTab<'vtab>> {
     list: RefCell<Vec<Pin<Box<VTabFunction<'vtab, T>>>>>,
 }
 
-impl<'vtab, T: VTab<'vtab> + ?Sized> Default for VTabFunctionList<'vtab, T> {
+impl<'vtab, T: VTab<'vtab>> Default for VTabFunctionList<'vtab, T> {
     fn default() -> Self {
         Self {
             list: RefCell::new(Vec::new()),
@@ -144,7 +144,7 @@ where
     )
 }
 
-struct VTabFunction<'vtab, T: VTab<'vtab> + ?Sized> {
+struct VTabFunction<'vtab, T: VTab<'vtab>> {
     n_args: i32,
     name: Cow<'vtab, str>,
     constraint: Option<ConstraintOp>,

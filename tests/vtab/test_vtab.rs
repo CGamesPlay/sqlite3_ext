@@ -80,7 +80,7 @@ impl<'vtab, Hooks: TestHooks + 'vtab> CreateVTab<'vtab> for TestVTab<'vtab, Hook
         Self::connect_create(aux)
     }
 
-    fn destroy(&mut self) -> Result<()> {
+    fn destroy(self) -> DisconnectResult<Self> {
         Ok(())
     }
 }

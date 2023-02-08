@@ -156,8 +156,8 @@ impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
         Ok(ret)
     }
 
-    fn disconnect(&mut self) -> Result<()> {
-        writeln!(self, "disconnect(tab={})", self.id)?;
+    fn disconnect(self) -> DisconnectResult<Self> {
+        writeln!(self, "disconnect(tab={})", self.id).map_err(|e| (self, e))?;
         Ok(())
     }
 }
@@ -169,8 +169,8 @@ impl<'vtab, O: Write + 'static> CreateVTab<'vtab> for VTabLog<O> {
         Self::connect_create(db, args, "create")
     }
 
-    fn destroy(&mut self) -> Result<()> {
-        writeln!(self, "destroy(tab={})", self.id)?;
+    fn destroy(self) -> DisconnectResult<Self> {
+        writeln!(self, "destroy(tab={})", self.id).map_err(|e| (self, e))?;
         Ok(())
     }
 }

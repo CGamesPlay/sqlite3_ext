@@ -87,7 +87,7 @@ impl<'vtab> CreateVTab<'vtab> for MyVTab<'vtab> {
         Ok((sql, vtab))
     }
 
-    fn destroy(&mut self) -> Result<()> {
+    fn destroy(self) -> DisconnectResult<Self> {
         Ok(())
     }
 }

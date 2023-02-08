@@ -35,7 +35,7 @@ impl CreateVTab<'_> for TestVTab {
         Self::connect_create()
     }
 
-    fn destroy(&mut self) -> Result<()> {
+    fn destroy(self) -> DisconnectResult<Self> {
         Ok(())
     }
 }

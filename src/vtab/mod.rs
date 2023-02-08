@@ -36,11 +36,13 @@ mod index_info;
 mod module;
 pub(crate) mod stubs;
 
+pub type DisconnectResult<T> = std::result::Result<(), (T, Error)>;
+
 /// A virtual table.
 ///
 /// This trait defines functionality required by all virtual tables. A read-only,
 /// eponymous-only virtual table (e.g. a table-valued function) can implement only this trait.
-pub trait VTab<'vtab> {
+pub trait VTab<'vtab>: Sized {
     /// Additional data associated with the virtual table module.
     ///
     /// When registering the module with [Connection::create_module], additional data can
@@ -67,9 +69,7 @@ pub trait VTab<'vtab> {
         db: &'vtab VTabConnection,
         aux: &'vtab Self::Aux,
         args: &[&str],
-    ) -> Result<(String, Self)>
-    where
-        Self: Sized;
+    ) -> Result<(String, Self)>;
 
     /// Corrresponds to xBestIndex.
     ///
@@ -91,9 +91,8 @@ pub trait VTab<'vtab> {
     /// being closed. The implementation should not remove the underlying data, but it
     /// should release any resources associated with the virtual table implementation. This method is the inverse of [Self::connect].
     ///
-    /// After invoking this method, the virtual table implementation is immediately
-    /// dropped. The default implementation of this method simply returns Ok.
-    fn disconnect(&mut self) -> Result<()> {
+    /// The default implementation of this method simply returns Ok.
+    fn disconnect(self) -> DisconnectResult<Self> {
         Ok(())
     }
 }
@@ -123,17 +122,12 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
         db: &'vtab VTabConnection,
         aux: &'vtab Self::Aux,
         args: &[&str],
-    ) -> Result<(String, Self)>
-    where
-        Self: Sized;
+    ) -> Result<(String, Self)>;
 
     /// Corresponds to xDestroy, when DROP TABLE is run on the virtual table. The virtual
     /// table implementation should destroy any underlying state that was created by
     /// [Self::create].
-    ///
-    /// After invoking this method, the virtual table implementation is immediately
-    /// dropped.
-    fn destroy(&mut self) -> Result<()>;
+    fn destroy(self) -> DisconnectResult<Self>;
 }
 
 /// A virtual table that supports INSERT/UPDATE/DELETE.

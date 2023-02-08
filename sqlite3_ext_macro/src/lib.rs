@@ -436,7 +436,7 @@ pub fn sqlite3_ext_doctest_impl(item: TokenStream) -> TokenStream {
 
         impl<'vtab> ::sqlite3_ext::vtab::CreateVTab<'vtab> for #item {
             fn create(_: &::sqlite3_ext::vtab::VTabConnection, _: &Self::Aux, _: &[&str]) -> std::result::Result<(String, Self), ::sqlite3_ext::Error> { todo!() }
-            fn destroy(&mut self) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
+            fn destroy(self) -> ::sqlite3_ext::vtab::DisconnectResult<Self> { todo!() }
         }
 
         impl<'vtab> ::sqlite3_ext::vtab::UpdateVTab<'vtab> for #item {

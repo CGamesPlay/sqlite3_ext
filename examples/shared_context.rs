@@ -102,7 +102,7 @@ impl<'vtab> MyCursor<'vtab> {
     }
 }
 
-impl<'vtab> VTabCursor<'vtab> for MyCursor<'vtab> {
+impl<'vtab> VTabCursor for MyCursor<'vtab> {
     fn filter(&mut self, _: i32, _: Option<&str>, _: &mut [&mut ValueRef]) -> Result<()> {
         self.vtab.state.increment();
         Ok(())

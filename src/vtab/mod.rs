@@ -49,7 +49,7 @@ pub trait VTab<'vtab> {
     type Aux: 'vtab;
 
     /// Cursor implementation for this virtual table.
-    type Cursor: VTabCursor<'vtab>;
+    type Cursor: VTabCursor + 'vtab;
 
     /// Corresponds to xConnect.
     ///
@@ -156,7 +156,7 @@ pub trait UpdateVTab<'vtab>: VTab<'vtab> {
 ///
 /// See [VTabTransaction] for details.
 pub trait TransactionVTab<'vtab>: UpdateVTab<'vtab> {
-    type Transaction: VTabTransaction<'vtab>;
+    type Transaction: VTabTransaction + 'vtab;
 
     /// Begin a transaction.
     fn begin(&'vtab self) -> Result<Self::Transaction>;
@@ -194,7 +194,7 @@ pub trait TransactionVTab<'vtab>: UpdateVTab<'vtab> {
 /// }
 /// # sqlite3_ext_doctest_impl!(MyVTab<'vtab>);
 ///
-/// impl<'vtab> MyVTab<'vtab> {
+/// impl MyVTab<'_> {
 ///     /// Register the overloaded functions. Should be called from connect/create.
 ///     fn init_functions(&mut self) {
 ///         self.functions.add_method(1, "my_func", None, |vtab, ctx, args| {
@@ -225,7 +225,7 @@ pub trait RenameVTab<'vtab>: VTab<'vtab> {
 }
 
 /// Implementation of the cursor type for a virtual table.
-pub trait VTabCursor<'vtab> {
+pub trait VTabCursor {
     /// Begin a search of the virtual table. This method is always invoked after creating
     /// the cursor, before any other methods of this trait. After calling this method, the
     /// cursor should point to the first row of results (or [eof](VTabCursor::eof) should
@@ -290,7 +290,7 @@ pub trait VTabCursor<'vtab> {
 /// ROLLBACK TO a;
 /// COMMIT;
 /// ```
-pub trait VTabTransaction<'vtab> {
+pub trait VTabTransaction {
     /// Start a two-phase commit.
     ///
     /// This method is only invoked prior to a commit or rollback. In order to implement

@@ -91,7 +91,7 @@ impl<'vtab, Hooks: TestHooks + 'vtab> FindFunctionVTab<'vtab> for TestVTab<'vtab
     }
 }
 
-impl<'vtab, Hooks: TestHooks + 'vtab> VTabCursor<'vtab> for TestVTabCursor<'vtab, Hooks> {
+impl<'vtab, Hooks: TestHooks + 'vtab> VTabCursor for TestVTabCursor<'vtab, Hooks> {
     fn filter(&mut self, _: i32, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
         self.rowid = 0;
         self.vtab.hooks.filter(self, args)

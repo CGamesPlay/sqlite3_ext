@@ -444,7 +444,7 @@ pub fn sqlite3_ext_doctest_impl(item: TokenStream) -> TokenStream {
         }
 
         struct Cursor {}
-        impl ::sqlite3_ext::vtab::VTabCursor<'_> for Cursor {
+        impl ::sqlite3_ext::vtab::VTabCursor for Cursor {
             fn filter(&mut self, _: i32, _: Option<&str>, _: &mut [&mut ValueRef]) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
             fn next(&mut self) -> std::result::Result<(), ::sqlite3_ext::Error> { todo!() }
             fn eof(&mut self) -> bool { todo!() }

@@ -40,7 +40,7 @@ impl CreateVTab<'_> for TestVTab {
     }
 }
 
-impl VTabCursor<'_> for TestCursor {
+impl VTabCursor for TestCursor {
     fn filter(
         &mut self,
         _index_num: i32,

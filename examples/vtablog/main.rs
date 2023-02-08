@@ -223,7 +223,7 @@ impl<O: Write> Drop for VTabLog<O> {
     }
 }
 
-impl<'vtab, O: Write> VTabCursor<'vtab> for VTabLogCursor<'vtab, O> {
+impl<'vtab, O: Write> VTabCursor for VTabLogCursor<'vtab, O> {
     fn filter(&mut self, _: i32, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
         writeln!(
             self.vtab,
@@ -293,7 +293,7 @@ impl<O: Write> Drop for VTabLogCursor<'_, O> {
     }
 }
 
-impl<'vtab, O: Write> VTabTransaction<'vtab> for VTabLogTransaction<'vtab, O> {
+impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
     fn sync(&mut self) -> Result<()> {
         writeln!(
             self.vtab,

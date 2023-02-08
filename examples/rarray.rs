@@ -15,7 +15,7 @@ type ArrayPointer = Rc<[Value]>;
 #[sqlite3_ext_vtab(EponymousModule)]
 struct Rarray {}
 
-impl<'vtab> VTab<'vtab> for Rarray {
+impl VTab<'_> for Rarray {
     type Aux = ();
     type Cursor = Cursor;
 
@@ -63,7 +63,7 @@ struct Cursor {
     array: Option<ArrayPointer>,
 }
 
-impl VTabCursor<'_> for Cursor {
+impl VTabCursor for Cursor {
     fn filter(&mut self, _: i32, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
         self.rowid = 0;
         self.array = if args.len() > 0 {

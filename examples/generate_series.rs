@@ -11,7 +11,7 @@ const COLUMN_STEP: i32 = 3;
 #[sqlite3_ext_vtab(EponymousModule)]
 struct GenerateSeries {}
 
-impl<'vtab> VTab<'vtab> for GenerateSeries {
+impl VTab<'_> for GenerateSeries {
     type Aux = ();
     type Cursor = Cursor;
 
@@ -119,7 +119,7 @@ struct Cursor {
     step: i64,
 }
 
-impl VTabCursor<'_> for Cursor {
+impl VTabCursor for Cursor {
     fn filter(
         &mut self,
         query_plan: i32,

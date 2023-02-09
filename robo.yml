@@ -11,8 +11,7 @@ bindgen:
       --raw-line "#![allow(non_snake_case)]" \
       --raw-line "#![allow(dead_code)]" \
       --raw-line "#![allow(non_camel_case_types)]" \
-      -o src/ffi/sqlite3types.rs \
-      -- -D SQLITE_ENABLE_NORMALIZE
+      -o src/ffi/sqlite3types.rs
     echo Generated src/ffi/sqlite3types.rs
 
     bindgen src/ffi/sqlite3ext.h \
@@ -24,8 +23,7 @@ bindgen:
       --raw-line "#![allow(dead_code)]" \
       --raw-line "#![allow(non_camel_case_types)]" \
       --raw-line "use super::sqlite3types::*;" \
-      -o src/ffi/sqlite3funcs.rs \
-      -- -D SQLITE_ENABLE_NORMALIZE
+      -o src/ffi/sqlite3funcs.rs
     echo Generated src/ffi/sqlite3funcs.rs
 
 test:

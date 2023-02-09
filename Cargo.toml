@@ -64,6 +64,7 @@ test = true
 
 [[example]]
 name = "rarray"
+required-features = [ "static_modern" ]
 crate-type = [ "lib" ]
 test = true
 

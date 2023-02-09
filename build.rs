@@ -61,6 +61,9 @@ fn generate_ffi(static_link: bool, modern_sqlite: bool) {
             let method = extract_method(&field.ty).expect("invalid field");
             (name, method)
         })
+        // These methods are conditionally enabled by SQLite, but libsqlite3-sys does
+        // not link them, so we need to remove them when not static linking.
+        .filter(|(name, _)| !static_link || (*name != "normalized_sql" && *name != "unlock_notify"))
         .take_while(|(name, _)| modern_sqlite || *name != "close_v2")
         .collect();
 

@@ -233,7 +233,7 @@ impl Connection {
     ///
     /// The passed function can be a closure, however the lifetime of the closure must be
     /// `'static` due to limitations in the Rust borrow checker. The
-    /// [create_scalar_function_object] function is an alternative that allows using an
+    /// [Self::create_scalar_function_object] function is an alternative that allows using an
     /// alternative lifetime.
     ///
     /// # Compatibility
@@ -254,9 +254,8 @@ impl Connection {
     }
 
     /// Create a new scalar function using a struct. This function is identical to
-    /// [create_scalar_function], but uses a trait object instead of a closure. This
-    /// enables creating scalar functions that maintain references with a lifetime smaller
-    /// than `'static`.
+    /// [Self::create_scalar_function], but uses a trait object instead of a closure. This enables
+    /// creating scalar functions that maintain references with a lifetime smaller than `'static`.
     pub fn create_scalar_function_object<'db, F>(
         &'db self,
         name: &str,

@@ -177,8 +177,8 @@ impl Connection {
             while !stmt.is_null() {
                 let cstr = CStr::from_ptr(ffi::sqlite3_sql(stmt)).to_str();
                 match cstr {
-                    Ok(cstr) => eprintln!("=> {}", cstr),
-                    Err(e) => eprintln!("{:?}: invalid SQL: {}", stmt, e),
+                    Ok(cstr) => eprintln!("=> {cstr}"),
+                    Err(e) => eprintln!("{stmt:?}: invalid SQL: {e}"),
                 }
                 stmt = ffi::sqlite3_next_stmt(self.as_mut_ptr(), stmt);
             }
@@ -268,9 +268,9 @@ impl Drop for Database {
     fn drop(&mut self) {
         if let Err(e) = self._close() {
             if panicking() {
-                eprintln!("Error while closing SQLite connection: {:?}", e);
+                eprintln!("Error while closing SQLite connection: {e:?}");
             } else {
-                panic!("Error while closing SQLite connection: {:?}", e);
+                panic!("Error while closing SQLite connection: {e:?}");
             }
         }
     }

@@ -214,7 +214,7 @@ to_context_result! {
             Error::Sqlite(code, None) => ffi::sqlite3_result_error_code(ctx, code),
             Error::NoChange => (),
             _ => {
-                let msg = format!("{}", err);
+                let msg = format!("{err}");
                 let msg = msg.as_bytes();
                 let len = msg.len();
                 ffi::sqlite3_result_error(ctx, msg.as_ptr() as _, len as _);

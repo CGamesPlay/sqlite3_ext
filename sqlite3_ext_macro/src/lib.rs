@@ -394,7 +394,7 @@ pub fn sqlite3_ext_fn(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
     let opts_name = Ident::new(
-        &format!("{}_opts", ident).to_case(Case::UpperSnake),
+        &format!("{ident}_opts").to_case(Case::UpperSnake),
         Span::call_site(),
     );
     let mut opts = quote! {

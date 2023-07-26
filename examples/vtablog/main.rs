@@ -47,7 +47,7 @@ mod parsing {
         )(input);
         match ret {
             Ok((_, arg)) => Ok(arg),
-            Err(e) => Err(Error::Module(format!("{}", e))),
+            Err(e) => Err(Error::Module(format!("{e}"))),
         }
     }
 }
@@ -116,7 +116,7 @@ impl<O: Write> VTabLog<O> {
             num_transactions: Cell::new(0),
         };
 
-        writeln!(vtab, "{}(tab={}, args={:?})", method, id, args)?;
+        writeln!(vtab, "{method}(tab={id}, args={args:?})")?;
 
         Ok((schema, vtab))
     }
@@ -133,8 +133,8 @@ impl<'vtab, O: Write + 'static> VTab<'vtab> for VTabLog<O> {
     fn best_index(&self, index_info: &mut IndexInfo) -> Result<()> {
         writeln!(
             self,
-            "best_index(tab={}, index_info={:?})",
-            self.id, index_info
+            "best_index(tab={}, index_info={index_info:?})",
+            self.id
         )?;
         if let Some(mut c) = index_info.constraints().next() {
             if c.usable() {
@@ -177,7 +177,7 @@ impl<'vtab, O: Write + 'static> CreateVTab<'vtab> for VTabLog<O> {
 
 impl<'vtab, O: Write + 'static> UpdateVTab<'vtab> for VTabLog<O> {
     fn update(&self, info: &mut ChangeInfo) -> Result<i64> {
-        writeln!(self, "update(tab={}, args={:?})", self.id, info)?;
+        writeln!(self, "update(tab={}, args={info:?})", self.id)?;
         sqlite3_match_version! {
             3_022_000 => {
                 let unchanged: Vec<_> = info.args()
@@ -187,7 +187,7 @@ impl<'vtab, O: Write + 'static> UpdateVTab<'vtab> for VTabLog<O> {
                     .map(|(i, _)| i)
                     .collect();
                 if unchanged.len() > 0 {
-                    writeln!(self, "  unchanged: {:?}", unchanged)?;
+                    writeln!(self, "  unchanged: {unchanged:?}")?;
                 }
             }
             _ => (),
@@ -212,7 +212,7 @@ impl<'vtab, O: Write + 'static> TransactionVTab<'vtab> for VTabLog<O> {
 
 impl<'vtab, O: Write + 'static> RenameVTab<'vtab> for VTabLog<O> {
     fn rename(&self, name: &str) -> Result<()> {
-        writeln!(self, "rename(tab={}, name={:?})", self.id, name)?;
+        writeln!(self, "rename(tab={}, name={name:?})", self.id)?;
         Ok(())
     }
 }
@@ -227,8 +227,8 @@ impl<'vtab, O: Write> VTabCursor for VTabLogCursor<'vtab, O> {
     fn filter(&mut self, _: i32, _: Option<&str>, args: &mut [&mut ValueRef]) -> Result<()> {
         writeln!(
             self.vtab,
-            "filter(tab={}, cursor={}, args={:?})",
-            self.vtab.id, self.id, args
+            "filter(tab={}, cursor={}, args={args:?})",
+            self.vtab.id, self.id
         )?;
         self.rowid = 0;
         Ok(())
@@ -251,8 +251,8 @@ impl<'vtab, O: Write> VTabCursor for VTabLogCursor<'vtab, O> {
         let ret = self.rowid >= self.vtab.num_rows;
         writeln!(
             self.vtab,
-            "eof(tab={}, cursor={}) -> {}",
-            self.vtab.id, self.id, ret
+            "eof(tab={}, cursor={}) -> {ret}",
+            self.vtab.id, self.id
         )
         .unwrap();
         ret
@@ -265,12 +265,12 @@ impl<'vtab, O: Write> VTabCursor for VTabLogCursor<'vtab, O> {
             _ => Ok(ALPHABET
                 .get(idx)
                 .map(|l| format!("{}{}", *l as char, self.rowid))
-                .unwrap_or_else(|| format!("{{{}}}{}", idx, self.rowid))),
+                .unwrap_or_else(|| format!("{{{idx}}}{}", self.rowid))),
         };
         if let Err(e) = writeln!(
             self.vtab,
-            "column(tab={}, cursor={}, idx={}) -> {:?}",
-            self.vtab.id, self.id, idx, ret
+            "column(tab={}, cursor={}, idx={idx}) -> {ret:?}",
+            self.vtab.id, self.id
         ) {
             ret = Err(e.into())
         }
@@ -324,8 +324,8 @@ impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
     fn savepoint(&mut self, n: i32) -> Result<()> {
         writeln!(
             self.vtab,
-            "savepoint(tab={}, transaction={}, n={})",
-            self.vtab.id, self.id, n
+            "savepoint(tab={}, transaction={}, n={n})",
+            self.vtab.id, self.id
         )?;
         Ok(())
     }
@@ -333,8 +333,8 @@ impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
     fn release(&mut self, n: i32) -> Result<()> {
         writeln!(
             self.vtab,
-            "release(tab={}, transaction={}, n={})",
-            self.vtab.id, self.id, n
+            "release(tab={}, transaction={}, n={n})",
+            self.vtab.id, self.id
         )?;
         Ok(())
     }
@@ -342,8 +342,8 @@ impl<'vtab, O: Write> VTabTransaction for VTabLogTransaction<'vtab, O> {
     fn rollback_to(&mut self, n: i32) -> Result<()> {
         writeln!(
             self.vtab,
-            "rollback_to(tab={}, transaction={}, n={})",
-            self.vtab.id, self.id, n
+            "rollback_to(tab={}, transaction={}, n={n})",
+            self.vtab.id, self.id
         )?;
         Ok(())
     }

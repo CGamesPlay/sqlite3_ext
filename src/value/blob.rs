@@ -149,7 +149,7 @@ mod test {
     #[test]
     fn debug() {
         let blob = Blob::from([1, 2, 3, 4]);
-        assert_eq!(format!("{:?}", blob), "Blob([1, 2, 3, 4])");
+        assert_eq!(format!("{blob:?}"), "Blob([1, 2, 3, 4])");
     }
 
     #[test]

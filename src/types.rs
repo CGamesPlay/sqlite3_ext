@@ -95,7 +95,7 @@ impl Error {
             | e @ Error::Module(_)
             | e @ Error::NoChange => {
                 if !msg.is_null() {
-                    if let Ok(s) = ffi::str_to_sqlite3(&format!("{}", e)) {
+                    if let Ok(s) = ffi::str_to_sqlite3(&format!("{e}")) {
                         unsafe { *msg = s };
                     }
                 }
@@ -120,7 +120,7 @@ impl From<&str> for Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Sqlite(_, Some(desc)) => write!(f, "{}", desc),
+            Error::Sqlite(_, Some(desc)) => write!(f, "{desc}"),
             Error::Sqlite(i, None) => {
                 let errstr: Result<&str> = sqlite3_require_version!(3_007_015, unsafe {
                     std::ffi::CStr::from_ptr(ffi::sqlite3_errstr(*i))
@@ -128,13 +128,13 @@ impl std::fmt::Display for Error {
                         .map_err(Error::Utf8Error)
                 });
                 match errstr {
-                    Ok(s) => write!(f, "{}", s),
-                    _ => write!(f, "SQLite error {}", i),
+                    Ok(s) => write!(f, "{s}"),
+                    _ => write!(f, "SQLite error {i}"),
                 }
             }
             Error::Utf8Error(e) => e.fmt(f),
             Error::NulError(e) => e.fmt(f),
-            Error::Module(s) => write!(f, "{}", s),
+            Error::Module(s) => write!(f, "{s}"),
             Error::VersionNotSatisfied(v) => write!(
                 f,
                 "requires SQLite version {}.{}.{} or above",

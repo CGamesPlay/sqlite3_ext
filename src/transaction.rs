@@ -124,9 +124,9 @@ impl Drop for Transaction<'_> {
         if self.state != TransactionState::Inactive {
             if let Err(e) = self.rollback_mut() {
                 if std::thread::panicking() {
-                    eprintln!("Error while closing SQLite transaction: {:?}", e);
+                    eprintln!("Error while closing SQLite transaction: {e:?}");
                 } else {
-                    panic!("Error while closing SQLite transaction: {:?}", e);
+                    panic!("Error while closing SQLite transaction: {e:?}");
                 }
             }
         }

@@ -67,7 +67,7 @@ where
         T: TransactionVTab<'vtab>,
     {
         self.with_initial_transaction();
-        let mut m = self.module();
+        let m = self.module();
         m.xBegin = Some(stubs::vtab_begin::<T>);
         m.xSync = Some(stubs::vtab_sync::<T>);
         m.xCommit = Some(stubs::vtab_commit::<T>);

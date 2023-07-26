@@ -35,8 +35,8 @@ fn main() {
 }
 
 fn generate_ffi(static_link: bool, modern_sqlite: bool) {
-    println!("cargo:rerun-if-changed={}", BINDGEN_OUTPUT);
-    let mut file = File::open(format!("{}", BINDGEN_OUTPUT)).expect(BINDGEN_OUTPUT);
+    println!("cargo:rerun-if-changed={BINDGEN_OUTPUT}");
+    let mut file = File::open(format!("{BINDGEN_OUTPUT}")).expect(BINDGEN_OUTPUT);
     let mut content = String::new();
     file.read_to_string(&mut content).unwrap();
 
@@ -162,7 +162,7 @@ fn generate_ffi(static_link: bool, modern_sqlite: bool) {
     };
 
     let tokens = TokenStream::from(result);
-    let src = format!("{}", tokens);
+    let src = format!("{tokens}");
     let formatted = rustfmt(src).unwrap();
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("linking.rs");
@@ -190,12 +190,12 @@ fn extract_method(ty: &syn::Type) -> Option<&syn::TypeBareFn> {
 
 fn rustfmt(input: String) -> Result<String, String> {
     let rustfmt =
-        which::which("rustfmt").map_err(|e| format!("unable to locate rustfmt: {:?}", e))?;
+        which::which("rustfmt").map_err(|e| format!("unable to locate rustfmt: {e:?}"))?;
     let mut rustfmt_child = std::process::Command::new(rustfmt)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .spawn()
-        .map_err(|e| format!("failed to spawn rustfmt: {:?}", e))?;
+        .map_err(|e| format!("failed to spawn rustfmt: {e:?}"))?;
     let mut stdin = rustfmt_child.stdin.take().unwrap();
 
     ::std::thread::spawn(move || {
@@ -206,5 +206,5 @@ fn rustfmt(input: String) -> Result<String, String> {
     if output.status.code() != Some(0) {
         return Err(format!("rustfmt exited with {:?}", output.status.code()));
     }
-    String::from_utf8(output.stdout).map_err(|e| format!("rustfmt returned invalid utf-8: {:?}", e))
+    String::from_utf8(output.stdout).map_err(|e| format!("rustfmt returned invalid utf-8: {e:?}"))
 }

@@ -3,6 +3,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
+#![allow(clippy::type_complexity)]
 
 pub const SQLITE_VERSION: &[u8; 7usize] = b"3.38.5\0";
 pub const SQLITE_VERSION_NUMBER: i32 = 3038005;

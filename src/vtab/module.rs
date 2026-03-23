@@ -212,7 +212,7 @@ impl<'vtab, T: CreateVTab<'vtab>> StandardModule<'vtab, T> {
         };
         sqlite3_match_version! {
             3_026_000 => {
-                if T::SHADOW_NAMES.len() > 0 {
+                if !T::SHADOW_NAMES.is_empty() {
                     set_version(&mut ret.base, 3);
                     ret.base.xShadowName = Some(stubs::vtab_shadow_name::<T>);
                 }
@@ -285,7 +285,7 @@ impl Connection {
         T::Aux: 'db,
     {
         let name = CString::new(name).unwrap();
-        let vtab = vtab.module().clone();
+        let vtab = *vtab.module();
         let handle = Box::new(Handle::<'vtab, T> { vtab, aux });
         let guard = self.lock();
         Error::from_sqlite_desc(

@@ -250,7 +250,7 @@ impl Connection {
     where
         F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'static,
     {
-        self.create_scalar_function_object(name, &opts, ScalarClosure(func))
+        self.create_scalar_function_object(name, opts, ScalarClosure(func))
     }
 
     /// Create a new scalar function using a struct. This function is identical to

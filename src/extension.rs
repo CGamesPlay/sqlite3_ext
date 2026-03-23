@@ -1,6 +1,5 @@
 use super::*;
 use std::{
-    ffi::c_void,
     mem::transmute,
     ops::Deref,
     os::raw::{c_char, c_int},
@@ -52,7 +51,7 @@ impl Extension {
     pub const fn new(c_entry: CEntry, init: fn(&Connection) -> Result<()>) -> Self {
         unsafe {
             Extension {
-                c_entry: transmute(c_entry as *mut c_void),
+                c_entry: transmute::<CEntry, unsafe extern "C" fn()>(c_entry),
                 init,
             }
         }

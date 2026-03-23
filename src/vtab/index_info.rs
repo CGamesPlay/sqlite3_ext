@@ -145,7 +145,7 @@ impl IndexInfo {
 
     /// Requires SQLite 3.9.0. On earlier versions of SQLite, this function is a harmless
     /// no-op.
-    pub fn set_scan_flags(&mut self, val: usize) -> () {
+    pub fn set_scan_flags(&mut self, val: usize) {
         let _ = val;
         sqlite3_match_version! {
             3_009_000 => self.base.idxFlags = val as _,
@@ -167,17 +167,11 @@ pub struct IndexInfoConstraint<'a> {
 
 impl IndexInfoConstraint<'_> {
     fn constraint(&self) -> &ffi::sqlite3_index_info_sqlite3_index_constraint {
-        unsafe { &*self.index_info.base.aConstraint.offset(self.position as _) }
+        unsafe { &*self.index_info.base.aConstraint.add(self.position) }
     }
 
     fn usage(&self) -> &mut ffi::sqlite3_index_info_sqlite3_index_constraint_usage {
-        unsafe {
-            &mut *self
-                .index_info
-                .base
-                .aConstraintUsage
-                .offset(self.position as _)
-        }
+        unsafe { &mut *self.index_info.base.aConstraintUsage.add(self.position) }
     }
 
     /// Return the column being constrained. The value is a 0-based index of columns as declared by
@@ -318,7 +312,7 @@ impl IndexInfoConstraint<'_> {
     /// processing. In order for ValueList processing to work:
     ///
     /// 1. this constraint must be assigned an argv index using
-    /// [set_argv_index](Self::set_argv_index);
+    ///    [set_argv_index](Self::set_argv_index);
     /// 2. this method is called with true; and
     /// 3. SQLite is able to provide all values simultaneously.
     ///
@@ -360,7 +354,7 @@ pub struct IndexInfoOrderBy<'a> {
 
 impl IndexInfoOrderBy<'_> {
     fn base(&self) -> &ffi::sqlite3_index_info_sqlite3_index_orderby {
-        unsafe { &*self.index_info.base.aOrderBy.offset(self.position as _) }
+        unsafe { &*self.index_info.base.aOrderBy.add(self.position) }
     }
 
     pub fn column(&self) -> i32 {

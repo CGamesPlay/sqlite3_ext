@@ -207,7 +207,7 @@ impl Statement {
         P: Params,
         F: FnOnce(&mut QueryResult) -> Result<R>,
     {
-        let res = self.query(params)?.next().map(|o| o.map(|row| f(row)));
+        let res = self.query(params)?.next().map(|o| o.map(f));
         // Always reset the query after using, although we prioritize a query failure
         // in the return value.
         let reset_res = self.reset();
@@ -565,7 +565,7 @@ impl FromValue for Column {
             }
             let data = ffi::sqlite3_column_blob(self.stmt, self.position as _);
             if data.is_null() {
-                return Err(SQLITE_NOMEM);
+                Err(SQLITE_NOMEM)
             } else {
                 Ok(slice::from_raw_parts(data as _, len as _))
             }

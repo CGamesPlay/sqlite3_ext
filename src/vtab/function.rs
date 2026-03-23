@@ -16,6 +16,7 @@ use std::{
 };
 
 type CFunc = unsafe extern "C" fn(*mut ffi::sqlite3_context, c_int, *mut *mut ffi::sqlite3_value);
+type VTabFunc<'vtab, T> = Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>;
 
 /// A collection of methods overloaded by a virtual table.
 ///
@@ -39,7 +40,7 @@ impl<'vtab, T: VTab<'vtab> + 'vtab> VTabFunctionList<'vtab, T> {
         n_args: i32,
         name: impl Into<Cow<'vtab, str>>,
         constraint: Option<ConstraintOp>,
-        func: Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>,
+        func: VTabFunc<'vtab, T>,
     ) {
         assert!((-1..128).contains(&n_args), "n_args invalid");
         if let Some(c) = &constraint {
@@ -110,9 +111,7 @@ impl<'vtab, T: VTab<'vtab> + 'vtab> VTabFunctionList<'vtab, T> {
     }
 }
 
-fn wrap_fn<'vtab, T, F>(
-    func: F,
-) -> Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>
+fn wrap_fn<'vtab, T, F>(func: F) -> VTabFunc<'vtab, T>
 where
     T: VTab<'vtab>,
     F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'vtab,
@@ -127,9 +126,7 @@ where
     )
 }
 
-fn wrap_method<'vtab, T, F>(
-    func: F,
-) -> Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>
+fn wrap_method<'vtab, T, F>(func: F) -> VTabFunc<'vtab, T>
 where
     T: VTab<'vtab>,
     F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) -> Result<()> + 'vtab,
@@ -149,7 +146,7 @@ struct VTabFunction<'vtab, T: VTab<'vtab>> {
     name: Cow<'vtab, str>,
     constraint: Option<ConstraintOp>,
     vtab: Cell<Option<&'vtab T>>,
-    func: Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>,
+    func: VTabFunc<'vtab, T>,
 }
 
 impl<'vtab, T: VTab<'vtab>> VTabFunction<'vtab, T> {
@@ -157,7 +154,7 @@ impl<'vtab, T: VTab<'vtab>> VTabFunction<'vtab, T> {
         n_args: i32,
         name: impl Into<Cow<'vtab, str>>,
         constraint: Option<ConstraintOp>,
-        func: Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>,
+        func: VTabFunc<'vtab, T>,
     ) -> Pin<Box<Self>> {
         Box::pin(Self {
             n_args,

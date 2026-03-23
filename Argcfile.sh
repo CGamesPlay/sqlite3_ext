@@ -16,6 +16,7 @@ bindgen() {
         --raw-line "#![allow(non_snake_case)]" \
         --raw-line "#![allow(dead_code)]" \
         --raw-line "#![allow(non_camel_case_types)]" \
+        --raw-line "#![allow(clippy::type_complexity)]" \
         -o src/ffi/sqlite3types.rs
     echo "Generated src/ffi/sqlite3types.rs"
 
@@ -27,6 +28,7 @@ bindgen() {
         --raw-line "#![allow(non_snake_case)]" \
         --raw-line "#![allow(dead_code)]" \
         --raw-line "#![allow(non_camel_case_types)]" \
+        --raw-line "#![allow(clippy::type_complexity)]" \
         --raw-line "use super::sqlite3types::*;" \
         -o src/ffi/sqlite3funcs.rs
     echo "Generated src/ffi/sqlite3funcs.rs"

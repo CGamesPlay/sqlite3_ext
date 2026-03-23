@@ -1,8 +1,5 @@
 use super::{ffi, mutex::SQLiteMutexGuard, sqlite3_require_version, Connection};
-use std::{
-    ffi::CStr,
-    os::raw::{c_char, c_int},
-};
+use std::ffi::CStr;
 
 /// Alias for [Error::Sqlite]\([ffi::SQLITE_LOCKED]\).
 pub const SQLITE_LOCKED: Error = Error::Sqlite(ffi::SQLITE_LOCKED, None);
@@ -75,31 +72,6 @@ impl Error {
                 let msg = CStr::from_ptr(ffi::sqlite3_errmsg(conn));
                 let msg = msg.to_str()?.to_owned();
                 Err(Error::Sqlite(rc, Some(msg)))
-            }
-        }
-    }
-
-    pub(crate) fn into_sqlite(self, msg: *mut *mut c_char) -> c_int {
-        match self {
-            Error::Sqlite(code, s) => {
-                if let Some(s) = s {
-                    if let Ok(s) = ffi::str_to_sqlite3(&s) {
-                        unsafe { *msg = s };
-                    }
-                }
-                code
-            }
-            e @ Error::Utf8Error(_)
-            | e @ Error::NulError(_)
-            | e @ Error::VersionNotSatisfied(_)
-            | e @ Error::Module(_)
-            | e @ Error::NoChange => {
-                if !msg.is_null() {
-                    if let Ok(s) = ffi::str_to_sqlite3(&format!("{e}")) {
-                        unsafe { *msg = s };
-                    }
-                }
-                ffi::SQLITE_ERROR
             }
         }
     }

@@ -83,7 +83,7 @@ impl<T: ?Sized> UnsafePtr<T> {
             let len = ffi::sqlite3_value_bytes(val.as_ptr()) as usize;
             let subtype_match = sqlite3_match_version! {
                 3_009_000 => ffi::sqlite3_value_subtype(val.as_ptr()) as u8 == subtype,
-                _ => subtype == subtype, // suppress unused warning on subtype
+                _ => true,
             };
             if len == 0 {
                 Ok(UnsafePtr {
@@ -110,7 +110,7 @@ impl<T: ?Sized> UnsafePtr<T> {
         self.ptr as _
     }
 
-    pub(crate) fn to_bytes(self) -> Vec<u8> {
+    pub(crate) fn into_bytes(self) -> Vec<u8> {
         let len = size_of::<&T>();
         let mut vec: Vec<u8> = Vec::with_capacity(len);
         unsafe {

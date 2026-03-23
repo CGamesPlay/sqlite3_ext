@@ -15,6 +15,8 @@ mod sqlite3funcs;
 mod sqlite3types;
 
 mod linking {
+    #![allow(clippy::missing_safety_doc)]
+    #![allow(clippy::too_many_arguments)]
     include!(concat!(env!("OUT_DIR"), "/linking.rs"));
 }
 
@@ -188,7 +190,7 @@ macro_rules! sqlite3_require_version {
 ///
 /// Per rustc, "it is undefined behavior to use this value". `¯\_(ツ)_/¯`
 pub const unsafe fn sqlite_transient() -> Option<unsafe extern "C" fn(arg1: *mut c_void)> {
-    std::mem::transmute(-1 as isize as usize)
+    std::mem::transmute(-1_isize as usize)
 }
 
 /// Clone the provided string into a nul-terminated string created by sqlite3_malloc. This
@@ -214,10 +216,33 @@ pub fn str_to_sqlite3(val: &str) -> Result<*mut c_char, Error> {
     }
 }
 
+#[doc(hidden)]
 pub unsafe fn handle_error(err: impl Into<Error>, msg: *mut *mut c_char) -> c_int {
-    err.into().into_sqlite(msg)
+    match err.into() {
+        Error::Sqlite(code, s) => {
+            if let Some(s) = s {
+                if let Ok(s) = str_to_sqlite3(&s) {
+                    unsafe { *msg = s };
+                }
+            }
+            code
+        }
+        e @ Error::Utf8Error(_)
+        | e @ Error::NulError(_)
+        | e @ Error::VersionNotSatisfied(_)
+        | e @ Error::Module(_)
+        | e @ Error::NoChange => {
+            if !msg.is_null() {
+                if let Ok(s) = str_to_sqlite3(&format!("{e}")) {
+                    unsafe { *msg = s };
+                }
+            }
+            SQLITE_ERROR
+        }
+    }
 }
 
+#[doc(hidden)]
 pub unsafe fn handle_result(result: Result<(), Error>, msg: *mut *mut c_char) -> c_int {
     match result {
         Ok(_) => SQLITE_OK,
@@ -230,14 +255,17 @@ pub fn is_version(min: c_int) -> bool {
     found >= min
 }
 
+#[doc(hidden)]
 pub unsafe extern "C" fn drop_boxed<T>(data: *mut c_void) {
     drop(Box::<T>::from_raw(data as _));
 }
 
+#[doc(hidden)]
 pub unsafe extern "C" fn drop_cstring(data: *mut c_void) {
     drop(CString::from_raw(data as _));
 }
 
+#[doc(hidden)]
 pub unsafe extern "C" fn drop_blob(data: *mut c_void) {
     drop(Blob::from_raw(data));
 }

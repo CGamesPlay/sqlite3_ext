@@ -247,7 +247,7 @@ impl FromValue for ValueRef {
             }
             let data = ffi::sqlite3_value_blob(self.as_ptr());
             if data.is_null() {
-                return Err(SQLITE_NOMEM);
+                Err(SQLITE_NOMEM)
             } else {
                 Ok(slice::from_raw_parts(data as _, len as _))
             }

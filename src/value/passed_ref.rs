@@ -1,6 +1,6 @@
 use std::any::{Any, TypeId};
 
-pub(crate) const POINTER_TAG: *const i8 = b"sqlite3_ext:PassedRef\0".as_ptr() as _;
+pub(crate) const POINTER_TAG: *const i8 = c"sqlite3_ext:PassedRef".as_ptr() as _;
 
 /// Pass arbitrary values through SQLite.
 ///

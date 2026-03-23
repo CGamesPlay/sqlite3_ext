@@ -78,7 +78,7 @@ impl InternalContext {
 }
 
 impl Context {
-    pub(crate) fn as_ptr<'a>(&self) -> *mut ffi::sqlite3_context {
+    pub(crate) fn as_ptr(&self) -> *mut ffi::sqlite3_context {
         &self.base as *const ffi::sqlite3_context as _
     }
 
@@ -163,6 +163,7 @@ macro_rules! to_context_result {
         #[sealed]
         impl ToContextResult for $ty {
             unsafe fn assign_to(self, $ctx: *mut ffi::sqlite3_context) {
+                #[allow(clippy::let_unit_value)]
                 let $val = self;
                 $impl
             }
@@ -225,7 +226,7 @@ to_context_result! {
 
 /// Sets the context result to the contained value.
 #[sealed]
-impl<'a> ToContextResult for &'a ValueRef {
+impl ToContextResult for &ValueRef {
     unsafe fn assign_to(self, ctx: *mut ffi::sqlite3_context) {
         ffi::sqlite3_result_value(ctx, self.as_ptr())
     }
@@ -233,7 +234,7 @@ impl<'a> ToContextResult for &'a ValueRef {
 
 /// Sets the context result to the contained value.
 #[sealed]
-impl<'a> ToContextResult for &'a mut ValueRef {
+impl ToContextResult for &mut ValueRef {
     unsafe fn assign_to(self, ctx: *mut ffi::sqlite3_context) {
         ffi::sqlite3_result_value(ctx, self.as_ptr())
     }
@@ -241,7 +242,7 @@ impl<'a> ToContextResult for &'a mut ValueRef {
 
 /// Sets the context result to the given BLOB.
 #[sealed]
-impl<'a> ToContextResult for &'a [u8] {
+impl ToContextResult for &[u8] {
     unsafe fn assign_to(self, ctx: *mut ffi::sqlite3_context) {
         let len = self.len();
         sqlite3_match_version! {
@@ -263,7 +264,7 @@ impl<'a> ToContextResult for &'a [u8] {
 
 /// Sets the context result to the given BLOB.
 #[sealed]
-impl<'a, const N: usize> ToContextResult for &'a [u8; N] {
+impl<const N: usize> ToContextResult for &[u8; N] {
     unsafe fn assign_to(self, ctx: *mut ffi::sqlite3_context) {
         self.as_slice().assign_to(ctx);
     }
@@ -312,10 +313,10 @@ impl<T: 'static + ?Sized> ToContextResult for UnsafePtr<T> {
         sqlite3_match_version! {
         3_009_000 => {
             let subtype = self.subtype;
-            self.to_bytes().assign_to(context);
+            self.into_bytes().assign_to(context);
             ffi::sqlite3_result_subtype(context, subtype as _);
         },
-        _ => self.to_bytes().assign_to(context),
+        _ => self.into_bytes().assign_to(context),
         }
     }
 }

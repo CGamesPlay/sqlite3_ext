@@ -127,7 +127,7 @@ impl Connection {
                 let rc = ffi::sqlite3_load_extension(
                     guard.as_mut_ptr(),
                     path.as_ptr(),
-                    entry.map_or_else(|| null(), |s| s.as_ptr()),
+                    entry.map_or_else(null, |s| s.as_ptr()),
                     err.as_mut_ptr(),
                 );
                 if rc != ffi::SQLITE_OK {
@@ -160,7 +160,7 @@ impl Connection {
                         self.as_mut_ptr(),
                         ffi::SQLITE_DBCONFIG_DEFENSIVE,
                         enable as i32,
-                        0 as i32,
+                        0_i32,
                     ),
                     self.as_mut_ptr(),
                 )

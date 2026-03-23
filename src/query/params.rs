@@ -121,7 +121,7 @@ impl<T: ToParam, const N: usize> Params for [T; N] {
 
 impl Params for &mut [&mut ValueRef] {
     fn bind_params(self, stmt: &mut Statement) -> Result<()> {
-        for (pos, val) in self.into_iter().enumerate() {
+        for (pos, val) in self.iter_mut().enumerate() {
             val.bind_param(stmt, pos as i32 + 1)?;
         }
         Ok(())
@@ -144,6 +144,7 @@ macro_rules! to_param {
         #[sealed]
         impl ToParam for $ty {
             fn bind_param(self, stmt: &mut Statement, $pos: i32) -> Result<()> {
+                #[allow(clippy::let_unit_value)]
                 let $val = self;
                 let $stmt = stmt.base;
                 Error::from_sqlite(unsafe { $impl })
@@ -158,16 +159,15 @@ to_param!(i64 as (stmt, pos, val) => ffi::sqlite3_bind_int64(stmt, pos, val));
 to_param!(f64 as (stmt, pos, val) => ffi::sqlite3_bind_double(stmt, pos, val));
 to_param!(Blob as (stmt, pos, val) => {
     let len = val.len();
-    let rc = sqlite3_match_version! {
+    sqlite3_match_version! {
         3_008_007 => ffi::sqlite3_bind_blob64(stmt, pos, val.into_raw(), len as _, Some(ffi::drop_blob)),
         _ => ffi::sqlite3_bind_blob(stmt, pos, val.into_raw(), len as _, Some(ffi::drop_blob)),
-    };
-    rc
+    }
 });
 to_param!(&mut ValueRef as (stmt, pos, val) => ffi::sqlite3_bind_value(stmt, pos, val.as_ptr()));
 
 #[sealed]
-impl<'a> ToParam for &'a str {
+impl ToParam for &str {
     fn bind_param(self, stmt: &mut Statement, pos: i32) -> Result<()> {
         let val = self.as_bytes();
         let len = val.len();
@@ -181,14 +181,14 @@ impl<'a> ToParam for &'a str {
 }
 
 #[sealed]
-impl<'a> ToParam for &'a ValueRef {
+impl ToParam for &ValueRef {
     fn bind_param(self, stmt: &mut Statement, pos: i32) -> Result<()> {
         unsafe { Error::from_sqlite(ffi::sqlite3_bind_value(stmt.base, pos, self.as_ptr())) }
     }
 }
 
 #[sealed]
-impl<'a> ToParam for &'a [u8] {
+impl ToParam for &[u8] {
     fn bind_param(self, stmt: &mut Statement, pos: i32) -> Result<()> {
         let len = self.len();
         unsafe {
@@ -213,7 +213,7 @@ impl<'a> ToParam for &'a [u8] {
 }
 
 #[sealed]
-impl<'a, const N: usize> ToParam for &'a [u8; N] {
+impl<const N: usize> ToParam for &[u8; N] {
     fn bind_param(self, stmt: &mut Statement, pos: i32) -> Result<()> {
         self.as_slice().bind_param(stmt, pos)
     }

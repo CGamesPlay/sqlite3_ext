@@ -414,7 +414,7 @@ pub struct ChangeInfo {
 impl ChangeInfo {
     /// Returns the type of update being performed.
     pub fn change_type(&self) -> ChangeType {
-        if self.args().len() == 0 {
+        if self.args().is_empty() {
             ChangeType::Delete
         } else if self.rowid().is_null() {
             ChangeType::Insert
@@ -549,7 +549,7 @@ pub struct ColumnContext {
 }
 
 impl ColumnContext {
-    pub(crate) fn as_ptr<'a>(&self) -> *mut ffi::sqlite3_context {
+    pub(crate) fn as_ptr(&self) -> *mut ffi::sqlite3_context {
         &self.base as *const ffi::sqlite3_context as _
     }
 

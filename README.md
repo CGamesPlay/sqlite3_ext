@@ -19,7 +19,7 @@ Multi-threading support is low-priority and untested. If your application-define
 - A [querying interface](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/query/struct.Statement.html) similar to Rusqlite's.
 - Application-defined [scalar](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/struct.Connection.html#method.create_scalar_function) and [aggregate](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/struct.Connection.html#method.create_aggregate_function) functions, and [collating sequences](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/struct.Connection.html#method.create_collation).
 - A more comprehensive [virtual table implementation](https://docs.rs/sqlite3_ext/latest/sqlite3_ext/vtab/index.html) than any other Rust crate currently published, supporting all SQLite virtual table methods.
-- Rust support for the most modern features of SQLite, up to version 3.38.5.
+- Rust support for the most modern features of SQLite, up to version 3.51.3.
 
 ## Crate features
 
@@ -104,7 +104,6 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_busy_handler |  | | |
 | sqlite3_busy_timeout |  | | |
 | sqlite3_cancel_auto_extension | - | :white_check_mark: | Extension::cancel_auto |
-| sqlite3_carray_bind | sqlite3_stmt | | |
 | sqlite3_changes |  | :white_check_mark: | Statement::execute |
 | sqlite3_changes64 |  | :white_check_mark: | Statement::execute |
 | sqlite3_clear_bindings | sqlite3_stmt | :grey_exclamation: | Unnecessary |
@@ -190,8 +189,8 @@ Here is a compatibility chart showing which parts of the SQLite API are currentl
 | sqlite3_get_table |  | :grey_exclamation: | Available via ffi |
 | sqlite3_hard_heap_limit64 |  | | |
 | sqlite3_initialize |  | :grey_exclamation: | Available via ffi |
-| sqlite3_interrupt |  | | |
-| sqlite3_is_interrupted |  | | |
+| sqlite3_interrupt | sqlite3 | | |
+| sqlite3_is_interrupted | sqlite3 | | |
 | sqlite3_keyword_check |  | | |
 | sqlite3_keyword_count |  | | |
 | sqlite3_keyword_name |  | | |

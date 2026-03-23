@@ -26,7 +26,7 @@ pub enum VTabTrait {
 impl Parse for VTabAttr {
     fn parse(input: ParseStream) -> Result<Self> {
         let base = input.parse()?;
-        let additional = if let Ok(_) = input.parse::<Token![,]>() {
+        let additional = if input.parse::<Token![,]>().is_ok() {
             Punctuated::parse_terminated(input)?
         } else {
             Punctuated::new()

@@ -6,25 +6,18 @@ use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
-use syn;
 
 const BINDGEN_OUTPUT: &str = "src/ffi/sqlite3types.rs";
 
 fn main() {
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_STATIC");
-    let static_link = if let Some(_) = env::var_os("CARGO_FEATURE_STATIC") {
-        true
-    } else {
-        false
-    };
+    let static_link = env::var_os("CARGO_FEATURE_STATIC").is_some();
 
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_STATIC_MODERN");
-    let modern_sqlite = if let Some(_) = env::var_os("CARGO_FEATURE_STATIC_MODERN") {
-        true
-    } else if !static_link {
+    let modern_sqlite = if env::var_os("CARGO_FEATURE_STATIC_MODERN").is_some() {
         true
     } else {
-        false
+        !static_link
     };
 
     if modern_sqlite {
@@ -36,7 +29,7 @@ fn main() {
 
 fn generate_ffi(static_link: bool, modern_sqlite: bool) {
     println!("cargo:rerun-if-changed={BINDGEN_OUTPUT}");
-    let mut file = File::open(format!("{BINDGEN_OUTPUT}")).expect(BINDGEN_OUTPUT);
+    let mut file = File::open(BINDGEN_OUTPUT).expect(BINDGEN_OUTPUT);
     let mut content = String::new();
     file.read_to_string(&mut content).unwrap();
 
@@ -93,7 +86,7 @@ fn generate_ffi(static_link: bool, modern_sqlite: bool) {
                 debug_assert!(!API.is_null(), "SQLite API not initialized");
             );
             if static_link {
-                if let Some(_) = varargs {
+                if varargs.is_some() {
                     quote! {
                         pub unsafe fn #sqlite3_name() -> #unsafety #abi fn(#args #varargs) #ty {
                             super::sqlite3funcs::#sqlite3_name
@@ -106,20 +99,18 @@ fn generate_ffi(static_link: bool, modern_sqlite: bool) {
                         }
                     }
                 }
-            } else {
-                if let Some(_) = varargs {
-                    quote! {
-                        pub unsafe fn #sqlite3_name() -> #unsafety #abi fn(#args #varargs) #ty {
-                            #checks
-                            (*API).#name.unwrap_unchecked()
-                        }
+            } else if varargs.is_some() {
+                quote! {
+                    pub unsafe fn #sqlite3_name() -> #unsafety #abi fn(#args #varargs) #ty {
+                        #checks
+                        (*API).#name.unwrap_unchecked()
                     }
-                } else {
-                    quote! {
-                        pub unsafe fn #sqlite3_name(#args) #ty {
-                            #checks
-                            ((*API).#name.unwrap_unchecked())(#arg_names)
-                        }
+                }
+            } else {
+                quote! {
+                    pub unsafe fn #sqlite3_name(#args) #ty {
+                        #checks
+                        ((*API).#name.unwrap_unchecked())(#arg_names)
                     }
                 }
             }
@@ -161,7 +152,7 @@ fn generate_ffi(static_link: bool, modern_sqlite: bool) {
         #(#methods)*
     };
 
-    let tokens = TokenStream::from(result);
+    let tokens = result;
     let src = format!("{tokens}");
     let formatted = rustfmt(src).unwrap();
     let out_dir = env::var_os("OUT_DIR").unwrap();

@@ -111,7 +111,7 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
     for d in directives {
         match d {
             ExtAttr::Export(ExtAttrExport { value }) => {
-                if let Some(_) = export {
+                if export.is_some() {
                     return Error::new(value.span(), "export specified multiple times")
                         .into_compile_error()
                         .into();
@@ -130,7 +130,7 @@ pub fn sqlite3_ext_init(attr: TokenStream, item: TokenStream) -> TokenStream {
     let load_result = match persistent {
         None => quote!(::sqlite3_ext::ffi::SQLITE_OK),
         Some(tok) => {
-            if let Some(_) = export {
+            if export.is_some() {
                 // Persistent loadable extensions were added in SQLite 3.14.0. If
                 // we were to return SQLITE_OK_LOAD_PERSISTENT, then the load
                 // would fail. We want the load to complete: any API which

@@ -312,12 +312,12 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
         quote!(: #lifetime_bounds)
     };
     let base = match attr.base {
-        VTabBase::Standard(_) => quote!(::sqlite3_ext::vtab::StandardModule),
-        VTabBase::Eponymous(_) => quote!(::sqlite3_ext::vtab::EponymousModule),
-        VTabBase::EponymousOnly(_) => quote!(::sqlite3_ext::vtab::EponymousOnlyModule),
+        VTabBase::Standard => quote!(::sqlite3_ext::vtab::StandardModule),
+        VTabBase::Eponymous => quote!(::sqlite3_ext::vtab::EponymousModule),
+        VTabBase::EponymousOnly => quote!(::sqlite3_ext::vtab::EponymousOnlyModule),
     };
     let mut expr = quote!(#base::<Self>::new());
-    let ret = if let VTabBase::EponymousOnly(_) = attr.base {
+    let ret = if let VTabBase::EponymousOnly = attr.base {
         expr.extend(quote!(?));
         quote!(::sqlite3_ext::Result<#base<#lifetime, Self>>)
     } else {
@@ -325,13 +325,13 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
     for t in attr.additional {
         match t {
-            VTabTrait::UpdateVTab(_) => expr.extend(quote!(.with_update())),
-            VTabTrait::TransactionVTab(_) => expr.extend(quote!(.with_transactions())),
-            VTabTrait::FindFunctionVTab(_) => expr.extend(quote!(.with_find_function())),
-            VTabTrait::RenameVTab(_) => expr.extend(quote!(.with_rename())),
+            VTabTrait::Update => expr.extend(quote!(.with_update())),
+            VTabTrait::Transaction => expr.extend(quote!(.with_transactions())),
+            VTabTrait::FindFunction => expr.extend(quote!(.with_find_function())),
+            VTabTrait::Rename => expr.extend(quote!(.with_rename())),
         }
     }
-    if let VTabBase::EponymousOnly(_) = attr.base {
+    if let VTabBase::EponymousOnly = attr.base {
         expr = quote!(Ok(#expr));
     };
     let expanded = quote! {

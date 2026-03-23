@@ -11,16 +11,16 @@ pub struct VTabAttr {
 }
 
 pub enum VTabBase {
-    Standard(kw::StandardModule),
-    Eponymous(kw::EponymousModule),
-    EponymousOnly(kw::EponymousOnlyModule),
+    Standard,
+    Eponymous,
+    EponymousOnly,
 }
 
 pub enum VTabTrait {
-    UpdateVTab(kw::UpdateVTab),
-    TransactionVTab(kw::TransactionVTab),
-    FindFunctionVTab(kw::FindFunctionVTab),
-    RenameVTab(kw::RenameVTab),
+    Update,
+    Transaction,
+    FindFunction,
+    Rename,
 }
 
 impl Parse for VTabAttr {
@@ -39,11 +39,17 @@ impl Parse for VTabBase {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(kw::StandardModule) {
-            input.parse().map(VTabBase::Standard)
+            input
+                .parse::<kw::StandardModule>()
+                .map(|_| VTabBase::Standard)
         } else if lookahead.peek(kw::EponymousModule) {
-            input.parse().map(VTabBase::Eponymous)
+            input
+                .parse::<kw::EponymousModule>()
+                .map(|_| VTabBase::Eponymous)
         } else if lookahead.peek(kw::EponymousOnlyModule) {
-            input.parse().map(VTabBase::EponymousOnly)
+            input
+                .parse::<kw::EponymousOnlyModule>()
+                .map(|_| VTabBase::EponymousOnly)
         } else {
             Err(lookahead.error())
         }
@@ -54,13 +60,17 @@ impl Parse for VTabTrait {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(kw::UpdateVTab) {
-            input.parse().map(VTabTrait::UpdateVTab)
+            input.parse::<kw::UpdateVTab>().map(|_| VTabTrait::Update)
         } else if lookahead.peek(kw::TransactionVTab) {
-            input.parse().map(VTabTrait::TransactionVTab)
+            input
+                .parse::<kw::TransactionVTab>()
+                .map(|_| VTabTrait::Transaction)
         } else if lookahead.peek(kw::FindFunctionVTab) {
-            input.parse().map(VTabTrait::FindFunctionVTab)
+            input
+                .parse::<kw::FindFunctionVTab>()
+                .map(|_| VTabTrait::FindFunction)
         } else if lookahead.peek(kw::RenameVTab) {
-            input.parse().map(VTabTrait::RenameVTab)
+            input.parse::<kw::RenameVTab>().map(|_| VTabTrait::Rename)
         } else {
             Err(lookahead.error())
         }

@@ -1,10 +1,5 @@
 use super::{
-    super::{
-        ffi,
-        function::{Context, InternalContext},
-        types::*,
-        value::*,
-    },
+    super::{ffi, function::Context, types::*, value::*},
     ConstraintOp, VTab,
 };
 use std::{
@@ -16,7 +11,7 @@ use std::{
 };
 
 type CFunc = unsafe extern "C" fn(*mut ffi::sqlite3_context, c_int, *mut *mut ffi::sqlite3_value);
-type VTabFunc<'vtab, T> = Box<dyn Fn(&'vtab T, &InternalContext, &mut [&mut ValueRef]) + 'vtab>;
+type VTabFunc<'vtab, T> = Box<dyn Fn(&'vtab T, &mut Context, &mut [&mut ValueRef]) + 'vtab>;
 
 /// A collection of methods overloaded by a virtual table.
 ///
@@ -116,14 +111,11 @@ where
     T: VTab<'vtab>,
     F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'vtab,
 {
-    Box::new(
-        move |_: &T, ic: &InternalContext, a: &mut [&mut ValueRef]| {
-            let ctx = unsafe { Context::from_ptr(ic.as_ptr()) };
-            if let Err(e) = func(ctx, a) {
-                ctx.set_result(e).unwrap();
-            }
-        },
-    )
+    Box::new(move |_: &T, ctx: &mut Context, a: &mut [&mut ValueRef]| {
+        if let Err(e) = func(ctx, a) {
+            ctx.set_result(e).unwrap();
+        }
+    })
 }
 
 fn wrap_method<'vtab, T, F>(func: F) -> VTabFunc<'vtab, T>
@@ -131,14 +123,11 @@ where
     T: VTab<'vtab>,
     F: Fn(&'vtab T, &Context, &mut [&mut ValueRef]) -> Result<()> + 'vtab,
 {
-    Box::new(
-        move |t: &T, ic: &InternalContext, a: &mut [&mut ValueRef]| {
-            let ctx = unsafe { Context::from_ptr(ic.as_ptr()) };
-            if let Err(e) = func(t, ctx, a) {
-                ctx.set_result(e).unwrap();
-            }
-        },
-    )
+    Box::new(move |t: &T, ctx: &mut Context, a: &mut [&mut ValueRef]| {
+        if let Err(e) = func(t, ctx, a) {
+            ctx.set_result(e).unwrap();
+        }
+    })
 }
 
 struct VTabFunction<'vtab, T: VTab<'vtab>> {
@@ -170,8 +159,8 @@ impl<'vtab, T: VTab<'vtab>> VTabFunction<'vtab, T> {
         (call_vtab_method::<T>, self as *const Self as *mut Self as _)
     }
 
-    pub fn invoke(&self, ic: &InternalContext, a: &mut [&mut ValueRef]) {
-        (*self.func)(self.vtab.get().unwrap(), ic, a);
+    pub fn invoke(&self, ctx: &mut Context, a: &mut [&mut ValueRef]) {
+        (*self.func)(self.vtab.get().unwrap(), ctx, a);
     }
 }
 
@@ -182,8 +171,8 @@ unsafe extern "C" fn call_vtab_method<'vtab, T>(
 ) where
     T: VTab<'vtab> + 'vtab,
 {
-    let ic = InternalContext::from_ptr(context);
-    let vtab_function = ic.user_data::<VTabFunction<'vtab, T>>();
+    let vtab_function = &mut *(ffi::sqlite3_user_data(context) as *mut VTabFunction<'vtab, T>);
+    let ctx = Context::from_ptr(context);
     let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
-    vtab_function.invoke(ic, args);
+    vtab_function.invoke(ctx, args);
 }

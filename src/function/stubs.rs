@@ -16,8 +16,7 @@ pub unsafe extern "C" fn call_scalar<'a, F>(
 ) where
     F: ScalarFunction<'a>,
 {
-    let ic = InternalContext::from_ptr(context);
-    let func = ic.user_data_mut::<F>();
+    let func = &mut *(ffi::sqlite3_user_data(context) as *mut F);
     let ctx = Context::from_ptr(context);
     let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
     if let Err(e) = func.call(ctx, args) {
@@ -30,9 +29,9 @@ pub unsafe extern "C" fn aggregate_step<U, F: LegacyAggregateFunction<U>>(
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
 ) {
-    let ic = InternalContext::from_ptr(context);
+    let ac = AggregateContext::from_ptr(context);
     let ctx = Context::from_ptr(context);
-    let agg = ic.aggregate_context::<U, F>().unwrap();
+    let agg = ac.get_or_insert_with(F::from_user_data).unwrap();
     let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
     if let Err(e) = agg.step(ctx, args) {
         ctx.set_result(e).unwrap();
@@ -42,11 +41,11 @@ pub unsafe extern "C" fn aggregate_step<U, F: LegacyAggregateFunction<U>>(
 pub unsafe extern "C" fn aggregate_final<U, F: LegacyAggregateFunction<U>>(
     context: *mut ffi::sqlite3_context,
 ) {
-    let ic = InternalContext::from_ptr(context);
+    let ac = AggregateContext::<U, F>::from_ptr(context);
     let ctx = Context::from_ptr(context);
-    let ret = match ic.try_aggregate_context::<U, F>() {
+    let ret = match ac.take() {
         Some(agg) => agg.value(ctx),
-        None => F::default_value(ic.user_data_mut(), ctx),
+        None => F::default_value(ac.user_data(), ctx),
     };
     if let Err(e) = ret {
         ctx.set_result(e).unwrap();
@@ -57,9 +56,9 @@ pub unsafe extern "C" fn aggregate_final<U, F: LegacyAggregateFunction<U>>(
 pub unsafe extern "C" fn aggregate_value<U, F: AggregateFunction<U>>(
     context: *mut ffi::sqlite3_context,
 ) {
-    let ic = InternalContext::from_ptr(context);
+    let ac = AggregateContext::from_ptr(context);
     let ctx = Context::from_ptr(context);
-    let agg = ic.aggregate_context::<U, F>().unwrap();
+    let agg = ac.get_or_insert_with(F::from_user_data).unwrap();
     if let Err(e) = agg.value(ctx) {
         ctx.set_result(e).unwrap();
     }
@@ -71,9 +70,9 @@ pub unsafe extern "C" fn aggregate_inverse<U, F: AggregateFunction<U>>(
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
 ) {
-    let ic = InternalContext::from_ptr(context);
+    let ac = AggregateContext::from_ptr(context);
     let ctx = Context::from_ptr(context);
-    let agg = ic.aggregate_context::<U, F>().unwrap();
+    let agg = ac.get_or_insert_with(F::from_user_data).unwrap();
     let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
     if let Err(e) = agg.inverse(ctx, args) {
         ctx.set_result(e).unwrap();

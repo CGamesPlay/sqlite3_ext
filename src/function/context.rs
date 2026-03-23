@@ -1,26 +1,29 @@
-use super::FromUserData;
 use crate::{ffi, sqlite3_match_version, types::*, value::*, Connection};
 use sealed::sealed;
-use std::{
-    any::TypeId,
-    ffi::CString,
-    mem::{size_of, MaybeUninit},
-};
+use std::{any::TypeId, ffi::CString, mem::size_of};
 
+/// Access to sqlite3_aggregate_context.
+///
+/// U is the type of user data and F is the function context type. Neither are checked at
+/// runtime.
 #[repr(transparent)]
-pub(crate) struct InternalContext {
+pub(crate) struct AggregateContext<U, F> {
     base: ffi::sqlite3_context,
+    phantom: std::marker::PhantomData<(U, F)>,
+}
+
+#[repr(u8)]
+#[derive(Default)]
+enum SqliteManagedBox<T> {
+    #[default]
+    Uninitialized,
+    Initialized(T),
 }
 
 /// Describes the run-time environment of an application-defined function.
 #[repr(transparent)]
 pub struct Context {
     base: ffi::sqlite3_context,
-}
-
-struct AggregateContext<T> {
-    init: bool,
-    val: MaybeUninit<T>,
 }
 
 #[repr(C)]
@@ -39,51 +42,44 @@ pub enum AuxDataError {
     WrongType,
 }
 
-impl InternalContext {
+impl<U, F> AggregateContext<U, F> {
     pub unsafe fn from_ptr<'a>(base: *mut ffi::sqlite3_context) -> &'a mut Self {
         &mut *(base as *mut Self)
     }
 
-    pub fn as_ptr(&self) -> *mut ffi::sqlite3_context {
-        &raw const self.base as _
+    pub unsafe fn user_data(&self) -> &U {
+        &mut *(ffi::sqlite3_user_data(&raw const self.base as _) as *mut U)
     }
 
-    pub fn user_data<U>(&self) -> &U {
-        unsafe { &mut *(ffi::sqlite3_user_data(self.as_ptr()) as *mut U) }
-    }
-
-    pub fn user_data_mut<U>(&mut self) -> &mut U {
-        unsafe { &mut *(ffi::sqlite3_user_data(self.as_ptr()) as *mut U) }
-    }
-
-    /// Get the aggregate context, returning a mutable reference to it.
-    pub unsafe fn aggregate_context<U, F: FromUserData<U>>(&mut self) -> Result<&mut F> {
-        let ptr =
-            ffi::sqlite3_aggregate_context(self.as_ptr(), size_of::<AggregateContext<F>>() as _)
-                as *mut AggregateContext<F>;
+    pub unsafe fn get_or_insert_with(&mut self, f: impl Fn(&U) -> F) -> Result<&mut F> {
+        let ptr = ffi::sqlite3_aggregate_context(
+            &raw const self.base as _,
+            size_of::<SqliteManagedBox<F>>() as _,
+        ) as *mut SqliteManagedBox<F>;
         if ptr.is_null() {
             return Err(SQLITE_NOMEM);
         }
         let context = &mut *ptr;
-        if !context.init {
-            context.val = MaybeUninit::new(F::from_user_data(self.user_data_mut()));
-            context.init = true;
+        if let SqliteManagedBox::Uninitialized = context {
+            *context = SqliteManagedBox::Initialized(f(self.user_data()));
         }
-        Ok(context.val.assume_init_mut())
+        let SqliteManagedBox::Initialized(ref mut val) = context else {
+            unreachable!()
+        };
+        Ok(val)
     }
 
     /// Try to get the aggregate context, consuming it if it is found.
-    pub unsafe fn try_aggregate_context<U, F: FromUserData<U>>(&mut self) -> Option<F> {
-        let ptr = ffi::sqlite3_aggregate_context(self.as_ptr(), 0 as _) as *mut AggregateContext<F>;
+    pub unsafe fn take(&mut self) -> Option<F> {
+        let ptr = ffi::sqlite3_aggregate_context(&raw const self.base as _, 0 as _)
+            as *mut SqliteManagedBox<F>;
         if ptr.is_null() {
             return None;
         }
-        let context = &mut *ptr;
-        if !context.init {
-            None
-        } else {
-            context.init = false;
-            Some(context.val.assume_init_read())
+        let context = std::mem::take(&mut *ptr);
+        match context {
+            SqliteManagedBox::Uninitialized => None,
+            SqliteManagedBox::Initialized(val) => Some(val),
         }
     }
 }

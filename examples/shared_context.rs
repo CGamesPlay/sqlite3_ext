@@ -51,7 +51,7 @@ struct QueryCount<'db> {
 }
 
 impl<'db> ScalarFunction<'db> for QueryCount<'db> {
-    fn call(&self, ctx: &Context, _: &mut [&mut ValueRef]) -> Result<()> {
+    fn call(&self, ctx: &mut Context, _: &mut [&mut ValueRef]) -> Result<()> {
         ctx.set_result(self.state.query_count())
     }
 }

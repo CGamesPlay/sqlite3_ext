@@ -91,16 +91,14 @@ fn aux_data() -> Result<()> {
         .set_n_args(2);
     // Returns the number of times that the first argument has been passed to the function.
     h.db.create_scalar_function("aux_data", &opts, |context, _| {
-        match context.aux_data::<i64>(0) {
-            Some(x) => {
-                *x += 1;
-                context.set_result(*x)
-            }
-            None => {
-                context.set_aux_data(0, 1i64);
-                context.set_result(1)
-            }
-        }
+        let x = if let Ok(x) = context.aux_data_mut::<i64>(0) {
+            *x += 1;
+            *x
+        } else {
+            context.set_aux_data(0, 1i64);
+            1
+        };
+        context.set_result(x)
     })?;
 
     let ret: Vec<i64> =

@@ -29,6 +29,7 @@ paste = "1.0.7"
 rusqlite = { version = "0.28.0", optional = true }
 sealed = "0.4.0"
 sqlite3_ext_macro = { version = "0.1.0", path = "sqlite3_ext_macro" }
+thiserror = "2.0.18"
 
 [dev-dependencies]
 indoc = "1.0"

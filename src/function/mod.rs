@@ -29,18 +29,18 @@ pub trait ScalarFunction<'db> {
     /// array of [ValueRef] objects. The function is required to set its output using
     /// [Context::set_result]. If no result is set, SQL NULL is returned. If the function
     /// returns an Err value, the SQL statement will fail, even if a result had been set.
-    fn call(&self, context: &Context, args: &mut [&mut ValueRef]) -> Result<()>;
+    fn call(&self, context: &mut Context, args: &mut [&mut ValueRef]) -> Result<()>;
 }
 
 struct ScalarClosure<F>(F)
 where
-    F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'static;
+    F: Fn(&mut Context, &mut [&mut ValueRef]) -> Result<()> + 'static;
 
 impl<F> ScalarFunction<'_> for ScalarClosure<F>
 where
-    F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'static,
+    F: Fn(&mut Context, &mut [&mut ValueRef]) -> Result<()> + 'static,
 {
-    fn call(&self, ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+    fn call(&self, ctx: &mut Context, args: &mut [&mut ValueRef]) -> Result<()> {
         self.0(ctx, args)
     }
 }
@@ -248,7 +248,7 @@ impl Connection {
         func: F,
     ) -> Result<()>
     where
-        F: Fn(&Context, &mut [&mut ValueRef]) -> Result<()> + 'static,
+        F: Fn(&mut Context, &mut [&mut ValueRef]) -> Result<()> + 'static,
     {
         self.create_scalar_function_object(name, opts, ScalarClosure(func))
     }

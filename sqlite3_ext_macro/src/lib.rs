@@ -371,7 +371,7 @@ pub fn sqlite3_ext_vtab(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// use sqlite3_ext::{function::*, *};
 ///
 /// #[sqlite3_ext_fn(n_args=0, risk_level=Innocuous)]
-/// pub fn random_number(ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+/// pub fn random_number(ctx: &mut Context, args: &mut [&mut ValueRef]) -> Result<()> {
 ///     ctx.set_result(4) // chosen by fair dice roll.
 /// }
 ///

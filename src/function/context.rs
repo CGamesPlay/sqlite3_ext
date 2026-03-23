@@ -29,13 +29,23 @@ struct AuxData<T> {
     val: T,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum AuxDataError {
+    /// No previous call to set_aux_data
+    #[error("not set")]
+    Unset,
+    /// Previous call to set_aux_data used a different type
+    #[error("wrong type")]
+    WrongType,
+}
+
 impl InternalContext {
     pub unsafe fn from_ptr<'a>(base: *mut ffi::sqlite3_context) -> &'a mut Self {
         &mut *(base as *mut Self)
     }
 
     pub fn as_ptr(&self) -> *mut ffi::sqlite3_context {
-        &self.base as *const ffi::sqlite3_context as _
+        &raw const self.base as _
     }
 
     pub fn user_data<U>(&self) -> &U {
@@ -79,12 +89,12 @@ impl InternalContext {
 }
 
 impl Context {
-    pub(crate) fn as_ptr(&self) -> *mut ffi::sqlite3_context {
-        &self.base as *const ffi::sqlite3_context as _
-    }
-
     pub(crate) unsafe fn from_ptr<'a>(base: *mut ffi::sqlite3_context) -> &'a mut Self {
         &mut *(base as *mut Self)
+    }
+
+    pub(crate) fn as_ptr(&self) -> *mut ffi::sqlite3_context {
+        &raw const self.base as _
     }
 
     /// Return a handle to the current database.
@@ -92,25 +102,35 @@ impl Context {
         unsafe { Connection::from_ptr(ffi::sqlite3_context_db_handle(self.as_ptr())) }
     }
 
-    /// Retrieve data about a function parameter that was previously set with
-    /// [set_aux_data](Context::set_aux_data).
-    ///
-    /// This method returns None if T is different from the data type that was stored
-    /// previously.
-    pub fn aux_data<T: 'static>(&self, idx: usize) -> Option<&mut T> {
-        unsafe {
-            let data = ffi::sqlite3_get_auxdata(self.as_ptr(), idx as _) as *mut AuxData<T>;
-            if data.is_null() {
-                None
+    unsafe fn aux_data_inner<T: 'static>(
+        &self,
+        idx: usize,
+    ) -> std::result::Result<*mut AuxData<T>, AuxDataError> {
+        let data = ffi::sqlite3_get_auxdata(self.as_ptr(), idx as _) as *mut AuxData<T>;
+        if data.is_null() {
+            Err(AuxDataError::Unset)
+        } else {
+            let data = &mut *data;
+            if data.type_id == TypeId::of::<T>() {
+                Ok(data)
             } else {
-                let data = &mut *data;
-                if data.type_id == TypeId::of::<T>() {
-                    Some(&mut data.val)
-                } else {
-                    None
-                }
+                Err(AuxDataError::WrongType)
             }
         }
+    }
+
+    /// Retrieve data about a function parameter that was previously set with
+    /// [set_aux_data](Context::set_aux_data).
+    pub fn aux_data<T: 'static>(&self, idx: usize) -> std::result::Result<&T, AuxDataError> {
+        unsafe { self.aux_data_inner::<T>(idx).map(|data| &(*data).val) }
+    }
+
+    /// Mutable version of [aux_data](Context::aux_data).
+    pub fn aux_data_mut<T: 'static>(
+        &mut self,
+        idx: usize,
+    ) -> std::result::Result<&mut T, AuxDataError> {
+        unsafe { self.aux_data_inner::<T>(idx).map(|data| &mut (*data).val) }
     }
 
     /// Set the auxiliary data associated with the corresponding function parameter.

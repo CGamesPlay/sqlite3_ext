@@ -21,7 +21,7 @@ fn process_args(args: &mut [&mut ValueRef]) -> Result<Vec<Option<BigDecimal>>> {
 macro_rules! scalar_method {
     ($name:ident as ( $a:ident, $b:ident ) -> $ty:ty => $ret:expr) => {
         #[sqlite3_ext_fn(n_args=2, risk_level=Innocuous, deterministic)]
-        fn $name(ctx: &Context, args: &mut [&mut ValueRef]) -> Result<()> {
+        fn $name(ctx: &mut Context, args: &mut [&mut ValueRef]) -> Result<()> {
             let mut args = process_args(args)?.into_iter();
             let a = args.next().unwrap_or(None);
             let b = args.next().unwrap_or(None);

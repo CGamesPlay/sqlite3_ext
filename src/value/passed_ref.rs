@@ -91,9 +91,11 @@ mod test {
                     s: "input string".to_owned()
                 })
             );
-            let mut dbg = format!("{:?}", val);
-            dbg.replace_range(38..(dbg.len() - 9), "XXX");
-            assert_eq!(dbg, "Null(PassedRef { type_id: TypeId { t: XXX }, .. })");
+            let dbg = format!("{:?}", val);
+            let redacted = regex::Regex::new(r"TypeId\(.*?\)|TypeId \{ t: .* \}")
+                .unwrap()
+                .replace(&dbg, "TypeId(XXX)");
+            assert_eq!(redacted, "Null(PassedRef { type_id: TypeId(XXX), .. })");
             Ok(())
         });
     }

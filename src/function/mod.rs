@@ -20,10 +20,11 @@ pub trait FromUserData<T> {
     fn from_user_data(data: &T) -> Self;
 }
 
-/// Trait for scalar functions. This trait is used with
-/// [Connection::create_scalar_function_object] to implement scalar functions that have a
-/// lifetime smaller than `'static`. It is also possible to use closures and avoid implementing
-/// this trait, see [Connection::create_scalar_function] for details.
+/// Trait for scalar functions with a lifetime smaller than `'static`.
+///
+/// This trait is used with [Connection::create_scalar_function_object] to implement scalar
+/// functions that have a lifetime smaller than `'static`. It is also possible to use closures
+/// and avoid implementing this trait, see [Connection::create_scalar_function] for details.
 pub trait ScalarFunction<'db> {
     /// Perform a single invocation. The function will be invoked with a [Context] and an
     /// array of [ValueRef] objects. The function is required to set its output using
@@ -180,8 +181,9 @@ impl FunctionOptions {
         self
     }
 
-    /// Set the level of risk for this function. See the [RiskLevel] enum for details about
-    /// what the individual options mean.
+    /// Set the level of risk for this function.
+    ///
+    /// See the [RiskLevel] enum for details about what the individual options mean.
     ///
     /// Requires SQLite 3.31.0. On earlier versions of SQLite, this function is a harmless no-op.
     pub const fn set_risk_level(
@@ -199,6 +201,52 @@ impl FunctionOptions {
                 RiskLevel::Innocuous => !ffi::SQLITE_DIRECTONLY,
                 RiskLevel::DirectOnly => !ffi::SQLITE_INNOCUOUS,
             };
+        }
+        self
+    }
+
+    /// Indicate that this function uses pointer subtypes.
+    ///
+    /// It is required to call this function with true if the function calls
+    /// [UnsafePtr::from_value_ref]. Failure to do so may cause the subtype
+    /// verification to fail, depending on the configuration of SQLite.
+    ///
+    /// This function is a harmless no-op on versions of SQLite prior to 3.45.0.
+    pub const fn set_read_subtype(
+        #[cfg_attr(not(modern_sqlite), allow(unused_mut))] mut self,
+        val: bool,
+    ) -> Self {
+        let _ = val;
+        #[cfg(modern_sqlite)]
+        {
+            if val {
+                self.flags |= ffi::SQLITE_SUBTYPE;
+            } else {
+                self.flags &= !ffi::SQLITE_SUBTYPE;
+            }
+        }
+        self
+    }
+
+    /// Indicate that this function returns pointer subtypes.
+    ///
+    /// It is required to call this function with true if the function calls
+    /// [Context::set_result] with an [UnsafePtr] instance. Failure to do so may cause SQLite
+    /// to not store the subtype, depending on the configuration of SQLite.
+    ///
+    /// This function is a harmless no-op on versions of SQLite prior to 3.45.0.
+    pub const fn set_return_subtype(
+        #[cfg_attr(not(modern_sqlite), allow(unused_mut))] mut self,
+        val: bool,
+    ) -> Self {
+        let _ = val;
+        #[cfg(modern_sqlite)]
+        {
+            if val {
+                self.flags |= ffi::SQLITE_RESULT_SUBTYPE;
+            } else {
+                self.flags &= !ffi::SQLITE_RESULT_SUBTYPE;
+            }
         }
         self
     }

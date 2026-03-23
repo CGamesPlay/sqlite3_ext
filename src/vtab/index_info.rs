@@ -28,7 +28,7 @@ impl IndexInfo {
     /// Get the "distinct mode" of the query.
     ///
     /// Requires SQLite 3.38.0. On earlier versions, this function will always return
-    /// [DistinctMode::Ordered].
+    /// `DistinctMode(0)`.
     pub fn distinct_mode(&self) -> DistinctMode {
         sqlite3_match_version! {
             3_038_000 => {

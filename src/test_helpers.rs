@@ -24,7 +24,10 @@ impl TestHelpers {
         input: T,
         func: F,
     ) {
-        let opts = FunctionOptions::default().set_n_args(-1);
+        let opts = FunctionOptions::default()
+            .set_n_args(-1)
+            .set_read_subtype(true)
+            .set_return_subtype(true);
         let input = Cell::new(Some(input));
         let func: Box<dyn Fn(&mut ValueRef) -> Result<()>> = Box::new(func);
         // Safe because we remove the function inside this function.

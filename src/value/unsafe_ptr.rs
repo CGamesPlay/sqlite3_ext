@@ -7,9 +7,13 @@ use std::{
 /// Pass arbitrary pointers through SQLite as BLOBs.
 ///
 /// Using this technique to pass pointers through SQLite is insecure and error-prone. A much
-/// better solution is available via [PassedRef]. Pointers passed through this
-/// interface require manual memory management, for example using [Box::into_raw] or
-/// [std::mem::forget].
+/// better solution is available via [PassedRef]. Pointers passed through this interface require
+/// manual memory management, for example using [Box::into_raw] or [std::mem::forget].
+///
+/// Additionally, user-defined functions that use this interface must appropriately call the
+/// [FunctionOptions;:set_read_subtype](crate::function::FunctionOptions::set_read_subtype) and
+/// [FunctionOptions;:set_return_subtype](crate::function::FunctionOptions::set_return_subtype)
+/// functions.
 ///
 /// # Examples
 ///

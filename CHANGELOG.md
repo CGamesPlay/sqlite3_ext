@@ -1,5 +1,11 @@
 # Release History and Changes
 
+## Unreleased
+
+**New features:**
+
+- Users of `UnsafePtr` are now required to call `FunctionOptions::set_read_subtype` and/or `FunctionOptions::set_return_subtype` as appropriate. SQLite 3.45.0 added some optimizations that *may* discard subtype information if they are not used. Consider migrating `PassedRef` instead, if possible.
+
 ## 2026-03-23 (0.2.0)
 
 **Breaking changes:**

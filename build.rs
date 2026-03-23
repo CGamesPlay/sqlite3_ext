@@ -130,7 +130,7 @@ fn generate_ffi(static_link: bool, modern_sqlite: bool) {
                 // api is a null pointer, it means we are statically linked into
                 // an application with SQLITE_OMIT_LOAD_EXTENSION (so no
                 // worries).
-                if !api.is_null() && (*api).libversion_number.unwrap() != libsqlite3_sys::sqlite3_libversion_number {
+                if !api.is_null() && !std::ptr::fn_addr_eq((*api).libversion_number.unwrap(), libsqlite3_sys::sqlite3_libversion_number as unsafe extern "C" fn() -> i32) {
                     return Err(crate::types::Error::Module("this extension is statically linked to SQLite and cannot be used as a loadable extension".to_owned()));
                 }
                 Ok(())

@@ -156,12 +156,15 @@ impl FunctionOptions {
     /// Functions which take a specific number of parameters take precedence over functions
     /// which take any number.
     ///
+    /// The limit for this value is configurable via SQLite compiler flags. Teh default
+    /// value is 1000 since SQLite 3.48.0, and was 127 before that.
+    ///
     /// # Panics
     ///
-    /// This function panics if n_args is outside the range -1..128. This limitation is
+    /// This function panics if n_args is outside the range -1..32767. This limitation is
     /// imposed by SQLite.
     pub const fn set_n_args(mut self, n_args: i32) -> Self {
-        assert!(n_args >= -1 && n_args < 128, "n_args invalid");
+        assert!(n_args >= -1 && n_args < 32767, "n_args invalid");
         self.n_args = n_args;
         self
     }

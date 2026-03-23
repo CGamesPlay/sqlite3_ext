@@ -411,6 +411,11 @@ impl QueryResult {
     pub fn len(&self) -> usize {
         self.stmt.column_count()
     }
+
+    /// Shorthand for `len() == 0`.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl Index<usize> for QueryResult {

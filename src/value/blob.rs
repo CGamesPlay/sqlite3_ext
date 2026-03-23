@@ -83,6 +83,11 @@ impl Blob {
         unsafe { read_unaligned(self.data.cast::<usize>().as_ptr()) }
     }
 
+    /// Shorthand for `len() == 0`.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Get the underlying BLOB data.
     pub fn as_slice(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.data.as_ptr().offset(SIZEI), self.len()) }

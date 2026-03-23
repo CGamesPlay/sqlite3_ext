@@ -98,6 +98,9 @@ extern "C" {
     pub fn sqlite3_interrupt(arg1: *mut sqlite3);
 }
 extern "C" {
+    pub fn sqlite3_is_interrupted(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn sqlite3_complete(sql: *const ::std::os::raw::c_char) -> ::std::os::raw::c_int;
 }
 extern "C" {
@@ -119,6 +122,13 @@ extern "C" {
     pub fn sqlite3_busy_timeout(
         arg1: *mut sqlite3,
         ms: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn sqlite3_setlk_timeout(
+        arg1: *mut sqlite3,
+        ms: ::std::os::raw::c_int,
+        flags: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
@@ -281,44 +291,38 @@ extern "C" {
 }
 extern "C" {
     pub fn sqlite3_uri_parameter(
-        zFilename: *const ::std::os::raw::c_char,
+        z: sqlite3_filename,
         zParam: *const ::std::os::raw::c_char,
     ) -> *const ::std::os::raw::c_char;
 }
 extern "C" {
     pub fn sqlite3_uri_boolean(
-        zFile: *const ::std::os::raw::c_char,
+        z: sqlite3_filename,
         zParam: *const ::std::os::raw::c_char,
         bDefault: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn sqlite3_uri_int64(
-        arg1: *const ::std::os::raw::c_char,
+        arg1: sqlite3_filename,
         arg2: *const ::std::os::raw::c_char,
         arg3: sqlite3_int64,
     ) -> sqlite3_int64;
 }
 extern "C" {
     pub fn sqlite3_uri_key(
-        zFilename: *const ::std::os::raw::c_char,
+        z: sqlite3_filename,
         N: ::std::os::raw::c_int,
     ) -> *const ::std::os::raw::c_char;
 }
 extern "C" {
-    pub fn sqlite3_filename_database(
-        arg1: *const ::std::os::raw::c_char,
-    ) -> *const ::std::os::raw::c_char;
+    pub fn sqlite3_filename_database(arg1: sqlite3_filename) -> *const ::std::os::raw::c_char;
 }
 extern "C" {
-    pub fn sqlite3_filename_journal(
-        arg1: *const ::std::os::raw::c_char,
-    ) -> *const ::std::os::raw::c_char;
+    pub fn sqlite3_filename_journal(arg1: sqlite3_filename) -> *const ::std::os::raw::c_char;
 }
 extern "C" {
-    pub fn sqlite3_filename_wal(
-        arg1: *const ::std::os::raw::c_char,
-    ) -> *const ::std::os::raw::c_char;
+    pub fn sqlite3_filename_wal(arg1: sqlite3_filename) -> *const ::std::os::raw::c_char;
 }
 extern "C" {
     pub fn sqlite3_database_file_object(arg1: *const ::std::os::raw::c_char) -> *mut sqlite3_file;
@@ -330,10 +334,10 @@ extern "C" {
         zWal: *const ::std::os::raw::c_char,
         nParam: ::std::os::raw::c_int,
         azParam: *mut *const ::std::os::raw::c_char,
-    ) -> *mut ::std::os::raw::c_char;
+    ) -> sqlite3_filename;
 }
 extern "C" {
-    pub fn sqlite3_free_filename(arg1: *mut ::std::os::raw::c_char);
+    pub fn sqlite3_free_filename(arg1: sqlite3_filename);
 }
 extern "C" {
     pub fn sqlite3_errcode(db: *mut sqlite3) -> ::std::os::raw::c_int;
@@ -352,6 +356,13 @@ extern "C" {
 }
 extern "C" {
     pub fn sqlite3_error_offset(db: *mut sqlite3) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn sqlite3_set_errmsg(
+        db: *mut sqlite3,
+        errcode: ::std::os::raw::c_int,
+        zErrMsg: *const ::std::os::raw::c_char,
+    ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn sqlite3_limit(
@@ -427,6 +438,12 @@ extern "C" {
 }
 extern "C" {
     pub fn sqlite3_stmt_isexplain(pStmt: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn sqlite3_stmt_explain(
+        pStmt: *mut sqlite3_stmt,
+        eMode: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn sqlite3_stmt_busy(arg1: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
@@ -863,6 +880,9 @@ extern "C" {
     pub fn sqlite3_value_frombind(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn sqlite3_value_encoding(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn sqlite3_value_subtype(arg1: *mut sqlite3_value) -> ::std::os::raw::c_uint;
 }
 extern "C" {
@@ -896,6 +916,20 @@ extern "C" {
         arg2: *mut ::std::os::raw::c_void,
         arg3: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
     );
+}
+extern "C" {
+    pub fn sqlite3_get_clientdata(
+        arg1: *mut sqlite3,
+        arg2: *const ::std::os::raw::c_char,
+    ) -> *mut ::std::os::raw::c_void;
+}
+extern "C" {
+    pub fn sqlite3_set_clientdata(
+        arg1: *mut sqlite3,
+        arg2: *const ::std::os::raw::c_char,
+        arg3: *mut ::std::os::raw::c_void,
+        arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+    ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn sqlite3_result_blob(
@@ -1120,10 +1154,16 @@ extern "C" {
     pub fn sqlite3_db_handle(arg1: *mut sqlite3_stmt) -> *mut sqlite3;
 }
 extern "C" {
+    pub fn sqlite3_db_name(
+        db: *mut sqlite3,
+        N: ::std::os::raw::c_int,
+    ) -> *const ::std::os::raw::c_char;
+}
+extern "C" {
     pub fn sqlite3_db_filename(
         db: *mut sqlite3,
         zDbName: *const ::std::os::raw::c_char,
-    ) -> *const ::std::os::raw::c_char;
+    ) -> sqlite3_filename;
 }
 extern "C" {
     pub fn sqlite3_db_readonly(
@@ -1454,6 +1494,15 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn sqlite3_db_status64(
+        arg1: *mut sqlite3,
+        arg2: ::std::os::raw::c_int,
+        arg3: *mut sqlite3_int64,
+        arg4: *mut sqlite3_int64,
+        arg5: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn sqlite3_stmt_status(
         arg1: *mut sqlite3_stmt,
         op: ::std::os::raw::c_int,
@@ -1620,6 +1669,15 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn sqlite3_stmt_scanstatus_v2(
+        pStmt: *mut sqlite3_stmt,
+        idx: ::std::os::raw::c_int,
+        iScanStatusOp: ::std::os::raw::c_int,
+        flags: ::std::os::raw::c_int,
+        pOut: *mut ::std::os::raw::c_void,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn sqlite3_stmt_scanstatus_reset(arg1: *mut sqlite3_stmt);
 }
 extern "C" {
@@ -1673,6 +1731,16 @@ extern "C" {
         szDb: sqlite3_int64,
         szBuf: sqlite3_int64,
         mFlags: ::std::os::raw::c_uint,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn sqlite3_carray_bind(
+        pStmt: *mut sqlite3_stmt,
+        i: ::std::os::raw::c_int,
+        aData: *mut ::std::os::raw::c_void,
+        nData: ::std::os::raw::c_int,
+        mFlags: ::std::os::raw::c_int,
+        xDel: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {

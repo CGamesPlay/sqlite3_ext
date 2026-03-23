@@ -5,10 +5,13 @@
 #![allow(non_camel_case_types)]
 #![allow(clippy::type_complexity)]
 
-pub const SQLITE_VERSION: &[u8; 7usize] = b"3.38.5\0";
-pub const SQLITE_VERSION_NUMBER: i32 = 3038005;
+pub const SQLITE_VERSION: &[u8; 7usize] = b"3.51.3\0";
+pub const SQLITE_VERSION_NUMBER: i32 = 3051003;
 pub const SQLITE_SOURCE_ID: &[u8; 85usize] =
-    b"2022-05-06 15:25:27 78d9c993d404cdfaa7fdd2973fa1052e3da9f66215cff9c5540ebe55c407d9fe\0";
+    b"2026-03-13 10:38:09 737ae4a34738ffa0c3ff7f9bb18df914dd1cad163f28fd6b6e114a344fe6d618\0";
+pub const SQLITE_SCM_BRANCH: &[u8; 12usize] = b"branch-3.51\0";
+pub const SQLITE_SCM_TAGS: &[u8; 23usize] = b"release version-3.51.3\0";
+pub const SQLITE_SCM_DATETIME: &[u8; 25usize] = b"2026-03-13T10:38:09.694Z\0";
 pub const SQLITE_OK: i32 = 0;
 pub const SQLITE_ERROR: i32 = 1;
 pub const SQLITE_INTERNAL: i32 = 2;
@@ -43,6 +46,9 @@ pub const SQLITE_DONE: i32 = 101;
 pub const SQLITE_ERROR_MISSING_COLLSEQ: i32 = 257;
 pub const SQLITE_ERROR_RETRY: i32 = 513;
 pub const SQLITE_ERROR_SNAPSHOT: i32 = 769;
+pub const SQLITE_ERROR_RESERVESIZE: i32 = 1025;
+pub const SQLITE_ERROR_KEY: i32 = 1281;
+pub const SQLITE_ERROR_UNABLE: i32 = 1537;
 pub const SQLITE_IOERR_READ: i32 = 266;
 pub const SQLITE_IOERR_SHORT_READ: i32 = 522;
 pub const SQLITE_IOERR_WRITE: i32 = 778;
@@ -76,6 +82,9 @@ pub const SQLITE_IOERR_COMMIT_ATOMIC: i32 = 7690;
 pub const SQLITE_IOERR_ROLLBACK_ATOMIC: i32 = 7946;
 pub const SQLITE_IOERR_DATA: i32 = 8202;
 pub const SQLITE_IOERR_CORRUPTFS: i32 = 8458;
+pub const SQLITE_IOERR_IN_PAGE: i32 = 8714;
+pub const SQLITE_IOERR_BADKEY: i32 = 8970;
+pub const SQLITE_IOERR_CODEC: i32 = 9226;
 pub const SQLITE_LOCKED_SHAREDCACHE: i32 = 262;
 pub const SQLITE_LOCKED_VTAB: i32 = 518;
 pub const SQLITE_BUSY_RECOVERY: i32 = 261;
@@ -111,6 +120,7 @@ pub const SQLITE_CONSTRAINT_PINNED: i32 = 2835;
 pub const SQLITE_CONSTRAINT_DATATYPE: i32 = 3091;
 pub const SQLITE_NOTICE_RECOVER_WAL: i32 = 283;
 pub const SQLITE_NOTICE_RECOVER_ROLLBACK: i32 = 539;
+pub const SQLITE_NOTICE_RBU: i32 = 795;
 pub const SQLITE_WARNING_AUTOINDEX: i32 = 284;
 pub const SQLITE_AUTH_USER: i32 = 279;
 pub const SQLITE_OK_LOAD_PERMANENTLY: i32 = 256;
@@ -153,6 +163,7 @@ pub const SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN: i32 = 2048;
 pub const SQLITE_IOCAP_POWERSAFE_OVERWRITE: i32 = 4096;
 pub const SQLITE_IOCAP_IMMUTABLE: i32 = 8192;
 pub const SQLITE_IOCAP_BATCH_ATOMIC: i32 = 16384;
+pub const SQLITE_IOCAP_SUBPAGE_READ: i32 = 32768;
 pub const SQLITE_LOCK_NONE: i32 = 0;
 pub const SQLITE_LOCK_SHARED: i32 = 1;
 pub const SQLITE_LOCK_RESERVED: i32 = 2;
@@ -201,6 +212,10 @@ pub const SQLITE_FCNTL_RESERVE_BYTES: i32 = 38;
 pub const SQLITE_FCNTL_CKPT_START: i32 = 39;
 pub const SQLITE_FCNTL_EXTERNAL_READER: i32 = 40;
 pub const SQLITE_FCNTL_CKSM_FILE: i32 = 41;
+pub const SQLITE_FCNTL_RESET_CACHE: i32 = 42;
+pub const SQLITE_FCNTL_NULL_IO: i32 = 43;
+pub const SQLITE_FCNTL_BLOCK_ON_CONNECT: i32 = 44;
+pub const SQLITE_FCNTL_FILESTAT: i32 = 45;
 pub const SQLITE_GET_LOCKPROXYFILE: i32 = 2;
 pub const SQLITE_SET_LOCKPROXYFILE: i32 = 3;
 pub const SQLITE_LAST_ERRNO: i32 = 4;
@@ -240,6 +255,7 @@ pub const SQLITE_CONFIG_STMTJRNL_SPILL: i32 = 26;
 pub const SQLITE_CONFIG_SMALL_MALLOC: i32 = 27;
 pub const SQLITE_CONFIG_SORTERREF_SIZE: i32 = 28;
 pub const SQLITE_CONFIG_MEMDB_MAXSIZE: i32 = 29;
+pub const SQLITE_CONFIG_ROWID_IN_VIEW: i32 = 30;
 pub const SQLITE_DBCONFIG_MAINDBNAME: i32 = 1000;
 pub const SQLITE_DBCONFIG_LOOKASIDE: i32 = 1001;
 pub const SQLITE_DBCONFIG_ENABLE_FKEY: i32 = 1002;
@@ -258,7 +274,13 @@ pub const SQLITE_DBCONFIG_DQS_DDL: i32 = 1014;
 pub const SQLITE_DBCONFIG_ENABLE_VIEW: i32 = 1015;
 pub const SQLITE_DBCONFIG_LEGACY_FILE_FORMAT: i32 = 1016;
 pub const SQLITE_DBCONFIG_TRUSTED_SCHEMA: i32 = 1017;
-pub const SQLITE_DBCONFIG_MAX: i32 = 1017;
+pub const SQLITE_DBCONFIG_STMT_SCANSTATUS: i32 = 1018;
+pub const SQLITE_DBCONFIG_REVERSE_SCANORDER: i32 = 1019;
+pub const SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE: i32 = 1020;
+pub const SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE: i32 = 1021;
+pub const SQLITE_DBCONFIG_ENABLE_COMMENTS: i32 = 1022;
+pub const SQLITE_DBCONFIG_MAX: i32 = 1022;
+pub const SQLITE_SETLK_BLOCK_ON_CONNECT: i32 = 1;
 pub const SQLITE_DENY: i32 = 1;
 pub const SQLITE_IGNORE: i32 = 2;
 pub const SQLITE_CREATE_INDEX: i32 = 1;
@@ -314,6 +336,7 @@ pub const SQLITE_LIMIT_WORKER_THREADS: i32 = 11;
 pub const SQLITE_PREPARE_PERSISTENT: i32 = 1;
 pub const SQLITE_PREPARE_NORMALIZE: i32 = 2;
 pub const SQLITE_PREPARE_NO_VTAB: i32 = 4;
+pub const SQLITE_PREPARE_DONT_LOG: i32 = 16;
 pub const SQLITE_INTEGER: i32 = 1;
 pub const SQLITE_FLOAT: i32 = 2;
 pub const SQLITE_BLOB: i32 = 4;
@@ -330,12 +353,15 @@ pub const SQLITE_DETERMINISTIC: i32 = 2048;
 pub const SQLITE_DIRECTONLY: i32 = 524288;
 pub const SQLITE_SUBTYPE: i32 = 1048576;
 pub const SQLITE_INNOCUOUS: i32 = 2097152;
+pub const SQLITE_RESULT_SUBTYPE: i32 = 16777216;
+pub const SQLITE_SELFORDER1: i32 = 33554432;
 pub const SQLITE_WIN32_DATA_DIRECTORY_TYPE: i32 = 1;
 pub const SQLITE_WIN32_TEMP_DIRECTORY_TYPE: i32 = 2;
 pub const SQLITE_TXN_NONE: i32 = 0;
 pub const SQLITE_TXN_READ: i32 = 1;
 pub const SQLITE_TXN_WRITE: i32 = 2;
 pub const SQLITE_INDEX_SCAN_UNIQUE: i32 = 1;
+pub const SQLITE_INDEX_SCAN_HEX: i32 = 2;
 pub const SQLITE_INDEX_CONSTRAINT_EQ: i32 = 2;
 pub const SQLITE_INDEX_CONSTRAINT_GT: i32 = 4;
 pub const SQLITE_INDEX_CONSTRAINT_LE: i32 = 8;
@@ -374,6 +400,7 @@ pub const SQLITE_TESTCTRL_FIRST: i32 = 5;
 pub const SQLITE_TESTCTRL_PRNG_SAVE: i32 = 5;
 pub const SQLITE_TESTCTRL_PRNG_RESTORE: i32 = 6;
 pub const SQLITE_TESTCTRL_PRNG_RESET: i32 = 7;
+pub const SQLITE_TESTCTRL_FK_NO_ACTION: i32 = 7;
 pub const SQLITE_TESTCTRL_BITVEC_TEST: i32 = 8;
 pub const SQLITE_TESTCTRL_FAULT_INSTALL: i32 = 9;
 pub const SQLITE_TESTCTRL_BENIGN_MALLOC_HOOKS: i32 = 10;
@@ -381,8 +408,10 @@ pub const SQLITE_TESTCTRL_PENDING_BYTE: i32 = 11;
 pub const SQLITE_TESTCTRL_ASSERT: i32 = 12;
 pub const SQLITE_TESTCTRL_ALWAYS: i32 = 13;
 pub const SQLITE_TESTCTRL_RESERVE: i32 = 14;
+pub const SQLITE_TESTCTRL_JSON_SELFCHECK: i32 = 14;
 pub const SQLITE_TESTCTRL_OPTIMIZATIONS: i32 = 15;
 pub const SQLITE_TESTCTRL_ISKEYWORD: i32 = 16;
+pub const SQLITE_TESTCTRL_GETOPT: i32 = 16;
 pub const SQLITE_TESTCTRL_SCRATCHMALLOC: i32 = 17;
 pub const SQLITE_TESTCTRL_INTERNAL_FUNCTIONS: i32 = 17;
 pub const SQLITE_TESTCTRL_LOCALTIME_FAULT: i32 = 18;
@@ -402,7 +431,8 @@ pub const SQLITE_TESTCTRL_SEEK_COUNT: i32 = 30;
 pub const SQLITE_TESTCTRL_TRACEFLAGS: i32 = 31;
 pub const SQLITE_TESTCTRL_TUNE: i32 = 32;
 pub const SQLITE_TESTCTRL_LOGEST: i32 = 33;
-pub const SQLITE_TESTCTRL_LAST: i32 = 33;
+pub const SQLITE_TESTCTRL_USELONGDOUBLE: i32 = 34;
+pub const SQLITE_TESTCTRL_LAST: i32 = 34;
 pub const SQLITE_STATUS_MEMORY_USED: i32 = 0;
 pub const SQLITE_STATUS_PAGECACHE_USED: i32 = 1;
 pub const SQLITE_STATUS_PAGECACHE_OVERFLOW: i32 = 2;
@@ -426,7 +456,8 @@ pub const SQLITE_DBSTATUS_CACHE_WRITE: i32 = 9;
 pub const SQLITE_DBSTATUS_DEFERRED_FKS: i32 = 10;
 pub const SQLITE_DBSTATUS_CACHE_USED_SHARED: i32 = 11;
 pub const SQLITE_DBSTATUS_CACHE_SPILL: i32 = 12;
-pub const SQLITE_DBSTATUS_MAX: i32 = 12;
+pub const SQLITE_DBSTATUS_TEMPBUF_SPILL: i32 = 13;
+pub const SQLITE_DBSTATUS_MAX: i32 = 13;
 pub const SQLITE_STMTSTATUS_FULLSCAN_STEP: i32 = 1;
 pub const SQLITE_STMTSTATUS_SORT: i32 = 2;
 pub const SQLITE_STMTSTATUS_AUTOINDEX: i32 = 3;
@@ -436,6 +467,7 @@ pub const SQLITE_STMTSTATUS_RUN: i32 = 6;
 pub const SQLITE_STMTSTATUS_FILTER_MISS: i32 = 7;
 pub const SQLITE_STMTSTATUS_FILTER_HIT: i32 = 8;
 pub const SQLITE_STMTSTATUS_MEMUSED: i32 = 99;
+pub const SQLITE_CHECKPOINT_NOOP: i32 = -1;
 pub const SQLITE_CHECKPOINT_PASSIVE: i32 = 0;
 pub const SQLITE_CHECKPOINT_FULL: i32 = 1;
 pub const SQLITE_CHECKPOINT_RESTART: i32 = 2;
@@ -443,6 +475,7 @@ pub const SQLITE_CHECKPOINT_TRUNCATE: i32 = 3;
 pub const SQLITE_VTAB_CONSTRAINT_SUPPORT: i32 = 1;
 pub const SQLITE_VTAB_INNOCUOUS: i32 = 2;
 pub const SQLITE_VTAB_DIRECTONLY: i32 = 3;
+pub const SQLITE_VTAB_USES_ALL_SCHEMAS: i32 = 4;
 pub const SQLITE_ROLLBACK: i32 = 1;
 pub const SQLITE_FAIL: i32 = 3;
 pub const SQLITE_REPLACE: i32 = 5;
@@ -452,10 +485,23 @@ pub const SQLITE_SCANSTAT_EST: i32 = 2;
 pub const SQLITE_SCANSTAT_NAME: i32 = 3;
 pub const SQLITE_SCANSTAT_EXPLAIN: i32 = 4;
 pub const SQLITE_SCANSTAT_SELECTID: i32 = 5;
+pub const SQLITE_SCANSTAT_PARENTID: i32 = 6;
+pub const SQLITE_SCANSTAT_NCYCLE: i32 = 7;
+pub const SQLITE_SCANSTAT_COMPLEX: i32 = 1;
 pub const SQLITE_SERIALIZE_NOCOPY: i32 = 1;
 pub const SQLITE_DESERIALIZE_FREEONCLOSE: i32 = 1;
 pub const SQLITE_DESERIALIZE_RESIZEABLE: i32 = 2;
 pub const SQLITE_DESERIALIZE_READONLY: i32 = 4;
+pub const SQLITE_CARRAY_INT32: i32 = 0;
+pub const SQLITE_CARRAY_INT64: i32 = 1;
+pub const SQLITE_CARRAY_DOUBLE: i32 = 2;
+pub const SQLITE_CARRAY_TEXT: i32 = 3;
+pub const SQLITE_CARRAY_BLOB: i32 = 4;
+pub const CARRAY_INT32: i32 = 0;
+pub const CARRAY_INT64: i32 = 1;
+pub const CARRAY_DOUBLE: i32 = 2;
+pub const CARRAY_TEXT: i32 = 3;
+pub const CARRAY_BLOB: i32 = 4;
 pub const NOT_WITHIN: i32 = 0;
 pub const PARTLY_WITHIN: i32 = 1;
 pub const FULLY_WITHIN: i32 = 2;
@@ -834,6 +880,7 @@ fn bindgen_test_layout_sqlite3_io_methods() {
 pub struct sqlite3_mutex {
     _unused: [u8; 0],
 }
+pub type sqlite3_filename = *const ::std::os::raw::c_char;
 pub type sqlite3_syscall_ptr = ::std::option::Option<unsafe extern "C" fn()>;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -847,7 +894,7 @@ pub struct sqlite3_vfs {
     pub xOpen: ::std::option::Option<
         unsafe extern "C" fn(
             arg1: *mut sqlite3_vfs,
-            zName: *const ::std::os::raw::c_char,
+            zName: sqlite3_filename,
             arg2: *mut sqlite3_file,
             flags: ::std::os::raw::c_int,
             pOutFlags: *mut ::std::os::raw::c_int,
@@ -1467,6 +1514,15 @@ pub struct sqlite3_module {
     pub xShadowName: ::std::option::Option<
         unsafe extern "C" fn(arg1: *const ::std::os::raw::c_char) -> ::std::os::raw::c_int,
     >,
+    pub xIntegrity: ::std::option::Option<
+        unsafe extern "C" fn(
+            pVTab: *mut sqlite3_vtab,
+            zSchema: *const ::std::os::raw::c_char,
+            zTabName: *const ::std::os::raw::c_char,
+            mFlags: ::std::os::raw::c_int,
+            pzErr: *mut *mut ::std::os::raw::c_char,
+        ) -> ::std::os::raw::c_int,
+    >,
 }
 #[test]
 fn bindgen_test_layout_sqlite3_module() {
@@ -1474,7 +1530,7 @@ fn bindgen_test_layout_sqlite3_module() {
     let ptr = UNINIT.as_ptr();
     assert_eq!(
         ::std::mem::size_of::<sqlite3_module>(),
-        192usize,
+        200usize,
         concat!("Size of: ", stringify!(sqlite3_module))
     );
     assert_eq!(
@@ -1720,6 +1776,16 @@ fn bindgen_test_layout_sqlite3_module() {
             stringify!(sqlite3_module),
             "::",
             stringify!(xShadowName)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).xIntegrity) as usize - ptr as usize },
+        192usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_module),
+            "::",
+            stringify!(xIntegrity)
         )
     );
 }
@@ -3188,6 +3254,52 @@ pub struct Fts5ExtensionApi {
             piCol: *mut ::std::os::raw::c_int,
         ),
     >,
+    pub xQueryToken: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut Fts5Context,
+            iPhrase: ::std::os::raw::c_int,
+            iToken: ::std::os::raw::c_int,
+            ppToken: *mut *const ::std::os::raw::c_char,
+            pnToken: *mut ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub xInstToken: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut Fts5Context,
+            iIdx: ::std::os::raw::c_int,
+            iToken: ::std::os::raw::c_int,
+            arg2: *mut *const ::std::os::raw::c_char,
+            arg3: *mut ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub xColumnLocale: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut Fts5Context,
+            iCol: ::std::os::raw::c_int,
+            pz: *mut *const ::std::os::raw::c_char,
+            pn: *mut ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub xTokenize_v2: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut Fts5Context,
+            pText: *const ::std::os::raw::c_char,
+            nText: ::std::os::raw::c_int,
+            pLocale: *const ::std::os::raw::c_char,
+            nLocale: ::std::os::raw::c_int,
+            pCtx: *mut ::std::os::raw::c_void,
+            xToken: ::std::option::Option<
+                unsafe extern "C" fn(
+                    arg1: *mut ::std::os::raw::c_void,
+                    arg2: ::std::os::raw::c_int,
+                    arg3: *const ::std::os::raw::c_char,
+                    arg4: ::std::os::raw::c_int,
+                    arg5: ::std::os::raw::c_int,
+                    arg6: ::std::os::raw::c_int,
+                ) -> ::std::os::raw::c_int,
+            >,
+        ) -> ::std::os::raw::c_int,
+    >,
 }
 #[test]
 fn bindgen_test_layout_Fts5ExtensionApi() {
@@ -3195,7 +3307,7 @@ fn bindgen_test_layout_Fts5ExtensionApi() {
     let ptr = UNINIT.as_ptr();
     assert_eq!(
         ::std::mem::size_of::<Fts5ExtensionApi>(),
-        160usize,
+        192usize,
         concat!("Size of: ", stringify!(Fts5ExtensionApi))
     );
     assert_eq!(
@@ -3403,11 +3515,141 @@ fn bindgen_test_layout_Fts5ExtensionApi() {
             stringify!(xPhraseNextColumn)
         )
     );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).xQueryToken) as usize - ptr as usize },
+        160usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(Fts5ExtensionApi),
+            "::",
+            stringify!(xQueryToken)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).xInstToken) as usize - ptr as usize },
+        168usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(Fts5ExtensionApi),
+            "::",
+            stringify!(xInstToken)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).xColumnLocale) as usize - ptr as usize },
+        176usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(Fts5ExtensionApi),
+            "::",
+            stringify!(xColumnLocale)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).xTokenize_v2) as usize - ptr as usize },
+        184usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(Fts5ExtensionApi),
+            "::",
+            stringify!(xTokenize_v2)
+        )
+    );
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Fts5Tokenizer {
     _unused: [u8; 0],
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct fts5_tokenizer_v2 {
+    pub iVersion: ::std::os::raw::c_int,
+    pub xCreate: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut ::std::os::raw::c_void,
+            azArg: *mut *const ::std::os::raw::c_char,
+            nArg: ::std::os::raw::c_int,
+            ppOut: *mut *mut Fts5Tokenizer,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub xDelete: ::std::option::Option<unsafe extern "C" fn(arg1: *mut Fts5Tokenizer)>,
+    pub xTokenize: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut Fts5Tokenizer,
+            pCtx: *mut ::std::os::raw::c_void,
+            flags: ::std::os::raw::c_int,
+            pText: *const ::std::os::raw::c_char,
+            nText: ::std::os::raw::c_int,
+            pLocale: *const ::std::os::raw::c_char,
+            nLocale: ::std::os::raw::c_int,
+            xToken: ::std::option::Option<
+                unsafe extern "C" fn(
+                    pCtx: *mut ::std::os::raw::c_void,
+                    tflags: ::std::os::raw::c_int,
+                    pToken: *const ::std::os::raw::c_char,
+                    nToken: ::std::os::raw::c_int,
+                    iStart: ::std::os::raw::c_int,
+                    iEnd: ::std::os::raw::c_int,
+                ) -> ::std::os::raw::c_int,
+            >,
+        ) -> ::std::os::raw::c_int,
+    >,
+}
+#[test]
+fn bindgen_test_layout_fts5_tokenizer_v2() {
+    const UNINIT: ::std::mem::MaybeUninit<fts5_tokenizer_v2> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<fts5_tokenizer_v2>(),
+        32usize,
+        concat!("Size of: ", stringify!(fts5_tokenizer_v2))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<fts5_tokenizer_v2>(),
+        8usize,
+        concat!("Alignment of ", stringify!(fts5_tokenizer_v2))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).iVersion) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(fts5_tokenizer_v2),
+            "::",
+            stringify!(iVersion)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).xCreate) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(fts5_tokenizer_v2),
+            "::",
+            stringify!(xCreate)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).xDelete) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(fts5_tokenizer_v2),
+            "::",
+            stringify!(xDelete)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).xTokenize) as usize - ptr as usize },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(fts5_tokenizer_v2),
+            "::",
+            stringify!(xTokenize)
+        )
+    );
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -3494,7 +3736,7 @@ pub struct fts5_api {
         unsafe extern "C" fn(
             pApi: *mut fts5_api,
             zName: *const ::std::os::raw::c_char,
-            pContext: *mut ::std::os::raw::c_void,
+            pUserData: *mut ::std::os::raw::c_void,
             pTokenizer: *mut fts5_tokenizer,
             xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
         ) -> ::std::os::raw::c_int,
@@ -3503,7 +3745,7 @@ pub struct fts5_api {
         unsafe extern "C" fn(
             pApi: *mut fts5_api,
             zName: *const ::std::os::raw::c_char,
-            ppContext: *mut *mut ::std::os::raw::c_void,
+            ppUserData: *mut *mut ::std::os::raw::c_void,
             pTokenizer: *mut fts5_tokenizer,
         ) -> ::std::os::raw::c_int,
     >,
@@ -3511,9 +3753,26 @@ pub struct fts5_api {
         unsafe extern "C" fn(
             pApi: *mut fts5_api,
             zName: *const ::std::os::raw::c_char,
-            pContext: *mut ::std::os::raw::c_void,
+            pUserData: *mut ::std::os::raw::c_void,
             xFunction: fts5_extension_function,
             xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub xCreateTokenizer_v2: ::std::option::Option<
+        unsafe extern "C" fn(
+            pApi: *mut fts5_api,
+            zName: *const ::std::os::raw::c_char,
+            pUserData: *mut ::std::os::raw::c_void,
+            pTokenizer: *mut fts5_tokenizer_v2,
+            xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub xFindTokenizer_v2: ::std::option::Option<
+        unsafe extern "C" fn(
+            pApi: *mut fts5_api,
+            zName: *const ::std::os::raw::c_char,
+            ppUserData: *mut *mut ::std::os::raw::c_void,
+            ppTokenizer: *mut *mut fts5_tokenizer_v2,
         ) -> ::std::os::raw::c_int,
     >,
 }
@@ -3523,7 +3782,7 @@ fn bindgen_test_layout_fts5_api() {
     let ptr = UNINIT.as_ptr();
     assert_eq!(
         ::std::mem::size_of::<fts5_api>(),
-        32usize,
+        48usize,
         concat!("Size of: ", stringify!(fts5_api))
     );
     assert_eq!(
@@ -3569,6 +3828,26 @@ fn bindgen_test_layout_fts5_api() {
             stringify!(fts5_api),
             "::",
             stringify!(xCreateFunction)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).xCreateTokenizer_v2) as usize - ptr as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(fts5_api),
+            "::",
+            stringify!(xCreateTokenizer_v2)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).xFindTokenizer_v2) as usize - ptr as usize },
+        40usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(fts5_api),
+            "::",
+            stringify!(xFindTokenizer_v2)
         )
     );
 }
@@ -4975,10 +5254,10 @@ pub struct sqlite3_api_routines {
             arg3: *const ::std::os::raw::c_char,
             arg4: ::std::os::raw::c_int,
             arg5: *mut *const ::std::os::raw::c_char,
-        ) -> *mut ::std::os::raw::c_char,
+        ) -> *const ::std::os::raw::c_char,
     >,
     pub free_filename:
-        ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_char)>,
+        ::std::option::Option<unsafe extern "C" fn(arg1: *const ::std::os::raw::c_char)>,
     pub database_file_object: ::std::option::Option<
         unsafe extern "C" fn(arg1: *const ::std::os::raw::c_char) -> *mut sqlite3_file,
     >,
@@ -5038,6 +5317,78 @@ pub struct sqlite3_api_routines {
             arg2: *mut *mut sqlite3_value,
         ) -> ::std::os::raw::c_int,
     >,
+    pub deserialize: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut sqlite3,
+            arg2: *const ::std::os::raw::c_char,
+            arg3: *mut ::std::os::raw::c_uchar,
+            arg4: sqlite3_int64,
+            arg5: sqlite3_int64,
+            arg6: ::std::os::raw::c_uint,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub serialize: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut sqlite3,
+            arg2: *const ::std::os::raw::c_char,
+            arg3: *mut sqlite3_int64,
+            arg4: ::std::os::raw::c_uint,
+        ) -> *mut ::std::os::raw::c_uchar,
+    >,
+    pub db_name: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut sqlite3,
+            arg2: ::std::os::raw::c_int,
+        ) -> *const ::std::os::raw::c_char,
+    >,
+    pub value_encoding: ::std::option::Option<
+        unsafe extern "C" fn(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int,
+    >,
+    pub is_interrupted:
+        ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3) -> ::std::os::raw::c_int>,
+    pub stmt_explain: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut sqlite3_stmt,
+            arg2: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub get_clientdata: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut sqlite3,
+            arg2: *const ::std::os::raw::c_char,
+        ) -> *mut ::std::os::raw::c_void,
+    >,
+    pub set_clientdata: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut sqlite3,
+            arg2: *const ::std::os::raw::c_char,
+            arg3: *mut ::std::os::raw::c_void,
+            arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub setlk_timeout: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut sqlite3,
+            arg2: ::std::os::raw::c_int,
+            arg3: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub set_errmsg: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut sqlite3,
+            arg2: ::std::os::raw::c_int,
+            arg3: *const ::std::os::raw::c_char,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub db_status64: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut sqlite3,
+            arg2: ::std::os::raw::c_int,
+            arg3: *mut sqlite3_int64,
+            arg4: *mut sqlite3_int64,
+            arg5: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
 }
 #[test]
 fn bindgen_test_layout_sqlite3_api_routines() {
@@ -5045,7 +5396,7 @@ fn bindgen_test_layout_sqlite3_api_routines() {
     let ptr = UNINIT.as_ptr();
     assert_eq!(
         ::std::mem::size_of::<sqlite3_api_routines>(),
-        2096usize,
+        2184usize,
         concat!("Size of: ", stringify!(sqlite3_api_routines))
     );
     assert_eq!(
@@ -7671,6 +8022,116 @@ fn bindgen_test_layout_sqlite3_api_routines() {
             stringify!(sqlite3_api_routines),
             "::",
             stringify!(vtab_in_next)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).deserialize) as usize - ptr as usize },
+        2096usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_api_routines),
+            "::",
+            stringify!(deserialize)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).serialize) as usize - ptr as usize },
+        2104usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_api_routines),
+            "::",
+            stringify!(serialize)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).db_name) as usize - ptr as usize },
+        2112usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_api_routines),
+            "::",
+            stringify!(db_name)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).value_encoding) as usize - ptr as usize },
+        2120usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_api_routines),
+            "::",
+            stringify!(value_encoding)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).is_interrupted) as usize - ptr as usize },
+        2128usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_api_routines),
+            "::",
+            stringify!(is_interrupted)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).stmt_explain) as usize - ptr as usize },
+        2136usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_api_routines),
+            "::",
+            stringify!(stmt_explain)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).get_clientdata) as usize - ptr as usize },
+        2144usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_api_routines),
+            "::",
+            stringify!(get_clientdata)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).set_clientdata) as usize - ptr as usize },
+        2152usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_api_routines),
+            "::",
+            stringify!(set_clientdata)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).setlk_timeout) as usize - ptr as usize },
+        2160usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_api_routines),
+            "::",
+            stringify!(setlk_timeout)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).set_errmsg) as usize - ptr as usize },
+        2168usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_api_routines),
+            "::",
+            stringify!(set_errmsg)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).db_status64) as usize - ptr as usize },
+        2176usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(sqlite3_api_routines),
+            "::",
+            stringify!(db_status64)
         )
     );
 }

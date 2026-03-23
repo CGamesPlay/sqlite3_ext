@@ -45,7 +45,7 @@ pub struct TestVTabCursor<'vtab, Hooks: TestHooks + 'vtab> {
 impl<'vtab, Hooks: TestHooks + 'vtab> TestVTab<'vtab, Hooks> {
     fn connect_create(hooks: &'vtab Hooks) -> Result<(String, Self)> {
         let mut vtab = TestVTab {
-            hooks: hooks.clone(),
+            hooks: hooks,
             functions: VTabFunctionList::default(),
             num_rows: 3,
         };

@@ -88,7 +88,6 @@ impl Connection {
     /// a slice containing the portion of the original input which was after the first SQL
     /// statement.
     pub fn prepare_first<'a>(&self, sql: &'a str) -> Result<(Option<Statement>, &'a str)> {
-        const FLAGS: u32 = 0;
         let guard = self.lock();
         let mut ret = MaybeUninit::uninit();
         let mut rest = MaybeUninit::uninit();
@@ -99,7 +98,7 @@ impl Connection {
                         self.as_mut_ptr(),
                         sql.as_ptr() as _,
                         sql.len() as _,
-                        FLAGS,
+                        0,
                         ret.as_mut_ptr(),
                         rest.as_mut_ptr(),
                     ),

@@ -20,6 +20,7 @@ fn main() {
         !static_link
     };
 
+    println!("cargo:rustc-check-cfg=cfg(modern_sqlite)");
     if modern_sqlite {
         println!("cargo:rustc-cfg=modern_sqlite");
     }

@@ -17,11 +17,11 @@ pub struct IndexInfo {
 }
 
 impl IndexInfo {
-    pub fn constraints(&self) -> IndexInfoConstraintIterator {
+    pub fn constraints(&self) -> IndexInfoConstraintIterator<'_> {
         IndexInfoConstraintIterator::new(self)
     }
 
-    pub fn order_by(&self) -> IndexInfoOrderByIterator {
+    pub fn order_by(&self) -> IndexInfoOrderByIterator<'_> {
         IndexInfoOrderByIterator::new(self)
     }
 

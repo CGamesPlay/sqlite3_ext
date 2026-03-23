@@ -41,7 +41,7 @@ pub trait FallibleIteratorMut {
     /// Convert this iterator into a [FallibleIterator] by applying a function to each
     /// element.
     #[inline]
-    fn map<F, B>(&mut self, f: F) -> Map<Self, F>
+    fn map<F, B>(&mut self, f: F) -> Map<'_, Self, F>
     where
         Self: Sized,
         F: FnMut(&mut Self::Item) -> Result<B, Self::Error>,

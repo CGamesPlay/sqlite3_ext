@@ -170,7 +170,11 @@ impl IndexInfoConstraint<'_> {
         unsafe { &*self.index_info.base.aConstraint.add(self.position) }
     }
 
-    fn usage(&self) -> &mut ffi::sqlite3_index_info_sqlite3_index_constraint_usage {
+    fn usage(&self) -> &ffi::sqlite3_index_info_sqlite3_index_constraint_usage {
+        unsafe { &mut *self.index_info.base.aConstraintUsage.add(self.position) }
+    }
+
+    fn usage_mut(&mut self) -> &mut ffi::sqlite3_index_info_sqlite3_index_constraint_usage {
         unsafe { &mut *self.index_info.base.aConstraintUsage.add(self.position) }
     }
 
@@ -256,7 +260,7 @@ impl IndexInfoConstraint<'_> {
     /// the corresponding constraints will then be passed in as the argv[] parameters to
     /// filter.
     pub fn set_argv_index(&mut self, idx: Option<u32>) {
-        self.usage().argvIndex = match idx {
+        self.usage_mut().argvIndex = match idx {
             None => 0,
             Some(i) => (i + 1) as _,
         };
@@ -274,7 +278,7 @@ impl IndexInfoConstraint<'_> {
     /// documentation](https://www.sqlite.org/vtab.html#omit_constraint_checking_in_bytecode)
     /// for more details.
     pub fn set_omit(&mut self, val: bool) {
-        self.usage().omit = val as _;
+        self.usage_mut().omit = val as _;
     }
 
     /// Check if all values in this IN constraint are able to be processed simultaneously.

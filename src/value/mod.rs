@@ -191,9 +191,9 @@ impl ValueRef {
     }
 
     // Caller is responsible for enforcing Rust pointer aliasing rules.
-    unsafe fn get_ref_internal<T: 'static>(&self) -> Option<&mut PassedRef<T>> {
+    unsafe fn get_ref_internal<T: 'static>(&self) -> Option<&PassedRef<T>> {
         sqlite3_match_version! {
-            3_020_000 => (ffi::sqlite3_value_pointer(self.as_ptr(), POINTER_TAG) as *mut PassedRef<T>).as_mut(),
+            3_020_000 => (ffi::sqlite3_value_pointer(self.as_ptr(), POINTER_TAG) as *const PassedRef<T>).as_ref(),
             _ => None,
         }
     }

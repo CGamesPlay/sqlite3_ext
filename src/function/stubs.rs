@@ -17,7 +17,7 @@ pub unsafe extern "C" fn call_scalar<'a, F>(
     F: ScalarFunction<'a>,
 {
     let ic = InternalContext::from_ptr(context);
-    let func = ic.user_data::<F>();
+    let func = ic.user_data_mut::<F>();
     let ctx = Context::from_ptr(context);
     let args = slice::from_raw_parts_mut(argv as *mut &mut ValueRef, argc as _);
     if let Err(e) = func.call(ctx, args) {
@@ -46,7 +46,7 @@ pub unsafe extern "C" fn aggregate_final<U, F: LegacyAggregateFunction<U>>(
     let ctx = Context::from_ptr(context);
     let ret = match ic.try_aggregate_context::<U, F>() {
         Some(agg) => agg.value(ctx),
-        None => F::default_value(ic.user_data(), ctx),
+        None => F::default_value(ic.user_data_mut(), ctx),
     };
     if let Err(e) = ret {
         ctx.set_result(e).unwrap();

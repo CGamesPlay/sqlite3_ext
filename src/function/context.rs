@@ -38,11 +38,12 @@ impl InternalContext {
         &self.base as *const ffi::sqlite3_context as _
     }
 
-    /// # Safety
-    ///
-    /// The called must verify that Rust pointer aliasing rules are followed.
-    pub unsafe fn user_data<U>(&self) -> &mut U {
-        &mut *(ffi::sqlite3_user_data(self.as_ptr()) as *mut U)
+    pub fn user_data<U>(&self) -> &U {
+        unsafe { &mut *(ffi::sqlite3_user_data(self.as_ptr()) as *mut U) }
+    }
+
+    pub fn user_data_mut<U>(&mut self) -> &mut U {
+        unsafe { &mut *(ffi::sqlite3_user_data(self.as_ptr()) as *mut U) }
     }
 
     /// Get the aggregate context, returning a mutable reference to it.
@@ -55,7 +56,7 @@ impl InternalContext {
         }
         let context = &mut *ptr;
         if !context.init {
-            context.val = MaybeUninit::new(F::from_user_data(self.user_data()));
+            context.val = MaybeUninit::new(F::from_user_data(self.user_data_mut()));
             context.init = true;
         }
         Ok(context.val.assume_init_mut())

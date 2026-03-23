@@ -12,10 +12,14 @@ fn best_index_rhs() -> Result<()> {
             _vtab: &TestVTab<'a, Self>,
             index_info: &mut IndexInfo,
         ) -> Result<()> {
-            assert_eq!(index_info.distinct_mode(), DistinctMode::Ordered);
-            let mut _c = index_info.constraints().next().expect("no constraint");
-            #[cfg(modern_sqlite)]
-            assert_eq!(_c.rhs()?.get_i64(), 20);
+            assert_eq!(index_info.distinct_mode(), DistinctMode(0));
+            let constr = index_info
+                .constraints()
+                .next()
+                .expect("constraint should exist");
+            if cfg!(modern_sqlite) {
+                assert_eq!(constr.rhs()?.get_i64(), 20);
+            }
             Ok(())
         }
     }

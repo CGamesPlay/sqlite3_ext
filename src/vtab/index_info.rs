@@ -25,7 +25,7 @@ impl IndexInfo {
         IndexInfoOrderByIterator::new(self)
     }
 
-    /// Determine if a query is DISTINCT.
+    /// Get the "distinct mode" of the query.
     ///
     /// Requires SQLite 3.38.0. On earlier versions, this function will always return
     /// [DistinctMode::Ordered].
@@ -33,9 +33,9 @@ impl IndexInfo {
         sqlite3_match_version! {
             3_038_000 => {
                 let ret = unsafe { ffi::sqlite3_vtab_distinct(&self.base as *const _ as _) };
-                DistinctMode::from_sqlite(ret)
+                DistinctMode(ret)
             },
-            _ => DistinctMode::Ordered,
+            _ => DistinctMode(0),
         }
     }
 
@@ -98,11 +98,16 @@ impl IndexInfo {
         self.base.orderByConsumed != 0
     }
 
-    /// Indicate that the virtual table fully understands the requirements of the
-    /// [order_by](Self::order_by) and [distinct_mode](Self::distinct_mode) fields. If this
-    /// is the case, then SQLite can omit reordering the results of the query, which may
-    /// improve performance. It is never necessary to use the order_by information, but
-    /// virtual tables may opt to use it as a performance optimization.
+    /// Indicate that the virtual table orders all returned rows according to the
+    /// [order_by](Self::order_by) fields.
+    ///
+    /// If this is the case, then SQLite can omit reordering the results of the query, which may
+    /// improve performance. It is never necessary to use the order_by information, but virtual
+    /// tables may opt to use it as a performance optimization.
+    ///
+    /// The virtual table may, if desired, additionally use the
+    /// [distinct_mode](Self::distinct_mode) method to find out if ordering requirements are
+    /// relaxed by the particular query.
     pub fn set_order_by_consumed(&mut self, val: bool) {
         self.base.orderByConsumed = val as _;
     }
@@ -471,42 +476,40 @@ impl ConstraintOp {
 
 /// Describes the requirements of the virtual table query.
 ///
-/// This value is retured by [IndexInfo::distinct_mode]. It allows the virtual table
-/// implementation to decide if it is safe to consume the [order_by](IndexInfo::order_by)
-/// fields using [IndexInfo::set_order_by_consumed].
-///
-/// The levels described here are progressively less demanding. If the virtual table
-/// implementation meets the requirements of [DistinctMode::Ordered], then it is always safe to
-/// consume the order_by fields.
+/// This value is retured by [IndexInfo::distinct_mode]. It provides the virtual table
+/// implementation with additional information about how the query planner wants the output to be
+/// returned. If the virtual table implementation can meet the requirements, then it may consume
+/// the [order_by](IndexInfo::order_by) fields using [IndexInfo::set_order_by_consumed].
 ///
 /// For the purposes of comparing virtual table output values to see if the values are same
 /// value for sorting purposes, two NULL values are considered to be the same. In other words,
 /// the comparison operator is "IS" (or "IS NOT DISTINCT FROM") and not "==".
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum DistinctMode {
-    /// The virtual table must return all rows in the correct order according to the
-    /// [order_by](IndexInfo::order_by) fields.
-    Ordered,
-    /// The virtual table may return rows in any order, but all rows that are in the same
-    /// group must be adjacent to one another. A group is defined as all rows for which all
-    /// of the columns in [order_by](IndexInfo::order_by) are equal. This is the mode used
-    /// when planning a GROUP BY query.
-    Grouped,
-    /// The same as [DistinctMode::Grouped], however the virtual table is allowed (but not
-    /// required) to skip all but a single row within each group. This is the mode used
-    /// when planning a DISTINCT query.
-    Distinct,
-}
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
+pub struct DistinctMode(pub i32);
 
 impl DistinctMode {
-    #[cfg(modern_sqlite)]
-    fn from_sqlite(val: i32) -> Self {
-        match val {
-            0 => Self::Ordered,
-            1 => Self::Grouped,
-            2 => Self::Distinct,
-            _ => panic!("invalid distinct mode"),
-        }
+    /// Indicates that sqlite doesn't need complete ordering from the virtual table.
+    ///
+    /// If this method returns true, then sqlite still expects that all rows with the same value in
+    /// all of the [order_by](IndexInfo::order_by) columns are adjacent to one another. If this is
+    /// not achievable, then it is not valid to consume the order_by columns.
+    ///
+    /// This returns true for GROUP BY and DISTINCT queries.
+    pub fn may_return_unordered(&self) -> bool {
+        self.0 == 1 || self.0 == 2
+    }
+
+    /// Indicates that sqlite doesn't need duplicated rows to be included in the result set.
+    ///
+    /// This returns true for DISTINCT queries.
+    pub fn may_omit_duplicates(&self) -> bool {
+        self.0 == 2 || self.0 == 3
+    }
+}
+
+impl From<i32> for DistinctMode {
+    fn from(val: i32) -> Self {
+        Self(val)
     }
 }
 
@@ -563,5 +566,22 @@ impl std::fmt::Debug for IndexInfoOrderBy<'_> {
             .field("column", &self.column())
             .field("desc", &self.desc())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn distinct_mode() {
+        assert!(!DistinctMode(0).may_return_unordered());
+        assert!(!DistinctMode(0).may_omit_duplicates());
+        assert!(DistinctMode(1).may_return_unordered());
+        assert!(!DistinctMode(1).may_omit_duplicates());
+        assert!(DistinctMode(2).may_return_unordered());
+        assert!(DistinctMode(2).may_omit_duplicates());
+        assert!(!DistinctMode(3).may_return_unordered());
+        assert!(DistinctMode(3).may_omit_duplicates());
     }
 }

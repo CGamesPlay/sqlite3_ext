@@ -2,7 +2,7 @@ use super::super::{ffi, value::*, vtab::*, Connection};
 use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
-    os::raw::{c_int, c_void},
+    os::raw::{c_char, c_int, c_void},
     ptr, slice,
 };
 
@@ -28,9 +28,9 @@ macro_rules! vtab_connect {
             db: *mut ffi::sqlite3,
             module: *mut c_void,
             argc: i32,
-            argv: *const *const i8,
+            argv: *const *const c_char,
             p_vtab: *mut *mut ffi::sqlite3_vtab,
-            err_msg: *mut *mut i8,
+            err_msg: *mut *mut c_char,
         ) -> c_int {
             let conn = &*(db as *mut Connection);
             let module = module::Handle::<'vtab, T>::from_ptr(module);
@@ -79,9 +79,9 @@ pub unsafe extern "C" fn vtab_connect_transaction<'vtab, T: TransactionVTab<'vta
     db: *mut ffi::sqlite3,
     module: *mut c_void,
     argc: i32,
-    argv: *const *const i8,
+    argv: *const *const c_char,
     p_vtab: *mut *mut ffi::sqlite3_vtab,
-    err_msg: *mut *mut i8,
+    err_msg: *mut *mut c_char,
 ) -> c_int {
     match vtab_connect::<T>(db, module, argc, argv, p_vtab, err_msg) {
         ffi::SQLITE_OK => (),
@@ -97,9 +97,9 @@ pub unsafe extern "C" fn vtab_create_transaction<
     db: *mut ffi::sqlite3,
     module: *mut c_void,
     argc: i32,
-    argv: *const *const i8,
+    argv: *const *const c_char,
     p_vtab: *mut *mut ffi::sqlite3_vtab,
-    err_msg: *mut *mut i8,
+    err_msg: *mut *mut c_char,
 ) -> c_int {
     match vtab_create::<T>(db, module, argc, argv, p_vtab, err_msg) {
         ffi::SQLITE_OK => (),
@@ -178,7 +178,7 @@ pub unsafe extern "C" fn vtab_destroy<'vtab, T: CreateVTab<'vtab> + 'vtab>(
 pub unsafe extern "C" fn vtab_filter<'vtab, T: VTab<'vtab> + 'vtab>(
     cursor: *mut ffi::sqlite3_vtab_cursor,
     index_num: i32,
-    index_str: *const i8,
+    index_str: *const c_char,
     argc: i32,
     argv: *mut *mut ffi::sqlite3_value,
 ) -> c_int {
@@ -260,7 +260,7 @@ pub unsafe extern "C" fn vtab_update<'vtab, T: UpdateVTab<'vtab> + 'vtab>(
 pub unsafe extern "C" fn vtab_find_function<'vtab, T: FindFunctionVTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
     n_args: c_int,
-    name: *const i8,
+    name: *const c_char,
     p_func: *mut Option<
         unsafe extern "C" fn(*mut ffi::sqlite3_context, c_int, *mut *mut ffi::sqlite3_value),
     >,
@@ -329,7 +329,7 @@ pub unsafe extern "C" fn vtab_rollback<'vtab, T: TransactionVTab<'vtab> + 'vtab>
 
 pub unsafe extern "C" fn vtab_rename<'vtab, T: RenameVTab<'vtab> + 'vtab>(
     vtab: *mut ffi::sqlite3_vtab,
-    name: *const i8,
+    name: *const c_char,
 ) -> c_int {
     let vtab = &mut *(vtab.cast::<VTabHandle<T>>());
     let name = match CStr::from_ptr(name).to_str() {
@@ -371,7 +371,7 @@ pub unsafe extern "C" fn vtab_rollback_to<'vtab, T: TransactionVTab<'vtab> + 'vt
 
 #[cfg(modern_sqlite)]
 pub unsafe extern "C" fn vtab_shadow_name<'vtab, T: CreateVTab<'vtab> + 'vtab>(
-    name: *const i8,
+    name: *const c_char,
 ) -> c_int {
     let name = CStr::from_ptr(name).to_bytes();
     for candidate in T::SHADOW_NAMES {

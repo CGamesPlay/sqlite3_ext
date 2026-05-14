@@ -4,7 +4,7 @@ use super::{
 };
 use std::{
     cmp::Ordering,
-    ffi::{c_void, CStr},
+    ffi::{c_char, c_void, CStr},
     slice,
     str::from_utf8_unchecked,
 };
@@ -100,7 +100,7 @@ pub unsafe extern "C" fn collation_needed<F: Fn(&str)>(
     user_data: *mut c_void,
     _db: *mut ffi::sqlite3,
     _text_rep: i32,
-    name: *const i8,
+    name: *const c_char,
 ) {
     let func = &*(user_data as *const F);
     let name = match CStr::from_ptr(name).to_str() {

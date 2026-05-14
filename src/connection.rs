@@ -8,7 +8,7 @@ use std::{
     ffi::{CStr, CString},
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
-    os::raw::c_int,
+    os::raw::{c_char, c_int},
     path::Path,
     ptr::null_mut,
     thread::panicking,
@@ -118,7 +118,7 @@ impl Connection {
             let guard = self.lock();
             LoadExtensionGuard::new(&guard)?;
             unsafe {
-                let mut err: MaybeUninit<*mut i8> = MaybeUninit::uninit();
+                let mut err: MaybeUninit<*mut c_char> = MaybeUninit::uninit();
                 let path = CString::new(path)?;
                 let entry = match entry {
                     Some(s) => Some(CString::new(s)?),

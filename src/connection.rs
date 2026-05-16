@@ -198,6 +198,12 @@ fn path_to_cstring(path: &Path) -> CString {
     CString::new(path.as_os_str().as_bytes()).unwrap()
 }
 
+#[cfg(windows)]
+fn path_to_cstring(path: &Path)
+-> CString {
+    CString::new(path.to_str().expect("path must be valid UTF-8")).unwrap()
+}
+
 /// Represents an owned connection to an SQLite database.
 ///
 /// This struct is an owned version of [Connection]. When this struct is dropped, it will close

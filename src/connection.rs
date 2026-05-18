@@ -192,10 +192,13 @@ impl std::fmt::Debug for Connection {
     }
 }
 
-#[cfg(unix)]
 fn path_to_cstring(path: &Path) -> CString {
-    use std::os::unix::ffi::OsStrExt;
-    CString::new(path.as_os_str().as_bytes()).unwrap()
+    if cfg!(unix) {
+        use std::os::unix::ffi::OsStrExt;
+        CString::new(path.as_os_str().as_bytes()).unwrap()
+    } else {
+        CString::new(path.to_str().expect("path is not valid UTF-8")).unwrap()
+    }
 }
 
 /// Represents an owned connection to an SQLite database.

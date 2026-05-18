@@ -2,10 +2,17 @@
 
 ## Unreleased
 
+## 2026-05-19 (0.2.1)
+
 **New features:**
 
 - Users of `UnsafePtr` are now required to call `FunctionOptions::set_read_subtype` and/or `FunctionOptions::set_return_subtype` as appropriate. SQLite 3.45.0 added some optimizations that *may* discard subtype information if they are not used. Consider migrating `PassedRef` instead, if possible.
 - `FunctionOptions::set_n_args` can now accept values up to 32767, although attempting to use values higher than the limit (currently 1000 by default) will cause the function registration to fail.
+
+**Bug fixes:**
+
+- Replace `i8` -> `c_char` for all C strings, by @h7x4.
+- Fix compilation on Windows, by @arianfarid.
 
 ## 2026-03-23 (0.2.0)
 

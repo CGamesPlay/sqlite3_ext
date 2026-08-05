@@ -193,10 +193,13 @@ impl std::fmt::Debug for Connection {
 }
 
 fn path_to_cstring(path: &Path) -> CString {
-    if cfg!(unix) {
+    #[cfg(unix)]
+    {
         use std::os::unix::ffi::OsStrExt;
         CString::new(path.as_os_str().as_bytes()).unwrap()
-    } else {
+    }
+    #[cfg(not(unix))]
+    {
         CString::new(path.to_str().expect("path is not valid UTF-8")).unwrap()
     }
 }
